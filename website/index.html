@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="ModelDock: a native Mac app for local AI engines, model files, downloads and API services.">
+  <meta name="theme-color" content="#5548f5"><title>ModelDock — Local AI, in one place</title>
+  <link rel="icon" href="assets/logo.png"><link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="skip">Skip to content</a>
+  <header class="site-header"><div class="wrap header-inner">
+    <a class="brand" href="./"><img src="assets/logo.png" width="36" height="36" alt=""><span>ModelDock</span></a>
+    <nav aria-label="Main navigation"><a href="#workflow" data-i18n="navHow">How it works</a><a class="guide-link" href="guide.html" data-i18n="navGuide">User guide</a><a href="https://github.com/etongle/ModelDock">GitHub <span aria-hidden="true">↗</span></a></nav>
+    <button id="language" class="language" type="button" aria-label="Switch to Simplified Chinese">中文</button>
+  </div></header>
+  <main id="main">
+    <section class="hero wrap">
+      <p class="eyebrow"><span class="dot"></span><span data-i18n="eyebrow">Native macOS · Apple Silicon</span></p>
+      <h1 data-i18n="heroTitle">Local AI.<br>One place to run it.</h1>
+      <p class="hero-copy" data-i18n="heroCopy">Your engines, model files, downloads and services—together in a native Mac app. Choose a model, configure its capabilities, and connect the tools you already use.</p>
+      <div class="actions"><a class="button primary" href="https://github.com/etongle/ModelDock/releases" data-i18n="download">Get ModelDock <span aria-hidden="true">↓</span></a><a class="button secondary guide-link" href="guide.html" data-i18n="readGuide">Read the guide <span aria-hidden="true">→</span></a></div>
+      <p class="fine" data-i18n="requirements">Apple Silicon · macOS 14+ · Noncommercial use</p>
+      <figure class="app-figure"><div class="window-top"><span></span><span></span><span></span><b data-i18n="windowTitle">Your model workspace</b></div><img id="hero-image" src="assets/en-engines.png" alt="ModelDock engine list and compatible model selection" width="2880" height="2000" fetchpriority="high"><figcaption data-i18n="demoCaption">Screenshots use demonstration data. Sizes and resource values are illustrative.</figcaption></figure>
+    </section>
+    <section class="wrap workflow section" id="workflow">
+      <div class="section-heading"><p class="eyebrow" data-i18n="workflowEye">From files to a working endpoint</p><h2 data-i18n="workflowTitle">A clear path to your next model.</h2><p data-i18n="workflowCopy">Keep the model, the runtime and the service distinct. Manage each without losing track of the others.</p></div>
+      <div class="steps" role="tablist" aria-label="Model workflow">
+        <button type="button" class="step active" role="tab" id="step-download" aria-controls="workflow-panel" aria-selected="true" data-tab="downloads"><span class="step-number">01</span><strong data-i18n="stepDownload">Download & inspect</strong><span data-i18n="stepDownloadCopy">Resolve a repository ID, choose files, resume a task, and inspect progress one file at a time.</span></button>
+        <button type="button" class="step" role="tab" id="step-model" aria-controls="workflow-panel" aria-selected="false" tabindex="-1" data-tab="models"><span class="step-number">02</span><strong data-i18n="stepModel">Choose the right runtime</strong><span data-i18n="stepModelCopy">See compatible engines, check files, and configure text or supported multimodal input.</span></button>
+        <button type="button" class="step" role="tab" id="step-service" aria-controls="workflow-panel" aria-selected="false" tabindex="-1" data-tab="services"><span class="step-number">03</span><strong data-i18n="stepService">Run & connect</strong><span data-i18n="stepServiceCopy">Use independent ports and instances. Connect pi or OpenCode directly or through the gateway.</span></button>
+      </div>
+      <div class="workflow-panel" role="tabpanel" id="workflow-panel" aria-labelledby="step-download"><img id="workflow-image" src="assets/en-downloads.png" alt="Repository file selection and download tasks" loading="lazy" width="2880" height="2000"><p id="workflow-caption" class="fine" data-i18n="captionDownloads">A repository checkbox selects a file; the task detail confirms its download status.</p></div>
+    </section>
+    <section class="control-section section"><div class="wrap control-grid">
+      <div><p class="eyebrow" data-i18n="controlEye">Stay in control</p><h2 data-i18n="controlTitle">Big downloads.<br>Small, clear decisions.</h2><p data-i18n="controlCopy">Pause one file to make room for another. Keep old model revisions for later switching. Review cleanup before removing files.</p><ul class="feature-list"><li data-i18n="controlOne">Per-task and per-file progress, percentages and transfer speed.</li><li data-i18n="controlTwo">Task deletion preserves files; incomplete-file cleanup is a separate action.</li><li data-i18n="controlThree">Running models and shared auxiliary files receive deletion protection.</li></ul></div>
+      <figure><img id="detail-image" src="assets/en-download-files.png" alt="Per-file download progress and pause controls" loading="lazy" width="2880" height="2000"><figcaption data-i18n="detailCaption">Pause a file or prioritize another while keeping resumable data.</figcaption></figure>
+    </div></section>
+    <section class="wrap section" id="engines">
+      <div class="section-heading"><p class="eyebrow" data-i18n="engineEye">Use a compatible engine</p><h2 data-i18n="engineTitle">One manager. Different runtimes.</h2><p data-i18n="engineCopy">Input capabilities depend on the model, its auxiliary components, and the actual runtime version.</p></div>
+      <div class="table-scroll"><table><thead><tr><th data-i18n="engineCol">Engine</th><th data-i18n="formatCol">Models</th><th data-i18n="inputCol">How it runs</th></tr></thead><tbody>
+        <tr><td>Splash</td><td data-i18n="splashModels">Compatible upstream MLX; matching legacy packed models</td><td data-i18n="splashInput">Text; supported current assemblies can include images/PDFs and matched drafts</td></tr>
+        <tr><td>Llama / llama.cpp</td><td>GGUF</td><td data-i18n="llamaInput">Text or supported media with a matching projector</td></tr>
+        <tr><td>MLX-LM / MLX-VLM</td><td>MLX Safetensors</td><td data-i18n="mlxInput">LM for text; VLM for supported multimodal architectures</td></tr>
+        <tr><td>Ollama</td><td data-i18n="ollamaModels">Ollama-registered models</td><td data-i18n="ollamaInput">Native model lifecycle and per-model capabilities</td></tr>
+        <tr><td>LM Studio</td><td>GGUF / MLX</td><td data-i18n="studioInput">Load through the application or its supported CLI</td></tr>
+        <tr><td>llama.cpp · Prism</td><td>GGUF</td><td data-i18n="prismInput">Support depends on the local build and model architecture</td></tr>
+        <tr><td>Strata</td><td data-i18n="strataModels">External compatible API</td><td data-i18n="strataInput">Connect an upstream service; native Mac installation is not bundled</td></tr>
+      </tbody></table></div>
+    </section>
+    <section class="wrap gateway-section section"><div>
+      <p class="eyebrow" data-i18n="gatewayEye">Bring your own client</p><h2 data-i18n="gatewayTitle">Direct connection.<br>Or one shared gateway.</h2><p data-i18n="gatewayCopy">Register a ready model in pi or OpenCode. Use its own endpoint, or route local services and remote compatible APIs through ModelDock's gateway.</p><a class="text-link guide-link" href="guide.html#8-connect-directly-or-through-the-gateway" data-i18n="gatewayLink">See the connection guide →</a>
+    </div><div class="route-diagram" aria-label="Clients connect to local or remote model services"><div class="route-clients">pi <span>OpenCode</span> <span data-i18n="otherClient">Your client</span></div><div class="route-arrow" aria-hidden="true">↓</div><div class="gateway-node"><img src="assets/logo.png" alt="" width="36" height="36"><strong data-i18n="gatewayNode">ModelDock gateway</strong><code>/v1</code></div><div class="route-arrow" aria-hidden="true">↓</div><div class="route-targets"><span data-i18n="localRoute">Local services</span><span data-i18n="remoteRoute">Remote APIs</span></div><p class="fine" data-i18n="directNote">Direct service endpoints remain available.</p></div></section>
+    <section class="wrap section details-section"><div><p class="eyebrow" data-i18n="languageEye">Make it yours</p><h2 data-i18n="languageTitle">English by default.<br>Switch when you want.</h2><p data-i18n="languageCopy">Choose English, Simplified Chinese, French, Portuguese or system language in Settings. The interface updates immediately.</p><div class="language-list"><span>English</span><span>简体中文</span><span>Français</span><span>Português</span></div></div><div class="menu-note"><span class="menu-symbol" aria-hidden="true">▱</span><h3 data-i18n="menuTitle">Keep the window closed.</h3><p data-i18n="menuCopy">Watch system resources and downloads from the menu bar. Click outside the panel to dismiss it; reopen the manager when needed.</p></div></section>
+    <section class="wrap license-section"><div><p class="eyebrow" data-i18n="licenseEye">Source available · Noncommercial</p><h2 data-i18n="licenseTitle">Explore it. Learn from it.<br>Keep it noncommercial.</h2><p data-i18n="licenseCopy">First-party code and documentation use PolyForm Noncommercial 1.0.0. Permitted noncommercial use, modification and redistribution are allowed; commercial use is not granted. Third-party engines and models keep their own terms.</p></div><a class="button secondary" href="https://github.com/etongle/ModelDock/blob/main/LICENSE" data-i18n="licenseLink">Read the license ↗</a></section>
+    <section class="wrap final-cta"><h2 data-i18n="finalTitle">Give your models a home.</h2><div class="actions"><a class="button primary" href="https://github.com/etongle/ModelDock/releases" data-i18n="download">Get ModelDock ↓</a><a href="https://github.com/etongle/ModelDock" class="text-link" data-i18n="source">View the source ↗</a></div><p class="fine" data-i18n="installNote">Current releases are not Apple-notarized. See the installation guide before opening a downloaded copy.</p></section>
+  </main>
+  <footer class="wrap"><a class="brand" href="./"><img src="assets/logo.png" width="28" height="28" alt=""><span>ModelDock</span></a><p data-i18n="footer">Made for local AI on Mac. Source-available, for noncommercial purposes.</p><a class="guide-link" href="guide.html" data-i18n="navGuide">User guide</a></footer>
+  <script src="site.js" defer></script>
+</body></html>

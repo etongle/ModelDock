@@ -1,0 +1,9 @@
+{
+  "version": "3.13.16",
+  "release": "20261009",
+  "architecture": "arm64",
+  "source": "https://github.com/astral-sh/python-build-standalone",
+  "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261009/cpython-3.13.16%2B20261009-aarch64-apple-darwin-install_only_stripped.tar.gz",
+  "mirrors": ["https://mirrors.nju.edu.cn/github-release/astral-sh/python-build-standalone/20261009/cpython-3.13.16%2B20261009-aarch64-apple-darwin-install_only_stripped.tar.gz"],
+  "sha256": "11785155d0f70e634178219c20925d8f20be00a3da4684fc4f5019dd15602ef7"
+}

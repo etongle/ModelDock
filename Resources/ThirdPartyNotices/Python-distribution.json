@@ -1,0 +1,9 @@
+{
+  "source": "https://github.com/astral-sh/python-build-standalone/releases/tag/20261009",
+  "pythonVersion": "3.13.16",
+  "licenses": [
+    "Python-2.0",
+    "CNRI-Python"
+  ],
+  "archiveSHA256": "70025edd2ed4bf0a333677928ded047368726954253b6e428732e71e9c5a163e"
+}

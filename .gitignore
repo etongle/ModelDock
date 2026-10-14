@@ -1,0 +1,12 @@
+.DS_Store
+build/
+artifacts/
+dist/
+__pycache__/
+*.pyc
+.swiftpm/
+DerivedData/
+.env
+.env.*
+!.env.example
+*.log

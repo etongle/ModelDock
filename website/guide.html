@@ -1,0 +1,193 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>User guide — ModelDock</title><meta name="description" content="Illustrated ModelDock usage guide"><link rel="icon" href="assets/logo.png"><link rel="stylesheet" href="site.css"></head><body data-page="guide" data-language="en"><a class="skip-link" href="#main" data-i18n="skip">Skip to content</a><header class="site-header"><div class="wrap header-inner"><a class="brand" href="./"><img src="assets/logo.png" width="36" height="36" alt=""><span>ModelDock</span></a><nav aria-label="Main navigation"><a href="./#workflow" data-i18n="navHow">How it works</a><a href="https://github.com/etongle/ModelDock">GitHub ↗</a></nav><button type="button" id="language" class="language">中文</button></div></header><main id="main" class="wrap guide-layout"><aside class="guide-toc" aria-label="Contents"><div class="toc">
+<ul>
+<li><a href="#modeldock-user-guide">ModelDock user guide</a><ul>
+<li><a href="#1-install-and-choose-a-language">1. Install and choose a language</a></li>
+<li><a href="#2-prepare-an-engine">2. Prepare an engine</a></li>
+<li><a href="#3-download-a-model">3. Download a model</a><ul>
+<li><a href="#per-file-progress-and-prioritization">Per-file progress and prioritization</a></li>
+<li><a href="#delete-a-task-or-clean-partial-files">Delete a task or clean partial files</a></li>
+</ul>
+</li>
+<li><a href="#4-import-and-inspect-local-models">4. Import and inspect local models</a></li>
+<li><a href="#5-start-a-model-service">5. Start a model service</a></li>
+<li><a href="#6-associate-draft-and-vision-models">6. Associate draft and vision models</a></li>
+<li><a href="#7-manage-services-and-model-versions">7. Manage services and model versions</a></li>
+<li><a href="#8-connect-directly-or-through-the-gateway">8. Connect directly or through the gateway</a><ul>
+<li><a href="#pi-and-opencode">pi and OpenCode</a></li>
+</ul>
+</li>
+<li><a href="#9-monitor-from-the-menu-bar">9. Monitor from the menu bar</a></li>
+<li><a href="#10-troubleshooting">10. Troubleshooting</a></li>
+<li><a href="#shortcuts-and-data-locations">Shortcuts and data locations</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</aside><article class="guide-content"><h1 id="modeldock-user-guide">ModelDock user guide</h1>
+<p><a href="guide.zh-CN.html">简体中文</a> · <a href="https://github.com/etongle/ModelDock/blob/main/README.md">Project introduction</a></p>
+<p>ModelDock separates the <strong>engine</strong> that runs inference, the <strong>model files</strong> stored on disk, and the <strong>service</strong> that exposes an API. One engine can have several service instances, each with its own model and port.</p>
+<p>All screenshots in this guide use demonstration data. They illustrate controls and layout; they are not performance measurements or claims that the demonstration model was loaded.</p>
+<h2 id="1-install-and-choose-a-language">1. Install and choose a language</h2>
+<p>Use an Apple Silicon Mac running macOS 14 or later. Download a DMG or ZIP from the project's Releases page, move <strong>ModelDock.app</strong> to <strong>Applications</strong>, and open it. Models and third-party engines are installed separately; the app bundles the Python runtime needed by its gateway.</p>
+<p>Current packages use an ad-hoc signature and have not been Apple-notarized. If a trusted downloaded copy is blocked, attempt to open it, then follow the <strong>Open Anyway</strong> flow in <strong>System Settings → Privacy &amp; Security</strong> described by <a href="https://support.apple.com/102445">Apple</a>. Only open distributions you trust.</p>
+<p>English is the default on first launch, including on non-English systems. Open <strong>ModelDock → Settings…</strong> (⌘,) and choose <strong>English</strong>, <strong>简体中文</strong>, <strong>Français</strong>, <strong>Português</strong>, or <strong>Follow system</strong>. The interface changes immediately and the choice is saved.</p>
+<p><img alt="Interface language and close behavior" src="assets/en-settings.png" /></p>
+<p>The main window closes to the background by default. A second option quits the app when closing its window, with a confirmation each time.</p>
+<h2 id="2-prepare-an-engine">2. Prepare an engine</h2>
+<p>Open <strong>Engines</strong> and select an installed engine. An engine card can be selected anywhere in its area, including whitespace. <strong>Global engine settings</strong> controls which engines appear in normal lists; individual engine settings contain supported defaults and options.</p>
+<p><img alt="Engine and multimodal launch configuration" src="assets/en-engines.png" /></p>
+<ul>
+<li>Use <strong>Check for updates</strong> to inspect versions. Desktop applications and command-line components are listed separately; their version numbers are independent. <strong>Up to date</strong> means no update is needed from the selected source. <strong>Update available</strong> identifies an older component.</li>
+<li>Stop that engine's running services before updating it. A service belonging to another engine should not block the operation.</li>
+<li>Homebrew-backed installation requires Homebrew. MLX components are managed in their own environment. A local build can be managed according to its identified build output.</li>
+<li>Review an uninstall or cleanup plan before applying it. Model files and personal data are retained by default; shared models and files in use are protected.</li>
+</ul>
+<p>Disabling an engine hides it from normal selection. Existing files and service records remain available for management.</p>
+<h2 id="3-download-a-model">3. Download a model</h2>
+<p>Open <strong>Downloads &amp; Import</strong>, choose the destination library, and enter either:</p>
+<pre><code class="language-text">mlx-community/Qwen3.8-27B-4bit
+https://huggingface.co/mlx-community/Qwen3.8-27B-4bit
+</code></pre>
+<p>A bare <code>owner/repo</code> defaults to Hugging Face. Full Hugging Face/ModelScope repository URLs and supported model-file direct links are also accepted. Restricted repositories require the correct access permission and token. The access token field is not saved to disk.</p>
+<p>Click <strong>Resolve URL</strong>, inspect the listing, and choose the files:</p>
+<ul>
+<li>For a GGUF language model, normally select one desired quantization. Vision/audio support may also require the matching <code>mmproj</code> file.</li>
+<li>For a complete MLX directory, include all required weight shards, configuration, tokenizer, and the model's vision/processor files where applicable.</li>
+<li>For a draft model, follow its draft format requirements; a tokenizer may be supplied by the main model instead of the draft repository.</li>
+</ul>
+<p><img alt="Repository resolution and selected files" src="assets/en-downloads.png" /></p>
+<p>Click <strong>Download &amp; Import</strong>. An existing recoverable task for the same repository, revision, selection, and destination is preferred. A currently active writer to the same destination is not duplicated. Different destinations and model revisions are managed independently.</p>
+<h3 id="per-file-progress-and-prioritization">Per-file progress and prioritization</h3>
+<p>Click a task's <strong>View files</strong> action. The detail lists each file's status, downloaded bytes, percentage, and transfer speed when applicable.</p>
+<p><img alt="Per-file progress, pause and priority controls" src="assets/en-download-files.png" /></p>
+<p>A tick in the repository's selection list means <strong>selected for download</strong>, not <strong>already downloaded</strong>. Completion is shown in task details after the relevant checks.</p>
+<p>Downloads process one file at a time. <strong>Pause</strong> on a file preserves its partial data and lets other files proceed; <strong>Download first</strong> prioritizes a different file. Resume the paused file, or resume all paused files, when ready. Closing the main window leaves downloads running; quitting the app pauses them.</p>
+<h3 id="delete-a-task-or-clean-partial-files">Delete a task or clean partial files</h3>
+<p>The task's trash action removes its record and preserves both completed and partial files. If it is the active task, transfer stops before its record is removed. Deleting a paused duplicate should therefore not delete the files used by the active task.</p>
+<p><strong>Clean incomplete files</strong> is a separate operation. It reviews ownership and shared destinations before removing partial data. Do not confuse that cleanup with deleting a task record.</p>
+<h2 id="4-import-and-inspect-local-models">4. Import and inspect local models</h2>
+<p>In <strong>Model Files</strong>, use <strong>+</strong> to add a local file or model directory. Imported files remain at their existing location. You can filter by engine or by main/auxiliary model, search by name or path, and select a card anywhere within its area.</p>
+<p><img alt="Model files and compatible launch options" src="assets/en-models.png" /></p>
+<p>A model detail shows its format, input capabilities, source revision, file location, and compatible launch choices. Format compatibility does not guarantee architecture support. Check any warning before launching.</p>
+<p>For a missing or damaged file, use its <strong>Repair</strong> action when the original repository/version is known. The manager downloads that individual file into staging, verifies it, and replaces the original target only when it is safe. A file in use, a changed target, or an incompatible source is blocked rather than replaced.</p>
+<h2 id="5-start-a-model-service">5. Start a model service</h2>
+<p>Select a compatible engine/model from <strong>Engines</strong>, or choose its launch option in <strong>Model Files</strong>. Review:</p>
+<ol>
+<li><strong>Port:</strong> use an unused port. Each independently hosted service needs its own endpoint; the manager identifies listeners by process identity as well as the port.</li>
+<li><strong>Context window:</strong> configure a size supported by the engine/model and your available memory. Client limits must match the actual service window.</li>
+<li><strong>Input mode:</strong> choose automatic, text-only, or multimodal where supported. A text-only model cannot gain image support through a checkbox.</li>
+<li><strong>Auxiliary components:</strong> choose the matching vision projector or draft model when the engine supports that component.</li>
+<li><strong>Runtime options:</strong> use only the options exposed for that engine. Additional supported CLI launches can be configured through <strong>Launch from command…</strong>.</li>
+</ol>
+<p>Click <strong>Start service</strong>. The detail shows startup stages, available percentage information, the endpoint, and logs. A preparation/download stage may precede model loading. A phase percentage is a progress estimate for that phase, not a precise measure of all GPU work. An unreported percentage should remain unknown.</p>
+<p><img alt="Service configuration and endpoint" src="assets/en-services.png" /></p>
+<p>Wait until the service is ready before connecting a client. Inspect <strong>This run's components</strong> to confirm the active draft/vision/tokenizer components, rather than assuming a saved association was applied to an already-running service.</p>
+<h2 id="6-associate-draft-and-vision-models">6. Associate draft and vision models</h2>
+<p>Open a main model's <strong>Associated launch components</strong> settings. Save a compatible draft model or matching GGUF projection file, then start a new service using that association. Changing the association affects later launches; it does not reload a running service.</p>
+<p>For the Qwen3.8-27B family, <code>incoai/Qwen3.8-27B-DFlash2</code> is an auxiliary draft package. It is not a standalone chat model. Its <code>config.json</code> and <code>model.safetensors</code> are required; it can share the main model's tokenizer. Splash's compatible current model preparation uses a matched draft. MLX-VLM draft support depends on its runtime and architecture support; MLX-LM cannot use this DFlash2 format as a generic draft.</p>
+<p>A vision-capable model can be run text-only when the selected runtime supports that mode. MLX multimodal services use <strong>MLX-VLM</strong>, not just MLX-LM. Older Splash packed models remain text-only and need their matching retained runtime.</p>
+<h2 id="7-manage-services-and-model-versions">7. Manage services and model versions</h2>
+<p>Every independent instance appears in <strong>Services</strong>, with its model, port, and status. Click anywhere on its card to select it. Stop a specific instance without stopping another one. Once stopped, its configuration can be deleted; model files and logs are retained.</p>
+<p>A model update is downloaded as another revision when the source supports revision snapshots. The existing service keeps its launched path/version. After the new files are complete, select the new version and configure another launch or restart the intended service. Keep an older version to switch back later, or move it to the Trash when it is unused.</p>
+<p>Files used by running main/auxiliary models and shared cache references are protected. Ollama manages registered models differently: deletion uses Ollama's native operation and requires the model to be unloaded. It is not a Trash operation.</p>
+<h2 id="8-connect-directly-or-through-the-gateway">8. Connect directly or through the gateway</h2>
+<p>A direct service exposes an endpoint such as <code>http://127.0.0.1:8083/v1</code>. Copy it from the service detail and select a model ID actually reported by the service.</p>
+<p>The <strong>Unified gateway</strong> provides one OpenAI-compatible endpoint for enabled routes:</p>
+<ul>
+<li>Add ready local services discovered by the manager.</li>
+<li>Add a remote OpenAI-compatible base URL and its required credentials.</li>
+<li>Choose the route's model ID and enabled input modalities.</li>
+<li>Use the alias published by the gateway's <code>/v1/models</code>, not a guessed provider/model name.</li>
+<li>Keep the gateway access key private. Remote endpoints and keys are configuration, not public documentation.</li>
+</ul>
+<p>The gateway and individual services remain separate endpoints. A client can use either connection method.</p>
+<h3 id="pi-and-opencode">pi and OpenCode</h3>
+<p>From a ready service, open <strong>One-click integration</strong>, choose the direct or gateway route, model, and working directory. <strong>Write configuration</strong> registers the model in the client's native settings and backs up the original configuration. Existing providers and default-model choices are preserved.</p>
+<p><strong>Connect &amp; open</strong> starts the selected client with the prepared connection. <strong>Copy command</strong> is useful for manual terminal launch. After changing model limits or settings, an already-running client may need to reload/reselect the model or begin a new session.</p>
+<p>Web search is a client/tool capability. Enable the offered search-tool integration where supported and configure any required tool credentials. It is not enabled by adding a parameter to ordinary text generation alone.</p>
+<h2 id="9-monitor-from-the-menu-bar">9. Monitor from the menu bar</h2>
+<p><img alt="System and service resources" src="assets/en-resources.png" /></p>
+<p>The menu-bar panel shows system CPU, memory, disk and library usage, service resources, downloads, and recent measurements when available. Click a download's management action to open the relevant task.</p>
+<p>Clicking inside the panel keeps it usable; clicking another window or desktop area closes it. Clicking its status icon toggles the panel. <strong>Open manager</strong> reopens the main window. Closing the main window keeps background work running by default; <strong>Quit</strong> pauses downloads and stops monitoring while independently running model services remain available.</p>
+<p>Performance values labeled as measurements come from an actual benchmark or supported service logs. Unknown measurements remain unavailable; do not compare startup estimates with generation throughput.</p>
+<h2 id="10-troubleshooting">10. Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Problem</th>
+<th>Check / action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Start button disabled</td>
+<td>Engine enabled/installed, complete compatible files, an unused valid port, correct multimodal runtime, and no scoped maintenance operation</td>
+</tr>
+<tr>
+<td>Splash preparation waits on a draft</td>
+<td>Inspect the draft download task, required files, repository access and runtime logs; the main weights being complete does not mean its auxiliary download is complete</td>
+</tr>
+<tr>
+<td>Vision model starts text-only</td>
+<td>Select multimodal/automatic mode and a runtime that loads the required vision component; MLX-LM alone is insufficient</td>
+</tr>
+<tr>
+<td>Port seems to belong to the wrong engine</td>
+<td>Inspect the listening process/service identity, then use the conflict action or another unused port</td>
+</tr>
+<tr>
+<td>Context overflow / repeated compaction</td>
+<td>Match the client's declared context to the service, reload updated client configuration, compact or restart the session, and avoid large unneeded context inputs</td>
+</tr>
+<tr>
+<td>Model appears more than once</td>
+<td>Check revision/quantization and physical file location; independent weights/revisions are different models, while shared runtime registrations should refer to the same source weights</td>
+</tr>
+<tr>
+<td>Missing model file</td>
+<td>Repair that file from the known repository/revision; otherwise resolve the source again and select the required file</td>
+</tr>
+<tr>
+<td>Download speed is “—”</td>
+<td>No active byte transfer is being measured, such as when paused, checking or completed</td>
+</tr>
+</tbody>
+</table>
+<p>Engine logs and third-party client error text may remain in the language produced by the corresponding tool.</p>
+<h2 id="shortcuts-and-data-locations">Shortcuts and data locations</h2>
+<table>
+<thead>
+<tr>
+<th>Shortcut</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>⌘1–⌘5</td>
+<td>Switch main sections</td>
+</tr>
+<tr>
+<td>⌘R</td>
+<td>Rescan engines/models</td>
+</tr>
+<tr>
+<td>⌘O</td>
+<td>Add a model directory</td>
+</tr>
+<tr>
+<td>⌘,</td>
+<td>Settings</td>
+</tr>
+<tr>
+<td>⌘W</td>
+<td>Close the main window using the configured behavior</td>
+</tr>
+<tr>
+<td>⌘Q</td>
+<td>Quit</td>
+</tr>
+</tbody>
+</table>
+<p>Manager state remains in <code>~/Library/Application Support/ModelManager</code> to preserve existing installations. Model files stay in their chosen library/import locations. Distribution packages and screenshots do not include personal state, credentials, or model weights.</p>
+<p>See <a href="https://github.com/etongle/ModelDock/blob/main/docs/LICENSING.md">licensing</a> for the noncommercial license and third-party boundaries.</p></article></main><footer class="wrap"><a class="brand" href="./"><img src="assets/logo.png" width="28" height="28" alt=""><span>ModelDock</span></a><p data-i18n="footer">Source available. Noncommercial use.</p></footer><script src="site.js" defer></script></body></html>

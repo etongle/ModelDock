@@ -1,0 +1,173 @@
+# ModelDock user guide
+
+[简体中文](USER_GUIDE.zh-CN.md) · [Project introduction](../README.md)
+
+ModelDock separates the **engine** that runs inference, the **model files** stored on disk, and the **service** that exposes an API. One engine can have several service instances, each with its own model and port.
+
+All screenshots in this guide use demonstration data. They illustrate controls and layout; they are not performance measurements or claims that the demonstration model was loaded.
+
+## 1. Install and choose a language
+
+Use an Apple Silicon Mac running macOS 14 or later. Download a DMG or ZIP from the project's Releases page, move **ModelDock.app** to **Applications**, and open it. Models and third-party engines are installed separately; the app bundles the Python runtime needed by its gateway.
+
+Current packages use an ad-hoc signature and have not been Apple-notarized. If a trusted downloaded copy is blocked, attempt to open it, then follow the **Open Anyway** flow in **System Settings → Privacy & Security** described by [Apple](https://support.apple.com/102445). Only open distributions you trust.
+
+English is the default on first launch, including on non-English systems. Open **ModelDock → Settings…** (⌘,) and choose **English**, **简体中文**, **Français**, **Português**, or **Follow system**. The interface changes immediately and the choice is saved.
+
+![Interface language and close behavior](assets/images/en-settings.png)
+
+The main window closes to the background by default. A second option quits the app when closing its window, with a confirmation each time.
+
+## 2. Prepare an engine
+
+Open **Engines** and select an installed engine. An engine card can be selected anywhere in its area, including whitespace. **Global engine settings** controls which engines appear in normal lists; individual engine settings contain supported defaults and options.
+
+![Engine and multimodal launch configuration](assets/images/en-engines.png)
+
+- Use **Check for updates** to inspect versions. Desktop applications and command-line components are listed separately; their version numbers are independent. **Up to date** means no update is needed from the selected source. **Update available** identifies an older component.
+- Stop that engine's running services before updating it. A service belonging to another engine should not block the operation.
+- Homebrew-backed installation requires Homebrew. MLX components are managed in their own environment. A local build can be managed according to its identified build output.
+- Review an uninstall or cleanup plan before applying it. Model files and personal data are retained by default; shared models and files in use are protected.
+
+Disabling an engine hides it from normal selection. Existing files and service records remain available for management.
+
+## 3. Download a model
+
+Open **Downloads & Import**, choose the destination library, and enter either:
+
+```text
+mlx-community/Qwen3.8-27B-4bit
+https://huggingface.co/mlx-community/Qwen3.8-27B-4bit
+```
+
+A bare `owner/repo` defaults to Hugging Face. Full Hugging Face/ModelScope repository URLs and supported model-file direct links are also accepted. Restricted repositories require the correct access permission and token. The access token field is not saved to disk.
+
+Click **Resolve URL**, inspect the listing, and choose the files:
+
+- For a GGUF language model, normally select one desired quantization. Vision/audio support may also require the matching `mmproj` file.
+- For a complete MLX directory, include all required weight shards, configuration, tokenizer, and the model's vision/processor files where applicable.
+- For a draft model, follow its draft format requirements; a tokenizer may be supplied by the main model instead of the draft repository.
+
+![Repository resolution and selected files](assets/images/en-downloads.png)
+
+Click **Download & Import**. An existing recoverable task for the same repository, revision, selection, and destination is preferred. A currently active writer to the same destination is not duplicated. Different destinations and model revisions are managed independently.
+
+### Per-file progress and prioritization
+
+Click a task's **View files** action. The detail lists each file's status, downloaded bytes, percentage, and transfer speed when applicable.
+
+![Per-file progress, pause and priority controls](assets/images/en-download-files.png)
+
+A tick in the repository's selection list means **selected for download**, not **already downloaded**. Completion is shown in task details after the relevant checks.
+
+Downloads process one file at a time. **Pause** on a file preserves its partial data and lets other files proceed; **Download first** prioritizes a different file. Resume the paused file, or resume all paused files, when ready. Closing the main window leaves downloads running; quitting the app pauses them.
+
+### Delete a task or clean partial files
+
+The task's trash action removes its record and preserves both completed and partial files. If it is the active task, transfer stops before its record is removed. Deleting a paused duplicate should therefore not delete the files used by the active task.
+
+**Clean incomplete files** is a separate operation. It reviews ownership and shared destinations before removing partial data. Do not confuse that cleanup with deleting a task record.
+
+## 4. Import and inspect local models
+
+In **Model Files**, use **+** to add a local file or model directory. Imported files remain at their existing location. You can filter by engine or by main/auxiliary model, search by name or path, and select a card anywhere within its area.
+
+![Model files and compatible launch options](assets/images/en-models.png)
+
+A model detail shows its format, input capabilities, source revision, file location, and compatible launch choices. Format compatibility does not guarantee architecture support. Check any warning before launching.
+
+For a missing or damaged file, use its **Repair** action when the original repository/version is known. The manager downloads that individual file into staging, verifies it, and replaces the original target only when it is safe. A file in use, a changed target, or an incompatible source is blocked rather than replaced.
+
+## 5. Start a model service
+
+Select a compatible engine/model from **Engines**, or choose its launch option in **Model Files**. Review:
+
+1. **Port:** use an unused port. Each independently hosted service needs its own endpoint; the manager identifies listeners by process identity as well as the port.
+2. **Context window:** configure a size supported by the engine/model and your available memory. Client limits must match the actual service window.
+3. **Input mode:** choose automatic, text-only, or multimodal where supported. A text-only model cannot gain image support through a checkbox.
+4. **Auxiliary components:** choose the matching vision projector or draft model when the engine supports that component.
+5. **Runtime options:** use only the options exposed for that engine. Additional supported CLI launches can be configured through **Launch from command…**.
+
+Click **Start service**. The detail shows startup stages, available percentage information, the endpoint, and logs. A preparation/download stage may precede model loading. A phase percentage is a progress estimate for that phase, not a precise measure of all GPU work. An unreported percentage should remain unknown.
+
+![Service configuration and endpoint](assets/images/en-services.png)
+
+Wait until the service is ready before connecting a client. Inspect **This run's components** to confirm the active draft/vision/tokenizer components, rather than assuming a saved association was applied to an already-running service.
+
+## 6. Associate draft and vision models
+
+Open a main model's **Associated launch components** settings. Save a compatible draft model or matching GGUF projection file, then start a new service using that association. Changing the association affects later launches; it does not reload a running service.
+
+For the Qwen3.8-27B family, `incoai/Qwen3.8-27B-DFlash2` is an auxiliary draft package. It is not a standalone chat model. Its `config.json` and `model.safetensors` are required; it can share the main model's tokenizer. Splash's compatible current model preparation uses a matched draft. MLX-VLM draft support depends on its runtime and architecture support; MLX-LM cannot use this DFlash2 format as a generic draft.
+
+A vision-capable model can be run text-only when the selected runtime supports that mode. MLX multimodal services use **MLX-VLM**, not just MLX-LM. Older Splash packed models remain text-only and need their matching retained runtime.
+
+## 7. Manage services and model versions
+
+Every independent instance appears in **Services**, with its model, port, and status. Click anywhere on its card to select it. Stop a specific instance without stopping another one. Once stopped, its configuration can be deleted; model files and logs are retained.
+
+A model update is downloaded as another revision when the source supports revision snapshots. The existing service keeps its launched path/version. After the new files are complete, select the new version and configure another launch or restart the intended service. Keep an older version to switch back later, or move it to the Trash when it is unused.
+
+Files used by running main/auxiliary models and shared cache references are protected. Ollama manages registered models differently: deletion uses Ollama's native operation and requires the model to be unloaded. It is not a Trash operation.
+
+## 8. Connect directly or through the gateway
+
+A direct service exposes an endpoint such as `http://127.0.0.1:8083/v1`. Copy it from the service detail and select a model ID actually reported by the service.
+
+The **Unified gateway** provides one OpenAI-compatible endpoint for enabled routes:
+
+- Add ready local services discovered by the manager.
+- Add a remote OpenAI-compatible base URL and its required credentials.
+- Choose the route's model ID and enabled input modalities.
+- Use the alias published by the gateway's `/v1/models`, not a guessed provider/model name.
+- Keep the gateway access key private. Remote endpoints and keys are configuration, not public documentation.
+
+The gateway and individual services remain separate endpoints. A client can use either connection method.
+
+### pi and OpenCode
+
+From a ready service, open **One-click integration**, choose the direct or gateway route, model, and working directory. **Write configuration** registers the model in the client's native settings and backs up the original configuration. Existing providers and default-model choices are preserved.
+
+**Connect & open** starts the selected client with the prepared connection. **Copy command** is useful for manual terminal launch. After changing model limits or settings, an already-running client may need to reload/reselect the model or begin a new session.
+
+Web search is a client/tool capability. Enable the offered search-tool integration where supported and configure any required tool credentials. It is not enabled by adding a parameter to ordinary text generation alone.
+
+## 9. Monitor from the menu bar
+
+![System and service resources](assets/images/en-resources.png)
+
+The menu-bar panel shows system CPU, memory, disk and library usage, service resources, downloads, and recent measurements when available. Click a download's management action to open the relevant task.
+
+Clicking inside the panel keeps it usable; clicking another window or desktop area closes it. Clicking its status icon toggles the panel. **Open manager** reopens the main window. Closing the main window keeps background work running by default; **Quit** pauses downloads and stops monitoring while independently running model services remain available.
+
+Performance values labeled as measurements come from an actual benchmark or supported service logs. Unknown measurements remain unavailable; do not compare startup estimates with generation throughput.
+
+## 10. Troubleshooting
+
+| Problem | Check / action |
+| --- | --- |
+| Start button disabled | Engine enabled/installed, complete compatible files, an unused valid port, correct multimodal runtime, and no scoped maintenance operation |
+| Splash preparation waits on a draft | Inspect the draft download task, required files, repository access and runtime logs; the main weights being complete does not mean its auxiliary download is complete |
+| Vision model starts text-only | Select multimodal/automatic mode and a runtime that loads the required vision component; MLX-LM alone is insufficient |
+| Port seems to belong to the wrong engine | Inspect the listening process/service identity, then use the conflict action or another unused port |
+| Context overflow / repeated compaction | Match the client's declared context to the service, reload updated client configuration, compact or restart the session, and avoid large unneeded context inputs |
+| Model appears more than once | Check revision/quantization and physical file location; independent weights/revisions are different models, while shared runtime registrations should refer to the same source weights |
+| Missing model file | Repair that file from the known repository/revision; otherwise resolve the source again and select the required file |
+| Download speed is “—” | No active byte transfer is being measured, such as when paused, checking or completed |
+
+Engine logs and third-party client error text may remain in the language produced by the corresponding tool.
+
+## Shortcuts and data locations
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘1–⌘5 | Switch main sections |
+| ⌘R | Rescan engines/models |
+| ⌘O | Add a model directory |
+| ⌘, | Settings |
+| ⌘W | Close the main window using the configured behavior |
+| ⌘Q | Quit |
+
+Manager state remains in `~/Library/Application Support/ModelManager` to preserve existing installations. Model files stay in their chosen library/import locations. Distribution packages and screenshots do not include personal state, credentials, or model weights.
+
+See [licensing](LICENSING.md) for the noncommercial license and third-party boundaries.

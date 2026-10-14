@@ -1,0 +1,193 @@
+<!doctype html><html lang="zh-Hans"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>使用说明 — ModelDock</title><meta name="description" content="Illustrated ModelDock usage guide"><link rel="icon" href="assets/logo.png"><link rel="stylesheet" href="site.css"></head><body data-page="guide" data-language="zh"><a class="skip-link" href="#main" data-i18n="skip">Skip to content</a><header class="site-header"><div class="wrap header-inner"><a class="brand" href="./"><img src="assets/logo.png" width="36" height="36" alt=""><span>ModelDock</span></a><nav aria-label="Main navigation"><a href="./#workflow" data-i18n="navHow">How it works</a><a href="https://github.com/etongle/ModelDock">GitHub ↗</a></nav><button type="button" id="language" class="language">中文</button></div></header><main id="main" class="wrap guide-layout"><aside class="guide-toc" aria-label="目录"><div class="toc">
+<ul>
+<li><a href="#modeldock">ModelDock 模型坞使用说明</a><ul>
+<li><a href="#1">1. 安装与语言选择</a></li>
+<li><a href="#2">2. 准备模型基座</a></li>
+<li><a href="#3">3. 下载模型</a><ul>
+<li><a href="#_1">看每个文件的进度，调整下载顺序</a></li>
+<li><a href="#_2">删除任务与清理未完成文件</a></li>
+</ul>
+</li>
+<li><a href="#4">4. 导入与检查本地模型</a></li>
+<li><a href="#5">5. 启动模型服务</a></li>
+<li><a href="#6">6. 关联草稿与视觉组件</a></li>
+<li><a href="#7">7. 服务实例与模型版本</a></li>
+<li><a href="#8">8. 直连服务或使用统一网关</a><ul>
+<li><a href="#pi-opencode">pi 与 OpenCode 一键接入</a></li>
+</ul>
+</li>
+<li><a href="#9">9. 菜单栏管理与性能</a></li>
+<li><a href="#10">10. 常见问题</a></li>
+<li><a href="#_3">快捷键与保存位置</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</aside><article class="guide-content"><h1 id="modeldock">ModelDock 模型坞使用说明</h1>
+<p><a href="guide.html">English</a> · <a href="https://github.com/etongle/ModelDock/blob/main/README.zh-CN.md">项目介绍</a></p>
+<p>模型坞把三类内容分开管理：<strong>运行引擎</strong>负责推理，<strong>模型文件</strong>保存在磁盘，<strong>模型服务</strong>向客户端提供 API。一个基座可以启动多个独立服务，每个实例使用自己的模型和端口。</p>
+<p>本说明的截图使用示例数据，展示的是控制项和布局；其中的大小、资源数值不是性能实测，也不代表示例模型已实际加载。</p>
+<h2 id="1">1. 安装与语言选择</h2>
+<p>使用 Apple Silicon、macOS 14 或更新版本的 Mac。从项目 Releases 下载 DMG 或 ZIP，把 <strong>ModelDock.app</strong> 放进“应用程序”并打开。模型和第三方引擎需要另外准备；应用已附带统一网关需要的 Python 环境。</p>
+<p>当前安装包使用临时签名，尚未经过 Apple 公证。如果可信来源的安装包被拦截，先尝试打开，再按照 <a href="https://support.apple.com/102445">Apple 官方说明</a>，在“系统设置 → 隐私与安全性”选择“仍要打开”。只打开可信来源的程序。</p>
+<p><strong>首次启动默认英语</strong>，不因系统为中文而改变。在菜单 <strong>ModelDock → Settings…</strong>（⌘,）中切换 English、简体中文、Français、Português 或跟随系统。语言立即生效并自动保存。</p>
+<p><img alt="语言选择与窗口关闭设置" src="assets/zh-Hans-settings.png" /></p>
+<p>默认关闭主窗口后保持后台运行。也可以选择关闭窗口时退出，每次退出都会再次确认。</p>
+<h2 id="2">2. 准备模型基座</h2>
+<p>打开“运行引擎”，选择已安装的基座。卡片的整块区域都能点击，包括留白。“全局引擎设置”控制基座是否在常规列表中展示，单个“引擎配置”保存该基座支持的默认值及选项。</p>
+<p><img alt="运行引擎及多模态启动配置" src="assets/zh-Hans-engines.png" /></p>
+<ul>
+<li>点击“检查更新”核对版本。桌面应用与命令行组件分别展示，版本号不应相互比较。“已是最新”表示当前更新源没有更高版本；“有新版本”表示对应组件可更新。</li>
+<li>更新基座前，需要停止它自己的运行服务；其他基座的服务不应阻止本次操作。</li>
+<li>Homebrew 发行版本需要本机 Homebrew。MLX 使用独立环境管理组件，本地编译工具根据识别出的构建产物管理。</li>
+<li>卸载和清理残留前先核对范围。模型和个人数据默认保留；共享模型与使用中的文件受到保护。</li>
+</ul>
+<p>禁用基座会把它从常规选择中隐藏，已有文件和服务记录仍可管理。</p>
+<h2 id="3">3. 下载模型</h2>
+<p>在“下载导入”选择模型库位置，输入模型 ID 或完整地址，例如：</p>
+<pre><code class="language-text">mlx-community/Qwen3.8-27B-4bit
+https://huggingface.co/mlx-community/Qwen3.8-27B-4bit
+</code></pre>
+<p><code>owner/repo</code> 默认到 Hugging Face 解析。也支持完整的 Hugging Face / ModelScope 仓库地址，以及支持的模型文件直链。受限仓库需要具备访问权限并填写令牌；访问令牌输入框不会保存到磁盘。</p>
+<p>点击“解析地址”，检查文件列表：</p>
+<ul>
+<li>GGUF 语言模型一般选择一个所需量化版本；视觉、音频等模型可能还需要匹配的 <code>mmproj</code>。</li>
+<li>完整 MLX 模型需要全部必需权重分片、配置、tokenizer；有视觉能力的模型还需对应 processor、视觉配置等文件。</li>
+<li>草稿模型按它自己的格式下载。部分草稿由主模型提供 tokenizer，不需要给草稿仓库额外补 tokenizer。</li>
+</ul>
+<p><img alt="解析仓库及选择下载文件" src="assets/zh-Hans-downloads.png" /></p>
+<p>点击“下载并导入”。对于同一仓库、版本、文件选择及保存位置，优先续传可恢复的已有任务。同一目标路径已经有写入任务时，不会再创建冲突写入；不同版本和不同位置独立管理。</p>
+<h3 id="_1">看每个文件的进度，调整下载顺序</h3>
+<p>点击任务的“查看文件”。详细页展示文件状态、已下载大小、百分比，以及正在传输时的速度。</p>
+<p><img alt="逐文件进度、暂停和优先下载" src="assets/zh-Hans-download-files.png" /></p>
+<p>仓库选择列表里的勾选仅表示“选择下载”，不表示文件已经完成。下载完整并通过相关检查后，任务详情才标记为完成。</p>
+<p>目前每次处理一个文件。暂停某个文件会保留断点并继续处理其他文件；“优先下载”可把另一个文件放到前面。需要时继续指定文件或继续全部暂停文件。关闭主窗口继续下载，退出整个程序则暂停任务。</p>
+<h3 id="_2">删除任务与清理未完成文件</h3>
+<p>任务的垃圾桶操作删除任务记录，保留已完成和未完成文件。正在下载的任务会先停止传输，再移除记录。因此，删除暂停的重复记录不会把正在被另一个任务使用的下载文件一并删除。</p>
+<p>“清理未完成文件”是另外一个操作，清理前会检查目标及共用关系。删除记录与清理磁盘文件不是同一个操作。</p>
+<h2 id="4">4. 导入与检查本地模型</h2>
+<p>在“模型文件”点击 <strong>+</strong>，选择本地文件或完整目录。导入保留原位置，可以按基座、主模型/附属模型筛选，也可以搜索名称和路径。点击卡片任何区域即可选中。</p>
+<p><img alt="模型文件与兼容启动入口" src="assets/zh-Hans-models.png" /></p>
+<p>详情展示格式、输入能力、来源版本、保存位置和兼容启动方式。支持格式不代表一定支持该架构，启动前应查看提示。</p>
+<p>缺少或损坏的单个文件，在已知原始仓库和版本时可使用对应“修复”入口。程序只下载该文件至暂存位置，通过检查后才替换原目标。目标正在使用、文件发生变化或来源不匹配时会阻止替换。</p>
+<h2 id="5">5. 启动模型服务</h2>
+<p>在“运行引擎”选择兼容模型，或从“模型文件”选择对应启动入口，逐项检查：</p>
+<ol>
+<li><strong>端口：</strong>使用未占用的端口。独立托管的多个服务各有自己的地址；程序同时检查端口和监听进程身份。</li>
+<li><strong>上下文：</strong>选择引擎、模型及内存能支持的长度。客户端声明的窗口必须与真实服务一致。</li>
+<li><strong>输入模式：</strong>选择自动、纯文本或支持的多模态。文本模型不能靠开关获得视觉能力。</li>
+<li><strong>配套组件：</strong>基座支持时，选择匹配的视觉投影或草稿模型。</li>
+<li><strong>运行选项：</strong>仅使用该引擎支持的参数；可通过“按命令行启动”配置额外受支持的命令行方式。</li>
+</ol>
+<p>点击“启动服务”。详细页会展示启动阶段、可获取的百分比、接口地址和日志。启动可能先准备或下载辅助模型，再加载主模型。阶段百分比是阶段进度信息，不是 GPU 工作总量的精确计量；没有真实进度来源时保持未知。</p>
+<p><img alt="服务配置及接口地址" src="assets/zh-Hans-services.png" /></p>
+<p>服务就绪后再连接客户端。在“本次配套组件”查看实际应用的草稿、视觉和 tokenizer；已经运行的实例不会因为随后修改了关联而自动重载。</p>
+<h2 id="6">6. 关联草稿与视觉组件</h2>
+<p>在主模型的“关联启动组件”中选择匹配的草稿或 GGUF 投影文件，保存后启动新服务。修改关联只影响后续启动，不会重载当前运行实例。</p>
+<p>Qwen3.8-27B 系列的 <code>incoai/Qwen3.8-27B-DFlash2</code> 是辅助草稿包，不能当作独立聊天模型运行。它需要 <code>config.json</code> 和 <code>model.safetensors</code>，可以共用主模型 tokenizer。匹配的新版 Splash 组合使用适配草稿；MLX-VLM 的草稿支持依赖具体运行时与架构，MLX-LM 不能把该格式当成通用草稿加载。</p>
+<p>视觉模型可以在引擎支持时按纯文本启动。MLX 多模态需要 <strong>MLX-VLM</strong>，只有 MLX-LM 不够。旧 Splash packed 模型仍是纯文本，使用匹配的保留运行组件。</p>
+<h2 id="7">7. 服务实例与模型版本</h2>
+<p>“模型服务”列出每个独立实例的模型、端口和状态。整块卡片可选中，可以停止其中一个实例而保留另一个。停止后可删除该服务配置，模型文件和日志保留。</p>
+<p>支持版本快照的来源会把模型更新下载为另一个版本，已有服务继续使用启动时的路径和版本。新文件完整后，选择新版本，配置另一个实例或重启目标服务。旧版本可以保留供后续切回，也可在不使用时移至废纸篓。</p>
+<p>运行中的主模型、辅助模型以及共享缓存受到保护。Ollama 登记模型使用原生删除操作，须先卸载常驻模型；它的删除不会经过废纸篓。</p>
+<h2 id="8">8. 直连服务或使用统一网关</h2>
+<p>直接服务地址例如 <code>http://127.0.0.1:8083/v1</code>，可从服务详情复制。使用服务实际报告的模型 ID。</p>
+<p>“统一网关”把启用的路由暴露在同一个 OpenAI 兼容接口下：</p>
+<ul>
+<li>添加程序发现的、已经就绪的本机服务。</li>
+<li>添加远程兼容 API 的 base URL 和它所需的密钥。</li>
+<li>选择路由的模型及允许输入的模态。</li>
+<li>使用网关 <code>/v1/models</code> 返回的别名，不凭名称猜测 provider/model。</li>
+<li>保护网关访问密钥。远程接口和密钥是个人配置，不应出现在公开文档中。</li>
+</ul>
+<p>网关和各个独立服务是不同地址，客户端可以选择任一接入方式。</p>
+<h3 id="pi-opencode">pi 与 OpenCode 一键接入</h3>
+<p>从就绪服务打开“一键接入”，选择直连或统一网关、目标模型及工作目录。“写入配置”登记到客户端原生配置并备份原配置，保留已有提供方和默认模型。</p>
+<p>“接入并打开”使用准备好的连接启动客户端，“复制命令”可用于手动终端启动。更新模型限制或参数后，已经运行的客户端可能需要重载、重新选择模型或新建会话。</p>
+<p>Web search 是客户端工具能力。支持时启用提供的搜索工具接入，并配置所需凭证；普通生成请求多加一个参数不会自动获得联网搜索。</p>
+<h2 id="9">9. 菜单栏管理与性能</h2>
+<p><img alt="系统及服务资源" src="assets/zh-Hans-resources.png" /></p>
+<p>菜单栏面板显示 CPU、内存、磁盘、模型库、服务资源、下载任务及已有测量结果。下载任务的管理入口会跳转到对应任务。</p>
+<p>面板内操作正常响应，点击其他窗口或桌面区域会自动收起；点击状态图标切换展开/关闭。“打开管理界面”重新显示主窗口。默认关闭主窗口继续后台任务；“退出”会暂停下载、停止监测，独立运行的模型服务继续可用。</p>
+<p>标为实测的性能来自实际测量或支持的运行日志，没有数据时不编造数值。启动估算进度与生成吞吐量是不同指标，不应混用。</p>
+<h2 id="10">10. 常见问题</h2>
+<table>
+<thead>
+<tr>
+<th>问题</th>
+<th>检查或解决方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>启动按钮不可用</td>
+<td>检查引擎是否启用并安装、模型是否完整兼容、端口是否有效未占用、多模态组件是否匹配，以及目标基座是否正在维护</td>
+</tr>
+<tr>
+<td>Splash 准备卡在草稿下载</td>
+<td>检查草稿任务、必需文件、仓库访问和运行日志；主模型下载完不代表辅助文件已完成</td>
+</tr>
+<tr>
+<td>视觉模型以文本运行</td>
+<td>选择多模态/自动及能够加载视觉组件的运行时；只有 MLX-LM 不够</td>
+</tr>
+<tr>
+<td>端口被错误标为其他基座</td>
+<td>检查实际监听进程和服务身份，再使用冲突处理或改为未占用端口</td>
+</tr>
+<tr>
+<td>上下文溢出、重复压缩</td>
+<td>核对客户端与服务的真实窗口，重载客户端新配置，压缩或重开会话，减少不必要的大上下文输入</td>
+</tr>
+<tr>
+<td>模型看起来重复</td>
+<td>检查版本、量化和实际权重位置。不同版本/独立权重应分开，同一权重的多引擎登记应关联在同一来源下</td>
+</tr>
+<tr>
+<td>缺少单个模型文件</td>
+<td>来源和版本已知时修复该文件；否则重新解析来源并选择必需文件</td>
+</tr>
+<tr>
+<td>下载速度显示“—”</td>
+<td>当前没有测量字节传输，例如暂停、校验或完成状态</td>
+</tr>
+</tbody>
+</table>
+<p>第三方引擎日志和客户端错误可能保留原工具的语言。</p>
+<h2 id="_3">快捷键与保存位置</h2>
+<table>
+<thead>
+<tr>
+<th>快捷键</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>⌘1–⌘5</td>
+<td>切换主页面</td>
+</tr>
+<tr>
+<td>⌘R</td>
+<td>重新扫描</td>
+</tr>
+<tr>
+<td>⌘O</td>
+<td>添加模型目录</td>
+</tr>
+<tr>
+<td>⌘,</td>
+<td>设置</td>
+</tr>
+<tr>
+<td>⌘W</td>
+<td>按设置关闭主窗口</td>
+</tr>
+<tr>
+<td>⌘Q</td>
+<td>退出程序</td>
+</tr>
+</tbody>
+</table>
+<p>为兼容已有安装，程序状态继续保存在 <code>~/Library/Application Support/ModelManager</code>；模型保存在所选模型库或导入位置。安装包和文档截图不包含个人配置、凭证或模型权重。</p>
+<p>非商业使用要求和第三方许可边界见<a href="https://github.com/etongle/ModelDock/blob/main/docs/LICENSING.md">许可说明</a>。</p></article></main><footer class="wrap"><a class="brand" href="./"><img src="assets/logo.png" width="28" height="28" alt=""><span>ModelDock</span></a><p data-i18n="footer">Source available. Noncommercial use.</p></footer><script src="site.js" defer></script></body></html>
