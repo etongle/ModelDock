@@ -41,7 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let capturing = argumentValue("--capture-dir") != nil
         let captureWidth = CGFloat(Double(argumentValue("--capture-width") ?? "1440") ?? 1440)
         let captureHeight = CGFloat(Double(argumentValue("--capture-height") ?? "1024") ?? 1024)
-        let contentSize = NSSize(width: capturing ? captureWidth : min(1440, screen.width - 60), height: capturing ? captureHeight : min(1024, screen.height - 60))
+        // Default to the common 1280×800 desktop size, capped at 85% of the visible screen and never below minSize.
+        let contentSize = NSSize(width: capturing ? captureWidth : max(980, min(1280, (screen.width * 0.85).rounded())),
+                                 height: capturing ? captureHeight : max(740, min(800, (screen.height * 0.85).rounded())))
         window = ManagerWindow(contentRect: NSRect(origin: .zero, size: contentSize), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.delegate = self
         (window as? ManagerWindow)?.minimizeToStatusBar = { [weak self] in self?.hideMainWindow() }
@@ -53,7 +55,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let view = NSHostingView(rootView: MainView(store: store, services: store.services)); window.contentView = view
         if passiveTesting {
             window.setFrameOrigin(NSPoint(x: screen.maxX + 200, y: screen.minY + 100)); window.orderFront(nil)
-        } else { window.center(); window.makeKeyAndOrderFront(nil); NSApplication.shared.activate(ignoringOtherApps: true) }
+        } else {
+            // NSWindow.center() sits above the midline; place the window at the true center of the visible area.
+            let frame = window.frame
+            window.setFrameOrigin(NSPoint(x: (screen.midX - frame.width / 2).rounded(), y: (screen.midY - frame.height / 2).rounded()))
+            window.makeKeyAndOrderFront(nil); NSApplication.shared.activate(ignoringOtherApps: true)
+        }
         makeMenu(); makeStatusBar()
         if !CommandLine.arguments.contains("--documentation-ui") { store.services.beginMonitoring(); store.scan(); store.beginResourceMonitoring() }
         if let task = argumentValue("--resume-download-job"), UUID(uuidString: task) != nil, store.downloads.jobs.contains(where: { $0.id == task }) {
