@@ -27,12 +27,12 @@ struct EngineServicesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(verbatim: L10n.text("服务实例")).font(.system(size: 24, weight: .semibold))
+                Text(verbatim: L10n.text("服务实例")).font(.system(size: TypeScale.section, weight: .semibold))
                 Spacer()
-                Text(verbatim: L10n.text("\(records.count + external.count) 个服务 · \(running) 个运行中")).font(.system(size: 13)).foregroundStyle(Theme.muted)
+                Text(verbatim: L10n.text("\(records.count + external.count) 个服务 · \(running) 个运行中")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
             }
             if records.isEmpty && external.isEmpty {
-                Text(verbatim: L10n.text("暂无服务。在下方选择模型和端口即可启动。")).font(.system(size: 14)).foregroundStyle(Theme.muted).padding(.vertical, 6)
+                Text(verbatim: L10n.text("暂无服务。在下方选择模型和端口即可启动。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.vertical, 6)
             } else {
                 ForEach(records) { spec in managedRow(spec) }
                 ForEach(external) { service in externalRow(service) }
@@ -44,8 +44,8 @@ struct EngineServicesView: View {
         return VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(spec.modelName).font(.system(size: 17, weight: .semibold)).lineLimit(1).help(L10n.text(spec.modelName))
-                    Text(verbatim: "127.0.0.1:\(spec.port)/v1").font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.muted)
+                    Text(spec.modelName).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1).help(L10n.text(spec.modelName))
+                    Text(verbatim: "127.0.0.1:\(spec.port)/v1").font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted)
                 }
                 Spacer(minLength: 8)
                 StateLabel(title: services.statusTitle(spec), color: status.color)
@@ -64,7 +64,7 @@ struct EngineServicesView: View {
     }
     private func metadata(_ spec: ServiceSpec) -> some View {
         Text(verbatim: L10n.text("端口 \(spec.port) · 上下文 \(spec.context.formatted()) tokens" + (spec.engineVersion.map { " · v\($0)" } ?? "")))
-            .font(.system(size: 12)).foregroundStyle(Theme.muted).fixedSize(horizontal: true, vertical: false)
+            .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: true, vertical: false)
     }
     private func actions(_ spec: ServiceSpec) -> some View {
         HStack(spacing: 12) {
@@ -75,18 +75,18 @@ struct EngineServicesView: View {
                 Button(L10n.text("配置")) { store.configureService(spec) }.buttonStyle(.bordered)
                 Button(role: .destructive) { store.removeServiceConfiguration(spec) } label: { Label(L10n.text("删除"), systemImage: "trash") }.buttonStyle(.bordered).disabled(!services.canRemoveConfiguration(spec)).help(L10n.text("删除服务配置，保留模型文件和运行日志")).accessibilityIdentifier("delete-engine-service-\(spec.id)")
             }
-        }.font(.system(size: 13)).fixedSize()
+        }.font(.system(size: TypeScale.body)).fixedSize()
     }
     private func externalRow(_ service: ObservedService) -> some View {
         let names = service.models.map { $0.hasPrefix("/") ? URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent : $0 }
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(verbatim: L10n.text(names.isEmpty ? "外部模型服务" : names.joined(separator: "、"))).font(.system(size: 17, weight: .semibold)).lineLimit(1).help(L10n.text(service.models.joined(separator: "、")))
+                Text(verbatim: L10n.text(names.isEmpty ? "外部模型服务" : names.joined(separator: "、"))).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1).help(L10n.text(service.models.joined(separator: "、")))
                 Spacer(minLength: 8)
                 StateLabel(title: service.ready ? "运行中 · 外部启动" : "端口占用 · 外部启动", color: service.ready ? .green : .orange)
             }
             HStack {
-                Text(verbatim: "127.0.0.1:\(service.port)/v1").font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.muted)
+                Text(verbatim: "127.0.0.1:\(service.port)/v1").font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted)
                 Spacer(minLength: 8)
                 Button(L10n.text("查看详情")) { if !store.serviceEngineFilter.isEmpty && store.serviceEngineFilter != service.engineID { store.serviceEngineFilter = "" }; store.selectedExternal = service.port; store.tab = .services }.buttonStyle(PlainAction())
             }

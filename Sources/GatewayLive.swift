@@ -35,9 +35,9 @@ enum GatewayLive {
         var exports: [ClientConnection] = []
         for client in [CodingClient.opencode, .pi] {
             guard client.contextRequirement(context) == nil,
-                  let executable = installations.first(where: { $0.id == client })?.executable else { continue }
+                  let installation = installations.first(where: { $0.id == client }), let executable = installation.executable else { continue }
             let connection = try ConnectionFiles.prepare(client: client, target: target, context: context,
-                executable: executable, project: project.path, root: report.appendingPathComponent("profiles"))
+                executable: executable, project: project.path, root: report.appendingPathComponent("profiles"), clientVersion: installation.version)
             try await ConnectionFiles.validateLaunch(URL(fileURLWithPath: connection.script + ".json"))
             exports.append(connection)
         }

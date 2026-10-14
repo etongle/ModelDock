@@ -9,32 +9,32 @@ struct DownloadWorkspace: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 18) {
-                Text(verbatim: L10n.text("下载任务")).font(.system(size: 30, weight: .bold))
+                Text(verbatim: L10n.text("下载任务")).font(.system(size: TypeScale.title, weight: .bold))
                 Text(verbatim: L10n.text("下载、续传与模型导入")).foregroundStyle(Theme.muted)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         if downloads.jobs.isEmpty { EmptyMessage(symbol: "arrow.down.circle", title: L10n.text("还没有下载任务"), detail: "粘贴仓库或模型文件地址，选择要下载的文件。") }
                         ForEach(downloads.jobs) { job in
                             VStack(alignment: .leading, spacing: 10) {
-                                Text(job.repository).font(.system(size: 15, weight: .semibold)).lineLimit(2)
-                                HStack { Text(verbatim: L10n.text(job.site.rawValue)); Spacer(); Text(verbatim: L10n.text(job.state.rawValue)).foregroundStyle(job.state == .failed ? Theme.errorText : Theme.linkColor) }.font(.system(size: 12))
+                                Text(job.repository).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(2)
+                                HStack { Text(verbatim: L10n.text(job.site.rawValue)); Spacer(); Text(verbatim: L10n.text(job.state.rawValue)).foregroundStyle(job.state == .failed ? Theme.errorText : Theme.linkColor) }.font(.system(size: TypeScale.callout))
                                 if job.totalKnown && job.total > 0 { ProgressView(value: min(Double(job.received), Double(job.total)), total: Double(job.total)) }
                                 else if job.state == .downloading { ProgressView().controlSize(.small) }
-                                HStack { Text(verbatim: L10n.text(job.percentageLabel)).fontWeight(.medium); Spacer(); Text(verbatim: L10n.text(job.totalKnown ? "\(sizeLabel(job.received)) / \(sizeLabel(job.total))" : sizeLabel(job.received))) }.font(.system(size: 12)).monospacedDigit().foregroundStyle(Theme.muted).accessibilityIdentifier("download-percentage-\(job.id)")
-                                HStack { Label(L10n.text("下载速度"), systemImage: "arrow.down"); Spacer(); Text(verbatim: L10n.text(downloads.speedLabel(job.id))).monospacedDigit() }.font(.system(size: 12)).foregroundStyle(Theme.muted).accessibilityIdentifier("download-speed-\(job.id)")
-                                Text(job.displayLocation).font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.muted).lineLimit(2).help(L10n.text(job.displayLocation)).textSelection(.enabled)
-                                Text(verbatim: L10n.text("已完成 \(job.finished.count) / \(job.files.count) 个文件")).font(.system(size: 11)).foregroundStyle(Theme.muted)
-                                Text(verbatim: L10n.text(job.state == .complete ? (job.repairTarget != nil ? "单文件修复已应用" : "已导入 · 可在模型文件中查看") : job.currentFile)).font(.system(size: 11)).foregroundStyle(Theme.muted).lineLimit(2)
-                                if let error = job.error { Text(verbatim: L10n.text(error)).font(.system(size: 12)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
+                                HStack { Text(verbatim: L10n.text(job.percentageLabel)).fontWeight(.medium); Spacer(); Text(verbatim: L10n.text(job.totalKnown ? "\(sizeLabel(job.received)) / \(sizeLabel(job.total))" : sizeLabel(job.received))) }.font(.system(size: TypeScale.callout)).monospacedDigit().foregroundStyle(Theme.muted).accessibilityIdentifier("download-percentage-\(job.id)")
+                                HStack { Label(L10n.text("下载速度"), systemImage: "arrow.down"); Spacer(); Text(verbatim: L10n.text(downloads.speedLabel(job.id))).monospacedDigit() }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).accessibilityIdentifier("download-speed-\(job.id)")
+                                Text(job.displayLocation).font(.system(size: TypeScale.caption, design: .monospaced)).foregroundStyle(Theme.muted).lineLimit(2).help(L10n.text(job.displayLocation)).textSelection(.enabled)
+                                Text(verbatim: L10n.text("已完成 \(job.finished.count) / \(job.files.count) 个文件")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
+                                Text(verbatim: L10n.text(job.state == .complete ? (job.repairTarget != nil ? "单文件修复已应用" : "已导入 · 可在模型文件中查看") : job.currentFile)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(2)
+                                if let error = job.error { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
                                 DownloadTaskActions(store: store, downloads: downloads, job: job)
                                 if job.state != .complete && downloads.activeID != job.id {
-                                    Button(L10n.text("清理未完成文件…")) { confirmCleanup(job) }.font(.system(size: 12)).foregroundStyle(Theme.errorText).buttonStyle(.plain).frame(minHeight: 30)
+                                    Button(L10n.text("清理未完成文件…")) { confirmCleanup(job) }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.errorText).buttonStyle(.plain).frame(minHeight: 30)
                                 }
                             }.padding(16).background(Theme.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
                         }
                     }
                 }
-                Text(verbatim: L10n.text("下载优先续传同位置的匹配任务。\n删除任务保留文件；清理会检查文件共用情况。")).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                Text(verbatim: L10n.text("下载优先续传同位置的匹配任务。\n删除任务保留文件；清理会检查文件共用情况。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
             }.padding(24).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
             ScrollView {
@@ -42,25 +42,25 @@ struct DownloadWorkspace: View {
                     DownloadFileDetails(store: store, downloads: downloads, job: job).padding(32)
                 } else {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text(verbatim: L10n.text("从模型网站导入")).font(.system(size: 32, weight: .bold))
-                    Text(verbatim: L10n.text("支持 Hugging Face、ModelScope 仓库，以及其他网站的模型文件直链。")).font(.system(size: 16)).foregroundStyle(Theme.muted)
-                    HStack { TextField(L10n.text("输入 owner/repo，或粘贴模型下载地址"), text: $downloads.address).textFieldStyle(.roundedBorder).font(.system(size: 15)).onSubmit { downloads.resolve() }.accessibilityIdentifier("download-address"); Button { downloads.resolve() } label: { if downloads.resolving { ProgressView().controlSize(.small) } else { Text(verbatim: L10n.text("解析地址")) } }.buttonStyle(.borderedProminent).tint(Theme.accent).disabled(downloads.resolving || downloads.address.isEmpty) }
+                    Text(verbatim: L10n.text("从模型网站导入")).font(.system(size: TypeScale.title, weight: .bold))
+                    Text(verbatim: L10n.text("支持 Hugging Face、ModelScope 仓库，以及其他网站的模型文件直链。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
+                    HStack { TextField(L10n.text("输入 owner/repo，或粘贴模型下载地址"), text: $downloads.address).textFieldStyle(.roundedBorder).font(.system(size: TypeScale.body)).onSubmit { downloads.resolve() }.accessibilityIdentifier("download-address"); Button { downloads.resolve() } label: { if downloads.resolving { ProgressView().controlSize(.small) } else { Text(verbatim: L10n.text("解析地址")) } }.buttonStyle(.borderedProminent).tint(Theme.accent).disabled(downloads.resolving || downloads.address.isEmpty) }
                     SecureField(L10n.text("访问令牌（可选，仅用于 Hugging Face / ModelScope）"), text: $downloads.token).textFieldStyle(.roundedBorder)
-                    Text(verbatim: L10n.text("私有或受限仓库需先获访问许可。令牌不会保存到磁盘，重新打开应用后需重新填写。")).font(.system(size: 12)).foregroundStyle(Theme.muted)
-                    HStack { VStack(alignment: .leading, spacing: 7) { Text(verbatim: L10n.text("保存到模型库")).font(.system(size: 14, weight: .semibold)); Text(verbatim: L10n.text(downloads.destination)).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled) }; Spacer(); Button(L10n.text("选择目录…")) { let panel = NSOpenPanel(); panel.canChooseFiles = false; panel.canChooseDirectories = true; panel.prompt = L10n.text("选择模型库"); if panel.runModal() == .OK, let url = panel.url { downloads.destination = url.resolvingSymlinksInPath().path } }.buttonStyle(.bordered) }
+                    Text(verbatim: L10n.text("私有或受限仓库需先获访问许可。令牌不会保存到磁盘，重新打开应用后需重新填写。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                    HStack { VStack(alignment: .leading, spacing: 7) { Text(verbatim: L10n.text("保存到模型库")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(downloads.destination)).font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled) }; Spacer(); Button(L10n.text("选择目录…")) { let panel = NSOpenPanel(); panel.canChooseFiles = false; panel.canChooseDirectories = true; panel.prompt = L10n.text("选择模型库"); if panel.runModal() == .OK, let url = panel.url { downloads.destination = url.resolvingSymlinksInPath().path } }.buttonStyle(.bordered) }
                     if let message = downloads.message { Text(verbatim: L10n.text(message)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
-                    if let notice = downloads.notice { Label(L10n.text(notice), systemImage: "info.circle").font(.system(size: 13)).foregroundStyle(Theme.linkColor) }
+                    if let notice = downloads.notice { Label(L10n.text(notice), systemImage: "info.circle").font(.system(size: TypeScale.body)).foregroundStyle(Theme.linkColor) }
                     if let listing = downloads.listing {
                         Divider()
-                        HStack { VStack(alignment: .leading, spacing: 7) { Text(listing.repository).font(.system(size: 21, weight: .semibold)); Text(verbatim: L10n.text("\(listing.site.rawValue) · \(listing.files.count) 个文件")).font(.system(size: 13)).foregroundStyle(Theme.muted) }; Spacer(); Button(L10n.text("全选")) { downloads.selected = Set(listing.files.map(\.id)) }; Button(L10n.text("取消全选")) { downloads.selected = [] } }.buttonStyle(.bordered)
-                        Text(verbatim: L10n.text("GGUF 通常选择一个量化版本；视觉模型还需对应 mmproj。MLX / Splash 封装应下载全部权重、配置与 tokenizer。下载完成后会自动扫描适配引擎。")).font(.system(size: 13)).foregroundStyle(Theme.muted)
+                        HStack { VStack(alignment: .leading, spacing: 7) { Text(listing.repository).font(.system(size: TypeScale.section, weight: .semibold)); Text(verbatim: L10n.text("\(listing.site.rawValue) · \(listing.files.count) 个文件")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }; Spacer(); Button(L10n.text("全选")) { downloads.selected = Set(listing.files.map(\.id)) }; Button(L10n.text("取消全选")) { downloads.selected = [] } }.buttonStyle(.bordered)
+                        Text(verbatim: L10n.text("GGUF 通常选择一个量化版本；视觉模型还需对应 mmproj。MLX / Splash 封装应下载全部权重、配置与 tokenizer。下载完成后会自动扫描适配引擎。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                         VStack(spacing: 0) { ForEach(listing.files) { file in
-                            Toggle(isOn: Binding(get: { downloads.selected.contains(file.id) }, set: { if $0 { downloads.selected.insert(file.id) } else { downloads.selected.remove(file.id) } })) { HStack { Text(file.path).font(.system(size: 13, design: .monospaced)).lineLimit(2); Spacer(); Text(verbatim: L10n.text(file.bytes > 0 ? sizeLabel(file.bytes) : "大小待确认")).font(.system(size: 12)).foregroundStyle(Theme.muted) }.padding(.vertical, 9) }.toggleStyle(.checkbox)
+                            Toggle(isOn: Binding(get: { downloads.selected.contains(file.id) }, set: { if $0 { downloads.selected.insert(file.id) } else { downloads.selected.remove(file.id) } })) { HStack { Text(file.path).font(.system(size: TypeScale.body, design: .monospaced)).lineLimit(2); Spacer(); Text(verbatim: L10n.text(file.bytes > 0 ? sizeLabel(file.bytes) : "大小待确认")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }.padding(.vertical, 9) }.toggleStyle(.checkbox)
                             Divider()
                         } }.padding(16).background(Theme.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
-                        if let task = downloads.preferredPausedTask { Label(L10n.text("已有同位置的暂停任务，将从 \(sizeLabel((try? DownloadRecovery.reconcile(task).received) ?? task.received)) 继续。"), systemImage: "arrow.clockwise").font(.system(size: 13)).foregroundStyle(Theme.linkColor) }
-                        Text(verbatim: L10n.text("勾选表示选择下载，不代表文件已下载完成。查看任务的“查看文件”可确认每个文件的状态。")).font(.system(size: 12)).foregroundStyle(Theme.muted)
-                        HStack { Text(verbatim: L10n.text("已选 \(downloads.selectedFiles.count) 个文件 · " + (downloads.selectedFiles.contains { $0.bytes <= 0 } ? "大小待确认" : sizeLabel(downloads.selectedFiles.reduce(0) { $0 + $1.bytes })))).font(.system(size: 13)).foregroundStyle(Theme.muted); Spacer(); Button { downloads.createJob() } label: { Label(L10n.text("下载并导入"), systemImage: downloads.preferredPausedTask == nil ? "arrow.down.circle" : "arrow.clockwise") }.buttonStyle(AccentButton()).disabled(downloads.selectedFiles.isEmpty || downloads.activeID != nil || store.maintaining).accessibilityIdentifier("download-and-import") }
+                        if let task = downloads.preferredPausedTask { Label(L10n.text("已有同位置的暂停任务，将从 \(sizeLabel((try? DownloadRecovery.reconcile(task).received) ?? task.received)) 继续。"), systemImage: "arrow.clockwise").font(.system(size: TypeScale.body)).foregroundStyle(Theme.linkColor) }
+                        Text(verbatim: L10n.text("勾选表示选择下载，不代表文件已下载完成。查看任务的“查看文件”可确认每个文件的状态。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                        HStack { Text(verbatim: L10n.text("已选 \(downloads.selectedFiles.count) 个文件 · " + (downloads.selectedFiles.contains { $0.bytes <= 0 } ? "大小待确认" : sizeLabel(downloads.selectedFiles.reduce(0) { $0 + $1.bytes })))).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted); Spacer(); Button { downloads.createJob() } label: { Label(L10n.text("下载并导入"), systemImage: downloads.preferredPausedTask == nil ? "arrow.down.circle" : "arrow.clockwise") }.buttonStyle(AccentButton()).disabled(downloads.selectedFiles.isEmpty || downloads.activeID != nil || store.maintaining).accessibilityIdentifier("download-and-import") }
                     } else { EmptyMessage(symbol: "link", title: L10n.text("粘贴模型地址开始"), detail: "先查看文件列表与下载大小，完成后自动扫描模型，并标记专属引擎和适配关系。") }
                 }.padding(32)
                 }

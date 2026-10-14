@@ -63,7 +63,7 @@ struct EngineVersionTable: View {
     var rows: [EngineVersionRow]
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack { Text(verbatim: L10n.text("组件")).frame(width: 150, alignment: .leading); Text(verbatim: L10n.text("当前已安装")).frame(width: 85, alignment: .leading); Text(verbatim: L10n.text("最新可安装")).frame(width: 85, alignment: .leading); Spacer(); Text(verbatim: L10n.text("更新状态")).frame(width: 115, alignment: .leading) }.font(.system(size: 11)).foregroundStyle(Theme.muted)
+            HStack { Text(verbatim: L10n.text("组件")).frame(width: 150, alignment: .leading); Text(verbatim: L10n.text("当前已安装")).frame(width: 85, alignment: .leading); Text(verbatim: L10n.text("最新可安装")).frame(width: 85, alignment: .leading); Spacer(); Text(verbatim: L10n.text("更新状态")).frame(width: 115, alignment: .leading) }.font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
             ForEach(rows) { row in
                 HStack(alignment: .top) {
                     Text(verbatim: L10n.text(row.name)).fontWeight(.medium).frame(width: 150, alignment: .leading)
@@ -71,7 +71,7 @@ struct EngineVersionTable: View {
                     Text(verbatim: L10n.text(row.available)).frame(width: 85, alignment: .leading)
                     Spacer(minLength: 4)
                     Label(L10n.text(row.state.title), systemImage: row.state == .current || row.state == .newer ? "checkmark.circle" : row.state == .update ? "arrow.up.circle" : "info.circle").foregroundStyle(row.state == .update ? Theme.warningText : Theme.linkColor).frame(width: 115, alignment: .leading)
-                }.font(.system(size: 12)).textSelection(.enabled).accessibilityElement(children: .combine)
+                }.font(.system(size: TypeScale.callout)).textSelection(.enabled).accessibilityElement(children: .combine)
             }
         }.padding(14).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
     }

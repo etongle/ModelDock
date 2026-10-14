@@ -127,7 +127,7 @@ enum ConnectionFiles {
             }
         }
     }
-    static func prepare(client: CodingClient, target: ConnectionTarget, context: Int, executable: String, project: String, root: URL, guardExecutable: String? = Bundle.main.executableURL?.path, webSearch: Bool = false) throws -> ClientConnection {
+    static func prepare(client: CodingClient, target: ConnectionTarget, context: Int, executable: String, project: String, root: URL, guardExecutable: String? = Bundle.main.executableURL?.path, webSearch: Bool = false, clientVersion: String = "") throws -> ClientConnection {
         guard (target.isRemote ? (1...65535) : (1024...65535)).contains(target.port), validModel(target.model), (2048...1_048_576).contains(context),
               target.context.map({ context <= $0 }) ?? true else { throw LaunchError.message("模型名称、端口或上下文长度无效。") }
         if let requirement = client.contextRequirement(context) { throw LaunchError.message(requirement + "。请先调整模型服务的上下文设置。") }
@@ -162,7 +162,7 @@ enum ConnectionFiles {
             ]
             if webSearch { object["mcp"] = [WebSearchConnection.name: WebSearchConnection.opencode]; object["permission"] = [WebSearchConnection.name + "_*": "allow"] }
             let data = try json(object); try write(data, to: configuration)
-            // The inline layer survives project-level defaults; --pure keeps third-party agents from selecting cloud models.
+            // The inline layer survives project-level defaults; enabled_providers keeps third-party agents from selecting cloud models.
             environment["OPENCODE_CONFIG_CONTENT"] = String(decoding: data, as: UTF8.self)
             environment["OPENCODE_DISABLE_EXTERNAL_SKILLS"] = "1"
             environment["OPENCODE_DISABLE_CLAUDE_CODE_SKILLS"] = "1"
@@ -170,7 +170,7 @@ enum ConnectionFiles {
             environment["XDG_DATA_HOME"] = profile.appendingPathComponent("data").path
             environment["XDG_CACHE_HOME"] = profile.appendingPathComponent("cache").path
             environment["XDG_STATE_HOME"] = profile.appendingPathComponent("state").path
-            arguments = (webSearch ? [] : ["--pure"]) + ["--model", selected]
+            arguments = opencodeArguments(version: clientVersion, model: selected, webSearch: webSearch)
         case .pi:
             configuration = profile.appendingPathComponent("models.json")
             var modelEntry: [String: Any] = ["id": target.model, "name": target.model, "reasoning": false, "input": target.capabilities?.inputs.contains("image") == true ? ["text", "image"] : ["text"],
@@ -218,6 +218,12 @@ enum ConnectionFiles {
         try write(Data(text.utf8), to: script, executable: true)
         try write(try JSONEncoder().encode(connection), to: root.appendingPathComponent("latest-\(client.rawValue).json"))
         return connection
+    }
+    /// OpenCode 2.x removed --pure/--model and attaches to a shared background service that ignores this
+    /// launcher's environment, so it needs --standalone and takes the model from the isolated config instead.
+    static func opencodeArguments(version: String, model: String, webSearch: Bool) -> [String] {
+        if (Int(version.split(separator: ".").first ?? "") ?? 0) >= 2 { return ["--standalone"] }
+        return (webSearch ? [] : ["--pure"]) + ["--model", model]
     }
     static func validateLaunch(_ receipt: URL) async throws {
         let connection = try JSONDecoder().decode(ClientConnection.self, from: Data(contentsOf: receipt))
@@ -299,7 +305,7 @@ final class ConnectionController: ObservableObject {
     func connect(_ client: CodingClient, store: AppStore, launch: Bool, registerOnly: Bool = false) {
         guard !busy else { return }
         guard let target = store.connectionTargets.first(where: { $0.id == modelID }),
-              let executable = installations.first(where: { $0.id == client })?.executable else { error = "模型服务或客户端不可用，请刷新后重试。"; return }
+              let installation = installations.first(where: { $0.id == client }), let executable = installation.executable else { error = "模型服务或客户端不可用，请刷新后重试。"; return }
         let chosenContext = context; let chosenProject = project
         busy = true; message = nil; error = nil
         Task {
@@ -321,7 +327,7 @@ final class ConnectionController: ObservableObject {
                 guard target.isRemote || ConnectionFiles.matches(target, before: listeners, after: after, probe: probe, records: store.services.records) else {
                     throw LaunchError.message("接口模型或监听进程已改变，未接入客户端。请刷新服务后重试。")
                 }
-                var connection = try ConnectionFiles.prepare(client: client, target: target, context: chosenContext, executable: executable, project: chosenProject, root: root, webSearch: webSearch && client != .hermes)
+                var connection = try ConnectionFiles.prepare(client: client, target: target, context: chosenContext, executable: executable, project: chosenProject, root: root, webSearch: webSearch && client != .hermes, clientVersion: installation.version)
                 if (registerInClient || registerOnly) && client != .hermes {
                     let saved = try NativeClientConfig.register(connection, root: root, webSearch: webSearch)
                     connection.registeredConfiguration = saved.configuration.path

@@ -88,11 +88,11 @@ enum ModelIdentity {
     var body: some View {
         if let registrations = model.splashRegistrations, !registrations.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Text(verbatim: L10n.text("引擎配套组件")).font(.system(size: 18, weight: .semibold))
-                Text(verbatim: L10n.text("Splash 与 MLX 共用本版本主权重；Splash 的草稿、视觉和配置登记单独保留。")).font(.system(size: 13)).foregroundStyle(Theme.muted)
+                Text(verbatim: L10n.text("引擎配套组件")).font(.system(size: TypeScale.body, weight: .semibold))
+                Text(verbatim: L10n.text("Splash 与 MLX 共用本版本主权重；Splash 的草稿、视觉和配置登记单独保留。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                 ForEach(registrations, id: \.path) { item in
                     HStack { StateLabel(title: item.complete ? "Splash 已准备" : "Splash 组件需修复", color: item.complete ? .green : .orange); Spacer(); Button(L10n.text("查看组件目录")) { store.reveal(item.path) }.buttonStyle(.bordered) }
-                    Text(verbatim: L10n.text(item.vision == "none" ? "Splash 输入：文本" : "Splash 输入：文本 / 图片 / 文件")).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                    Text(verbatim: L10n.text(item.vision == "none" ? "Splash 输入：文本" : "Splash 输入：文本 / 图片 / 文件")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 }
             }.padding(18).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
         }

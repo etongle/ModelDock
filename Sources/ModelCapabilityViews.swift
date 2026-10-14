@@ -20,7 +20,7 @@ struct ModelCapabilityBadge: View {
     var prefix = ""
     var body: some View {
         Label(L10n.text(prefix + capabilities.badgeTitle), systemImage: capabilities.known && capabilities.supportsMedia ? "photo.on.rectangle" : "text.alignleft")
-            .font(.system(size: 12, weight: .medium)).foregroundStyle(capabilities.known ? Theme.linkColor : Theme.muted)
+            .font(.system(size: TypeScale.callout, weight: .medium)).foregroundStyle(capabilities.known ? Theme.linkColor : Theme.muted)
             .padding(.horizontal, 8).padding(.vertical, 5).background(Theme.selection.opacity(0.65), in: RoundedRectangle(cornerRadius: 7))
             .help(L10n.text(capabilities.source)).accessibilityLabel(L10n.text(prefix + capabilities.badgeTitle + "。" + capabilities.source))
     }

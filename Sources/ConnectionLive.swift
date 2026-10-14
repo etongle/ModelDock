@@ -55,9 +55,9 @@ enum ConnectionLive {
             }
             var exports: [ClientConnection] = []
             for client in [CodingClient.opencode, .pi] {
-                guard let executable = installations.first(where: { $0.id == client })?.executable else { continue }
+                guard let installation = installations.first(where: { $0.id == client }), let executable = installation.executable else { continue }
                 exports.append(try ConnectionFiles.prepare(client: client, target: target, context: spec.context,
-                    executable: executable, project: project, root: store.connections.root))
+                    executable: executable, project: project, root: store.connections.root, clientVersion: installation.version))
             }
             try JSONEncoder().encode(exports).write(to: report.appendingPathComponent("live-exports.json"))
             result["result"] = "ready"; result["model"] = target.model

@@ -34,7 +34,8 @@ enum PopoverChecks {
         app.toggleStatusPopover(); try ConnectionChecks.require(!app.statusPopover.isShown, "Status icon failed to toggle closed")
         let popover = NSRect(x: 20, y: 50, width: 390, height: 600), button = NSRect(x: 20, y: 700, width: 150, height: 24)
         try ConnectionChecks.require(PopoverOutsideClickMonitor.isOutside(NSPoint(x: 600, y: 100), popover: popover, button: button) && !PopoverOutsideClickMonitor.isOutside(NSPoint(x: 40, y: 710), popover: popover, button: button), "Global click classification or status-icon protection wrong")
-        try ConnectionFiles.json(["result": "passed", "checks": ["actual AppKit inside/outside mouse events", "inside controls retain panel", "outside same-app click dismisses", "status icon toggles and reopens", "desktop/outside geometry and icon protection"], "globalDesktopClickInjected": false]).write(to: folder.appendingPathComponent("result.json"))
+        try ConnectionChecks.require(PopoverOutsideClickMonitor.shouldClose(NSPoint(x: 40, y: 710), content: popover, button: button, global: true) && !PopoverOutsideClickMonitor.shouldClose(NSPoint(x: 40, y: 710), content: popover, button: button, global: false) && PopoverOutsideClickMonitor.shouldClose(NSPoint(x: 60, y: 655), content: popover, button: button, global: false), "Hidden status item or popover arrow click did not dismiss")
+        try ConnectionFiles.json(["result": "passed", "checks": ["actual AppKit inside/outside mouse events", "inside controls retain panel", "outside same-app click dismisses", "status icon toggles and reopens", "desktop/outside geometry and icon protection", "arrow and hidden status item clicks dismiss"], "globalDesktopClickInjected": false]).write(to: folder.appendingPathComponent("result.json"))
         print("Popover checks passed"); NSApplication.shared.terminate(nil)
     }
 }

@@ -1,12 +1,18 @@
 from pathlib import Path
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
-import json,os,subprocess,sys,threading,urllib.request,time
+import json,os,re,subprocess,sys,threading,urllib.request,time
 root=Path(sys.argv[1]).resolve()
 exports=json.loads((root/'live-exports.json').read_text())
 fixture=Path(exports[0]['project'])/'fixture.txt'
 fixture.write_text('MODEL_MANAGER_CONTEXT_READ_FIXTURE\n')
 requests=[]
 active=None
+def opencode_run(executable,model):
+    # OpenCode 2.x dropped --pure and attaches to a shared background service; --standalone keeps the isolated config.
+    version=subprocess.run([executable,'--version'],capture_output=True,text=True,stdin=subprocess.DEVNULL).stdout
+    found=re.search(r'(\d+)\.\d+',version)
+    if found and int(found.group(1))>=2:return [executable,'run','--standalone','--model',model,'--format','json']
+    return [executable,'--pure','run','--model',model,'--format','json']
 class Proxy(BaseHTTPRequestHandler):
     def log_message(self,*args):pass
     def do_GET(self):
@@ -74,10 +80,10 @@ try:
         for n,prompt in enumerate(prompts):
             if client=='pi':command=[info['executable']]+info['arguments']+['--offline','--session',str(root/'pi-conversation.jsonl'),'--print',prompt]
             else:
-                command=[info['executable'],'--pure','run','--model',info['providerID']+'/'+info['model'],'--format','json']
+                command=opencode_run(info['executable'],info['providerID']+'/'+info['model'])
                 if session:command+=['--session',session]
                 command+=[prompt]
-            began=len(requests);t=time.time();done=subprocess.run(command,cwd=info['project'],env=env,text=True,capture_output=True,timeout=150)
+            began=len(requests);t=time.time();done=subprocess.run(command,cwd=info['project'],env=env,text=True,capture_output=True,timeout=150,stdin=subprocess.DEVNULL)
             (root/f'{client}-turn{n}.stdout').write_text(done.stdout);(root/f'{client}-turn{n}.stderr').write_text(done.stderr)
             if client=='opencode':
                 pieces=[];compactions=0
