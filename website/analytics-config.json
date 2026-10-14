@@ -1,0 +1,8 @@
+{
+  "provider": "ga4",
+  "enabled": false,
+  "measurementId": "",
+  "hostname": "etongle.github.io",
+  "pathPrefix": "/ModelDock/",
+  "reportingTimeZone": "Asia/Shanghai"
+}

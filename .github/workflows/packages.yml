@@ -1,0 +1,49 @@
+name: Publish release to GitHub Packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing published release tag
+        required: true
+        default: v0.8.1
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: packages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'etongle/ModelDock'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install verified ORAS 1.3.4
+        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6
+        with:
+          version: 1.3.4
+          url: https://github.com/oras-project/oras/releases/download/v1.3.4/oras_1.3.4_linux_amd64.tar.gz
+          checksum: f27adb935022d94df8dc77719c322dda592c78a0d57a6f7dcdd8d900b248c454
+      - name: Publish verified macOS release files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+          PACKAGE_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | oras login ghcr.io --username "$PACKAGE_OWNER" --password-stdin --registry-config "$RUNNER_TEMP/modeldock-oras.json"
+          python3 Tools/publish_packages.py --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --work-dir "$RUNNER_TEMP/modeldock-package" --registry-config "$RUNNER_TEMP/modeldock-oras.json"
+      - name: Remove temporary registry login
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/modeldock-oras.json" ]; then
+            oras logout ghcr.io --registry-config "$RUNNER_TEMP/modeldock-oras.json"
+            rm -f "$RUNNER_TEMP/modeldock-oras.json"
+          fi

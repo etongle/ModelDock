@@ -80,3 +80,5 @@ python3 Tests/packaged_release_checks.py
 本项目第一方代码与文档采用 **[PolyForm Noncommercial License 1.0.0](LICENSE)**，允许其规定的非商业用途下使用、修改和再分发；没有授予商业使用许可。再分发须保留许可及 Required Notice。
 
 这是**源码可见的非商业项目**，不属于 OSI 定义的开源项目。外部基座、模型权重和附带依赖继续遵守各自许可，详见[许可说明](docs/LICENSING.md)和[Required Notice](LICENSE-NOTICE.txt)。
+
+GitHub Packages：[包下载与发布](docs/PACKAGES.md)；网站访问量：[统计配置](docs/ANALYTICS.md)。

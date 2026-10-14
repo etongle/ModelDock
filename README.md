@@ -75,6 +75,9 @@ The app targets macOS 14 and later. The current release was tested on the develo
 
 Visit the [bilingual documentation website](https://etongle.github.io/ModelDock/) for an introduction and illustrated guides. The buildless static site is in `website/`; the included GitHub Actions workflow deploys it on pushes affecting the website, or through a manual run. See [website maintenance](docs/WEBSITE.md).
 
+
+GitHub Packages mirrors the installation files for automation; see [package downloads and publication](docs/PACKAGES.md). Optional website visitor statistics are viewed privately in the owner's GA4 dashboard; see [analytics setup](docs/ANALYTICS.md).
+
 ## License
 
 ModelDock's first-party code and documentation use the **[PolyForm Noncommercial License 1.0.0](LICENSE)**. It permits uses, modifications, and redistribution for permitted noncommercial purposes. Commercial use is not granted by this license. Retain the license and required notices when redistributing.

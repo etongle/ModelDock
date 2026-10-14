@@ -1,6 +1,6 @@
 # GitHub Pages website
 
-The static website lives in `website/`; it has no backend, tracking, or runtime build dependency. It includes English/Chinese project copy, an engine compatibility table, illustrated guides, a language switch, and release links.
+The static website lives in `website/`; it has no backend or runtime build dependency. Optional GA4 visitor statistics are configured at deployment; they stay disabled until a measurement ID is supplied. It includes English/Chinese project copy, an engine compatibility table, illustrated guides, a language switch, and release links.
 
 ## Preview locally
 
@@ -33,3 +33,7 @@ The workflow has read access to source and only the Pages/id-token permissions n
 Regenerate guide HTML with `python3 Tools/build_website_guides.py` (requires the Python `Markdown` package). Ordinary visitors only receive static HTML/CSS/JS. Recheck all links and screenshots after renaming UI actions.
 
 Screenshots must use isolated demonstration data. Never publish a personal state directory, access token, client configuration, logs containing secrets, or real user paths.
+
+## Visitor statistics
+
+The Pages workflow reads the Actions variable `GA4_MEASUREMENT_ID`. With no value, analytics remain disabled. Statistics are viewed in the owner's GA4 dashboard; see [analytics setup and report dimensions](ANALYTICS.md). The homepage uses the Splash launch illustration; its token/s figures are explicitly marked as historical single runs with different quantization/cache.
