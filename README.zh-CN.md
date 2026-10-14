@@ -9,9 +9,9 @@
 
 **Apple Silicon · macOS 14+ · 英语、简体中文、法语、葡萄牙语**
 
-![模型坞运行引擎界面](docs/assets/images/zh-Hans-engines.png)
+![模型坞 Splash 主图与历史 token 生成速度对比](website/assets/splash-hero.png)
 
-*文档截图使用示例数据。截图中的模型大小及资源数值用于说明界面，并非性能实测。*
+*首图为界面宣传插图。速度来自 M4 Max 历史单次实测，量化与缓存不同；使用说明中的截图使用示例数据。*
 
 ## 主要功能
 

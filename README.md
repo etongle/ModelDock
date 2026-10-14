@@ -9,9 +9,9 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 
 **Apple Silicon · macOS 14+ · English, 简体中文, Français, Português**
 
-![ModelDock runtime engines](docs/assets/images/en-engines.png)
+![ModelDock featuring Splash and historical token generation speeds](website/assets/splash-hero.png)
 
-*Documentation screenshots use demonstration data. Model sizes and resource values shown in them are illustrative.*
+*Illustrated interface. Speed figures are historical single runs on M4 Max; quantization and cache differ. Documentation screenshots use demonstration data.*
 
 ## What you can do
 

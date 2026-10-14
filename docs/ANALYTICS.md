@@ -2,7 +2,7 @@
 
 Statistics are viewed in your own **Google Analytics 4 management dashboard**, not published on the ModelDock website. The homepage and both illustrated guides share one measurement configuration. The Mac application does not load this website analytics tag.
 
-**Current state:** the integration is ready, but collection remains disabled until a real `G-…` measurement ID is supplied. Earlier traffic cannot be reconstructed from the browser integration.
+Collection is enabled when the production deployment has a valid **GA4_MEASUREMENT_ID** repository variable. Local previews keep collection disabled. Earlier traffic cannot be reconstructed from the browser integration.
 
 ## Create the property
 
@@ -38,6 +38,6 @@ See [Google's geography report](https://support.google.com/analytics/answer/1294
 
 统计仅在你的 GA4 管理后台查看。先使用自己的 Google 账号创建 **ModelDock** 媒体资源，时区选择 **Asia/Shanghai**；新增网站数据流，网址填 **https://etongle.github.io/ModelDock/**，复制 **G- 开头的测量 ID**。
 
-将 ID 发给项目维护者，或填入仓库 Actions 的 **GA4_MEASUREMENT_ID** 变量后重新运行网站发布。当前没有测量 ID，因此不会生成或伪造访问量。
+将 ID 发给项目维护者，或填入仓库 Actions 的 **GA4_MEASUREMENT_ID** 变量后重新运行网站发布。生产网站使用已配置的测量 ID；未配置时和本地预览均关闭统计。
 
 在 GA4 的“探索 → 自由形式”中配置国家、省/州、日期、小时等维度，查看浏览量、用户数和会话数。总量用所选日期范围的整体结果；独立访客不能把每天或每个地区的数据直接相加。统计从启用后开始，无法恢复此前的访问历史。
