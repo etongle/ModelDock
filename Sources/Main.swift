@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     let outsideClicks = PopoverOutsideClickMonitor()
     func applicationDidFinishLaunching(_ notification: Notification) {
         if argumentValue("--appearance") == "dark" { NSApplication.shared.appearance = NSAppearance(named: .darkAqua) }
+        else if argumentValue("--appearance") == "light" { NSApplication.shared.appearance = NSAppearance(named: .aqua) }
         let directory = argumentValue("--state-dir").map { URL(fileURLWithPath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/ModelManager")
         store = AppStore(stateDirectory: directory)
         store.onLanguageChange = { [weak self] in self?.refreshLanguage() }
