@@ -18,16 +18,16 @@ struct ModelLocalVersions: View {
     var versions: [LocalModel] { LocalModelVersions.related(model, models: store.models) }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(verbatim: L10n.text(versions.count > 1 ? "新旧版本并存" : "本地版本")).font(.system(size: 18, weight: .semibold))
-            Text(verbatim: L10n.text(versions.count > 1 ? "更新会保留旧模型。选择版本后配置服务，运行中的服务继续使用已启动版本；不用的版本可以移至废纸篓。" : "当前只有一个本地版本。引擎的准备登记和配套组件归属于此版本，不单独计作模型版本。")).font(.system(size: 13)).foregroundStyle(Theme.muted)
+            Text(verbatim: L10n.text(versions.count > 1 ? "新旧版本并存" : "本地版本")).font(.system(size: TypeScale.body, weight: .semibold))
+            Text(verbatim: L10n.text(versions.count > 1 ? "更新会保留旧模型。选择版本后配置服务，运行中的服务继续使用已启动版本；不用的版本可以移至废纸篓。" : "当前只有一个本地版本。引擎的准备登记和配套组件归属于此版本，不单独计作模型版本。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
             if versions.count > 1 {
                 ForEach(versions) { version in
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(verbatim: L10n.text(version.name)).font(.system(size: 14, weight: .medium)).lineLimit(2)
-                            Text(verbatim: L10n.text(version.format + " · " + sizeLabel(version.bytes) + (ModelOrigin.read(version).map { " · " + String($0.revision.prefix(12)) } ?? ""))).font(.system(size: 11)).foregroundStyle(Theme.muted)
+                            Text(verbatim: L10n.text(version.name)).font(.system(size: TypeScale.body, weight: .medium)).lineLimit(2)
+                            Text(verbatim: L10n.text(version.format + " · " + sizeLabel(version.bytes) + (ModelOrigin.read(version).map { " · " + String($0.revision.prefix(12)) } ?? ""))).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
                         }.frame(maxWidth: .infinity, alignment: .leading)
-                        if version.id == model.id { Text(verbatim: L10n.text("当前查看")).font(.system(size: 11)).foregroundStyle(Theme.linkColor) }
+                        if version.id == model.id { Text(verbatim: L10n.text("当前查看")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.linkColor) }
                         else { Button(L10n.text("选择版本")) { store.showModelFile(version) }.buttonStyle(.bordered) }
                         Button(role: .destructive) { store.deleteModel(version) } label: { Image(systemName: "trash") }.buttonStyle(.bordered).help(L10n.text("移至废纸篓；使用中的模型会被拦截")).disabled(store.modelFiles.deletingID != nil)
                     }.padding(12).background(Theme.line.opacity(0.3), in: RoundedRectangle(cornerRadius: 9))

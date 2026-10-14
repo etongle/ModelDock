@@ -29,16 +29,16 @@ struct DraftModelInfo: View {
     var model: LocalModel
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(verbatim: L10n.text("草稿加速组件")).font(.system(size: 21, weight: .semibold))
-            Text(verbatim: L10n.text(model.usageExplanation)).font(.system(size: 13)).foregroundStyle(Theme.muted)
-            Text(verbatim: L10n.text("本仓库的必需文件：config.json、model.safetensors。tokenizer 由主模型提供。")).font(.system(size: 13))
+            Text(verbatim: L10n.text("草稿加速组件")).font(.system(size: TypeScale.section, weight: .semibold))
+            Text(verbatim: L10n.text(model.usageExplanation)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
+            Text(verbatim: L10n.text("本仓库的必需文件：config.json、model.safetensors。tokenizer 由主模型提供。")).font(.system(size: TypeScale.body))
             let targets = store.models.filter { DraftModelPolicy.matches(model, target: $0) }
-            Text(verbatim: L10n.text(targets.isEmpty ? "尚未找到尺寸匹配的本地主模型。" : "尺寸匹配的主模型")).font(.system(size: 14, weight: .medium))
+            Text(verbatim: L10n.text(targets.isEmpty ? "尚未找到尺寸匹配的本地主模型。" : "尺寸匹配的主模型")).font(.system(size: TypeScale.body, weight: .medium))
             ForEach(targets) { target in
-                HStack { Text(verbatim: L10n.text(target.name)).lineLimit(2); Spacer(); Button(L10n.text("查看主模型")) { store.showModelFile(target) }.buttonStyle(.bordered) }.font(.system(size: 13))
+                HStack { Text(verbatim: L10n.text(target.name)).lineLimit(2); Spacer(); Button(L10n.text("查看主模型")) { store.showModelFile(target) }.buttonStyle(.bordered) }.font(.system(size: TypeScale.body))
             }
-            Text(verbatim: L10n.text("可在主模型的“关联启动组件”中选择本草稿。新版 Splash 和支持 DFlash 的 MLX-VLM 能加载此组件；MLX-LM 不支持此格式。尺寸匹配后仍由引擎验证模型家族。")).font(.system(size: 12)).foregroundStyle(Theme.muted)
-            Link("查看 DFlash2 模型说明", destination: URL(string: "https://huggingface.co/incoai/Qwen3.8-27B-DFlash2")!).font(.system(size: 13))
+            Text(verbatim: L10n.text("可在主模型的“关联启动组件”中选择本草稿。新版 Splash 和支持 DFlash 的 MLX-VLM 能加载此组件；MLX-LM 不支持此格式。尺寸匹配后仍由引擎验证模型家族。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+            Link("查看 DFlash2 模型说明", destination: URL(string: "https://huggingface.co/incoai/Qwen3.8-27B-DFlash2")!).font(.system(size: TypeScale.body))
         }.padding(18).background(Theme.selection.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
     }
 }

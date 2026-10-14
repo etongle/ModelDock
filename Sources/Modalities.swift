@@ -106,34 +106,34 @@ struct InputModeView: View {
     @ObservedObject var store: AppStore
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) { Text(verbatim: L10n.text("模型输入能力")).font(.system(size: 14)).foregroundStyle(Theme.muted); ModelCapabilityBadge(capabilities: store.selectedModelCapabilities); Spacer() }
+            HStack(spacing: 10) { Text(verbatim: L10n.text("模型输入能力")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted); ModelCapabilityBadge(capabilities: store.selectedModelCapabilities); Spacer() }
             if let spec = store.currentService, spec.pid != nil {
-                HStack(spacing: 10) { Text(verbatim: L10n.text("当前服务")).font(.system(size: 14)).foregroundStyle(Theme.muted); ModelCapabilityBadge(capabilities: store.serviceCapabilities(spec)); Spacer() }
-                Text(verbatim: L10n.text("此实例正在运行；停止后可修改启动模式，或选择其他空闲端口启动新实例。")).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                HStack(spacing: 10) { Text(verbatim: L10n.text("当前服务")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted); ModelCapabilityBadge(capabilities: store.serviceCapabilities(spec)); Spacer() }
+                Text(verbatim: L10n.text("此实例正在运行；停止后可修改启动模式，或选择其他空闲端口启动新实例。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
             }
             HStack {
-                Text(verbatim: L10n.text("本次启动模式")).font(.system(size: 14)).foregroundStyle(Theme.muted)
+                Text(verbatim: L10n.text("本次启动模式")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                 if store.engine.independentModels {
                     Picker(L10n.text("本次启动模式"), selection: $store.inputMode) {
                         Text(verbatim: L10n.text(InputMode.automatic.title)).tag(InputMode.automatic)
                         Text(verbatim: L10n.text(InputMode.text.title)).tag(InputMode.text)
                         Text(verbatim: L10n.text(InputMode.multimodal.title)).tag(InputMode.multimodal).disabled(store.nativeInputReason != nil)
                     }.labelsHidden().frame(maxWidth: 240).disabled(store.currentService?.pid != nil).accessibilityIdentifier("model-input-mode")
-                } else { Text(verbatim: L10n.text("随具体模型自动开启")).font(.system(size: 14)) }
+                } else { Text(verbatim: L10n.text("随具体模型自动开启")).font(.system(size: TypeScale.body)) }
                 Spacer()
             }
             if [EngineKind.llama, .prism].contains(store.engine.kind), store.inputMode != .text {
-                HStack { Text(verbatim: L10n.text(store.projectorPath.isEmpty ? store.selectedModel?.companion.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "未选择投影文件" : URL(fileURLWithPath: store.projectorPath).lastPathComponent)).font(.system(size: 12)).foregroundStyle(Theme.muted).lineLimit(1); Spacer(); Button(L10n.text("选择投影文件…")) { store.chooseProjector() }.buttonStyle(.bordered).disabled(store.currentService?.pid != nil) }
+                HStack { Text(verbatim: L10n.text(store.projectorPath.isEmpty ? store.selectedModel?.companion.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "未选择投影文件" : URL(fileURLWithPath: store.projectorPath).lastPathComponent)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(1); Spacer(); Button(L10n.text("选择投影文件…")) { store.chooseProjector() }.buttonStyle(.bordered).disabled(store.currentService?.pid != nil) }
             }
-            if let reason = store.nativeInputReason { Text(verbatim: L10n.text(reason)).font(.system(size: 12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+            if let reason = store.nativeInputReason { Text(verbatim: L10n.text(reason)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
             else {
-                HStack(spacing: 10) { Text(verbatim: L10n.text("启动后输入")).font(.system(size: 12)).foregroundStyle(Theme.muted); ModelCapabilityBadge(capabilities: ModalityPolicy.planned(engine: store.engine, model: store.selectedModel, projector: store.projectorPath, mode: store.inputMode)) }
+                HStack(spacing: 10) { Text(verbatim: L10n.text("启动后输入")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted); ModelCapabilityBadge(capabilities: ModalityPolicy.planned(engine: store.engine, model: store.selectedModel, projector: store.projectorPath, mode: store.inputMode)) }
             }
             if store.engine.kind == .mlx {
-                Text(verbatim: L10n.text("本次使用：" + ((store.inputMode == .multimodal || (store.inputMode == .automatic && store.selectedModelCapabilities.supportsMedia && store.engine.visionPath != nil)) ? "MLX-VLM · 多模态服务" : "MLX-LM · 文本服务"))).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.linkColor)
+                Text(verbatim: L10n.text("本次使用：" + ((store.inputMode == .multimodal || (store.inputMode == .automatic && store.selectedModelCapabilities.supportsMedia && store.engine.visionPath != nil)) ? "MLX-VLM · 多模态服务" : "MLX-LM · 文本服务"))).font(.system(size: TypeScale.body, weight: .medium)).foregroundStyle(Theme.linkColor)
             }
-            Text(verbatim: L10n.text(store.engine.modalityGuide.activation)).font(.system(size: 12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-            Button(L10n.text("查看此基座的官方多模态说明")) { if let url = URL(string: store.engine.modalityGuide.url) { NSWorkspace.shared.open(url) } }.buttonStyle(PlainAction()).font(.system(size: 12))
+            Text(verbatim: L10n.text(store.engine.modalityGuide.activation)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            Button(L10n.text("查看此基座的官方多模态说明")) { if let url = URL(string: store.engine.modalityGuide.url) { NSWorkspace.shared.open(url) } }.buttonStyle(PlainAction()).font(.system(size: TypeScale.callout))
         }.onAppear { store.normalizeStartupMode() }.onChange(of: store.engineID) { store.normalizeStartupMode() }
     }
 }

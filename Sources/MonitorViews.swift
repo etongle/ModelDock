@@ -13,10 +13,10 @@ struct ResourceCard: View {
     var title: String; var symbol: String; var value: String; var detail: String; var fraction: Double?
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label(L10n.text(title), systemImage: symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.muted)
-            Text(verbatim: L10n.text(value)).font(.system(size: 22, weight: .semibold, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.65)
+            Label(L10n.text(title), systemImage: symbol).font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(Theme.muted)
+            Text(verbatim: L10n.text(value)).font(.system(size: TypeScale.section, weight: .semibold, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.65)
             ProgressView(value: min(1, max(0, fraction ?? 0))).tint(Theme.accent).accessibilityLabel(L10n.text(title + "占用"))
-            Text(verbatim: L10n.text(detail)).font(.system(size: 12)).foregroundStyle(Theme.muted).lineLimit(2).frame(minHeight: 30, alignment: .top)
+            Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(2).frame(minHeight: 30, alignment: .top)
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading).background(Theme.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: 13)).overlay { RoundedRectangle(cornerRadius: 13).stroke(Theme.line) }.accessibilityElement(children: .combine)
     }
 }
@@ -44,7 +44,7 @@ struct ResourceTrend: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack { Text(verbatim: L10n.text("实时趋势")).font(.system(size: 16, weight: .semibold)); Spacer(); Label(L10n.text("CPU"), systemImage: "circle.fill").foregroundStyle(Theme.linkColor); Label(L10n.text("内存"), systemImage: "circle.fill").foregroundStyle(.teal) }.font(.system(size: 11))
+            HStack { Text(verbatim: L10n.text("实时趋势")).font(.system(size: TypeScale.body, weight: .semibold)); Spacer(); Label(L10n.text("CPU"), systemImage: "circle.fill").foregroundStyle(Theme.linkColor); Label(L10n.text("内存"), systemImage: "circle.fill").foregroundStyle(.teal) }.font(.system(size: TypeScale.caption))
             GeometryReader { geometry in
                 ZStack {
                     ForEach([0.0, 0.5, 1.0], id: \.self) { value in Path { path in path.move(to: CGPoint(x: 0, y: geometry.size.height * value)); path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height * value)) }.stroke(Theme.line, style: StrokeStyle(lineWidth: 1, dash: [4, 4])) }
@@ -52,7 +52,7 @@ struct ResourceTrend: View {
                     path(geometry.size, value: { $0.memory }).stroke(.teal, lineWidth: 2)
                 }
             }.frame(height: 72).accessibilityLabel(L10n.text("CPU 与内存占用趋势"))
-            HStack { Text(verbatim: L10n.text("0–100% · 最多保留最近 3 分钟")); Spacer(); Text(verbatim: L10n.text(points.last?.date.formatted(date: .omitted, time: .standard) ?? "采样中")) }.font(.system(size: 11)).foregroundStyle(Theme.muted)
+            HStack { Text(verbatim: L10n.text("0–100% · 最多保留最近 3 分钟")); Spacer(); Text(verbatim: L10n.text(points.last?.date.formatted(date: .omitted, time: .standard) ?? "采样中")) }.font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
         }.padding(18).background(Theme.line.opacity(0.2), in: RoundedRectangle(cornerRadius: 12))
     }
 }
@@ -61,21 +61,21 @@ struct ServiceResourceRows: View {
     @ObservedObject var monitor: ResourceMonitor
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(verbatim: L10n.text("模型服务资源")).font(.system(size: 21, weight: .semibold))
-            if monitor.services.isEmpty { Text(verbatim: L10n.text("服务启动后，显示引擎及其子进程的内存和 CPU 占用。")).foregroundStyle(Theme.muted).font(.system(size: 14)) }
+            Text(verbatim: L10n.text("模型服务资源")).font(.system(size: TypeScale.section, weight: .semibold))
+            if monitor.services.isEmpty { Text(verbatim: L10n.text("服务启动后，显示引擎及其子进程的内存和 CPU 占用。")).foregroundStyle(Theme.muted).font(.system(size: TypeScale.body)) }
             ForEach(monitor.services) { service in
                 HStack(spacing: 18) {
                     Image(systemName: "server.rack").foregroundStyle(Theme.linkColor).frame(width: 30)
-                    VStack(alignment: .leading, spacing: 6) { Text(verbatim: L10n.text(service.name)).fontWeight(.semibold); Text(verbatim: "\(service.model) · \(service.port)").font(.system(size: 12)).foregroundStyle(Theme.muted).lineLimit(1).help(L10n.text(service.model)) }.frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 6) { Text(verbatim: L10n.text(service.name)).fontWeight(.semibold); Text(verbatim: "\(service.model) · \(service.port)").font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(1).help(L10n.text(service.model)) }.frame(maxWidth: .infinity, alignment: .leading)
                     value("内存", service.memory.map(memoryLabel) ?? "—")
                     value("CPU", percentageLabel(service.cpu))
                     value("进程", service.processCount > 0 ? String(service.processCount) : "—")
                 }.padding(16).background(Theme.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: 10)).accessibilityElement(children: .combine)
             }
-            Text(verbatim: L10n.text("服务内存统计包括可读取的子进程；服务 CPU 以单核 100% 计算，多核负载可超过 100%。")).font(.system(size: 12)).foregroundStyle(Theme.muted)
+            Text(verbatim: L10n.text("服务内存统计包括可读取的子进程；服务 CPU 以单核 100% 计算，多核负载可超过 100%。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
         }
     }
-    func value(_ title: String, _ text: String) -> some View { VStack(alignment: .trailing, spacing: 7) { Text(verbatim: L10n.text(title)).font(.system(size: 11)).foregroundStyle(Theme.muted); Text(verbatim: L10n.text(text)).font(.system(size: 15, weight: .medium)).monospacedDigit() }.frame(width: 90, alignment: .trailing) }
+    func value(_ title: String, _ text: String) -> some View { VStack(alignment: .trailing, spacing: 7) { Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted); Text(verbatim: L10n.text(text)).font(.system(size: TypeScale.body, weight: .medium)).monospacedDigit() }.frame(width: 90, alignment: .trailing) }
 }
 struct BenchmarkCards: View {
     var result: BenchmarkResult
@@ -88,7 +88,7 @@ struct BenchmarkCards: View {
             metric("采样峰值内存", result.peakMemory.map(memoryLabel) ?? "—")
         }
     }
-    func metric(_ title: String, _ value: String) -> some View { VStack(alignment: .leading, spacing: 12) { Text(verbatim: L10n.text(title)).font(.system(size: 12)).foregroundStyle(Theme.muted); Text(verbatim: L10n.text(value)).font(.system(size: 20, weight: .semibold, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6) }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Theme.selection.opacity(0.7), in: RoundedRectangle(cornerRadius: 11)) }
+    func metric(_ title: String, _ value: String) -> some View { VStack(alignment: .leading, spacing: 12) { Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted); Text(verbatim: L10n.text(value)).font(.system(size: TypeScale.section, weight: .semibold, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6) }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Theme.selection.opacity(0.7), in: RoundedRectangle(cornerRadius: 11)) }
 }
 
 @MainActor
@@ -105,12 +105,12 @@ struct MonitorWorkspace: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
-                VStack(alignment: .leading, spacing: 9) { Text(verbatim: L10n.text("资源与性能")).font(.system(size: 32, weight: .bold)); Text(verbatim: L10n.text("整机资源、模型服务与本机推理实测")).foregroundStyle(Theme.muted) }.frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 9) { Text(verbatim: L10n.text("资源与性能")).font(.system(size: TypeScale.title, weight: .bold)); Text(verbatim: L10n.text("整机资源、模型服务与本机推理实测")).foregroundStyle(Theme.muted) }.frame(maxWidth: .infinity, alignment: .leading)
                 ResourceOverview(monitor: monitor)
                 ResourceTrend(points: monitor.history)
                 ServiceResourceRows(monitor: monitor)
                 Divider()
-                Text(verbatim: L10n.text("模型推理性能")).font(.system(size: 23, weight: .semibold))
+                Text(verbatim: L10n.text("模型推理性能")).font(.system(size: TypeScale.section, weight: .semibold))
                 if store.benchmarkTargets.isEmpty {
                     EmptyMessage(symbol: "speedometer", title: L10n.text("启动主模型服务后即可实测"), detail: "选择正在运行的语言模型，测量生成速度、首个输出延迟和服务内存。")
                     Button(L10n.text("查看模型服务")) { store.tab = .services }.buttonStyle(.bordered)
@@ -119,22 +119,22 @@ struct MonitorWorkspace: View {
                         Picker(L10n.text("模型服务"), selection: Binding(get: { current?.id ?? "" }, set: { performance.selection = $0 })) { ForEach(store.benchmarkTargets) { target in Text(verbatim: "\(target.engineName) · \(target.apiModel) · \(target.port)").tag(target.id) } }.disabled(performance.running)
                         HStack(spacing: 20) { Picker(L10n.text("输出上限"), selection: $performance.outputLimit) { ForEach([64, 128, 256], id: \.self) { Text(verbatim: L10n.text("\($0) tokens")).tag($0) } }.frame(width: 220).disabled(performance.running); Spacer(); if performance.running { ProgressView().controlSize(.small); Button(L10n.text("取消测量")) { performance.cancel() }.buttonStyle(.bordered) } else { Button { if let current { performance.measure(current, chip: store.inventory?.chip ?? "本机 Mac") } } label: { Label(L10n.text("一键实测"), systemImage: "speedometer") }.buttonStyle(AccentButton()).disabled(store.maintaining) } }
                         SecureField(L10n.text("本地服务访问密钥（可选，仅本次打开有效）"), text: $performance.apiKey).textFieldStyle(.roundedBorder).disabled(performance.running)
-                        Text(verbatim: L10n.text("使用固定短提示进行一次推理。首个输出包含思考和排队等待；对比时请使用相同输出长度，留意缓存与其他服务负载。")).font(.system(size: 13)).foregroundStyle(Theme.muted)
-                        if !performance.phase.isEmpty { Text(verbatim: L10n.text(performance.phase)).font(.system(size: 14)).foregroundStyle(Theme.linkColor) }
-                        if let message = performance.message { Text(verbatim: L10n.text(message)).font(.system(size: 13)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
+                        Text(verbatim: L10n.text("使用固定短提示进行一次推理。首个输出包含思考和排队等待；对比时请使用相同输出长度，留意缓存与其他服务负载。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
+                        if !performance.phase.isEmpty { Text(verbatim: L10n.text(performance.phase)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.linkColor) }
+                        if let message = performance.message { Text(verbatim: L10n.text(message)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
                     }.padding(22).background(Theme.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: 13))
                 }
                 if let latest {
-                    Text(verbatim: L10n.text("最近实测：\(latest.target.modelName) · \(latest.target.engineName) \(latest.target.engineVersion) · \(latest.date.formatted(date: .abbreviated, time: .shortened))")).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                    Text(verbatim: L10n.text("最近实测：\(latest.target.modelName) · \(latest.target.engineName) \(latest.target.engineVersion) · \(latest.date.formatted(date: .abbreviated, time: .shortened))")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                     BenchmarkCards(result: latest)
-                    HStack(spacing: 20) { Text(verbatim: L10n.text("输入 \(latest.promptTokens.map(String.init) ?? "—") / 输出 \(latest.outputTokens.map(String.init) ?? "—") tokens")); Text(verbatim: L10n.text("输入速度 " + rateLabel(latest.promptRate))); Text(verbatim: L10n.text("端到端吞吐 " + rateLabel(latest.endToEndRate))) }.font(.system(size: 12)).foregroundStyle(Theme.muted)
-                    Text(verbatim: L10n.text(latest.rateSource)).font(.system(size: 12)).foregroundStyle(Theme.muted)
-                    Text(verbatim: L10n.text("\(latest.chip) · 输出上限 \(latest.requestedTokens) tokens · 缓存输入 \(latest.cachedTokens.map(String.init) ?? "—") tokens")).font(.system(size: 11)).foregroundStyle(Theme.muted)
-                } else { Text(verbatim: L10n.text("暂无实测数据。测量后会在这里显示结果，并保存历史。")).font(.system(size: 14)).foregroundStyle(Theme.muted) }
+                    HStack(spacing: 20) { Text(verbatim: L10n.text("输入 \(latest.promptTokens.map(String.init) ?? "—") / 输出 \(latest.outputTokens.map(String.init) ?? "—") tokens")); Text(verbatim: L10n.text("输入速度 " + rateLabel(latest.promptRate))); Text(verbatim: L10n.text("端到端吞吐 " + rateLabel(latest.endToEndRate))) }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                    Text(verbatim: L10n.text(latest.rateSource)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                    Text(verbatim: L10n.text("\(latest.chip) · 输出上限 \(latest.requestedTokens) tokens · 缓存输入 \(latest.cachedTokens.map(String.init) ?? "—") tokens")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
+                } else { Text(verbatim: L10n.text("暂无实测数据。测量后会在这里显示结果，并保存历史。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
                 if !performance.records.isEmpty {
-                    Text(verbatim: L10n.text("实测历史")).font(.system(size: 22, weight: .semibold))
+                    Text(verbatim: L10n.text("实测历史")).font(.system(size: TypeScale.section, weight: .semibold))
                     ForEach(Array(performance.records.prefix(12))) { result in
-                        HStack(spacing: 20) { VStack(alignment: .leading, spacing: 7) { Text(result.target.modelName).font(.system(size: 15, weight: .semibold)).lineLimit(1); Text(verbatim: L10n.text("\(result.target.engineName) \(result.target.engineVersion) · \(result.requestedTokens) tokens · \(result.date.formatted(date: .abbreviated, time: .shortened))")).font(.system(size: 11)).foregroundStyle(Theme.muted) }.frame(maxWidth: .infinity, alignment: .leading); VStack(alignment: .trailing, spacing: 5) { Text(verbatim: L10n.text(rateLabel(result.measuredRate))).font(.system(size: 16, weight: .medium)).monospacedDigit(); Text(verbatim: L10n.text(result.speedTitle)).font(.system(size: 10)).foregroundStyle(Theme.muted) }; Text(verbatim: L10n.text(secondsLabel(result.firstOutput))).font(.system(size: 13)).foregroundStyle(Theme.muted).frame(width: 90, alignment: .trailing) }.padding(16).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10)).help(L10n.text(result.chip))
+                        HStack(spacing: 20) { VStack(alignment: .leading, spacing: 7) { Text(result.target.modelName).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1); Text(verbatim: L10n.text("\(result.target.engineName) \(result.target.engineVersion) · \(result.requestedTokens) tokens · \(result.date.formatted(date: .abbreviated, time: .shortened))")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }.frame(maxWidth: .infinity, alignment: .leading); VStack(alignment: .trailing, spacing: 5) { Text(verbatim: L10n.text(rateLabel(result.measuredRate))).font(.system(size: TypeScale.body, weight: .medium)).monospacedDigit(); Text(verbatim: L10n.text(result.speedTitle)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }; Text(verbatim: L10n.text(secondsLabel(result.firstOutput))).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).frame(width: 90, alignment: .trailing) }.padding(16).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10)).help(L10n.text(result.chip))
                     }
                 }
             }.padding(30)
@@ -150,28 +150,28 @@ struct StatusBarPanel: View {
     @ObservedObject var performance: PerformanceController
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack { Image(systemName: "square.stack.3d.up.fill").font(.system(size: 24)).foregroundStyle(Theme.linkColor); VStack(alignment: .leading, spacing: 4) { Text(verbatim: L10n.text("模型管理")).font(.system(size: 19, weight: .semibold)); Text(verbatim: L10n.text("\(services.records.filter { $0.pid != nil }.count) 个受管服务 · \(services.external.filter(\.ready).count) 个外部接口")).font(.system(size: 11)).foregroundStyle(Theme.muted) }; Spacer() }
+            HStack { Image(systemName: "square.stack.3d.up.fill").font(.system(size: 24)).foregroundStyle(Theme.linkColor); VStack(alignment: .leading, spacing: 4) { Text(verbatim: L10n.text("模型管理")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text("\(services.records.filter { $0.pid != nil }.count) 个受管服务 · \(services.external.filter(\.ready).count) 个外部接口")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }; Spacer() }
             bar("CPU", value: percentageLabel(monitor.system?.cpu), fraction: monitor.system?.cpu.map { $0 / 100 }, symbol: "cpu")
             bar("内存", value: monitor.system.map { memoryLabel($0.memoryUsed) + " / " + memoryLabel($0.memoryTotal) } ?? "读取中", fraction: monitor.system.map { Double($0.memoryUsed) / Double(max(1, $0.memoryTotal)) }, symbol: "memorychip")
             bar("磁盘", value: monitor.system.map { diskLabel($0.diskUsed) + " / " + diskLabel($0.diskTotal) } ?? "读取中", fraction: monitor.system.flatMap { $0.diskTotal > 0 ? Double($0.diskUsed) / Double($0.diskTotal) : nil }, symbol: "internaldrive")
-            Text(verbatim: L10n.text("模型库：" + (monitor.system?.modelBytes.map(sizeLabel) ?? "统计中"))).font(.system(size: 12)).foregroundStyle(Theme.muted)
+            Text(verbatim: L10n.text("模型库：" + (monitor.system?.modelBytes.map(sizeLabel) ?? "统计中"))).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
             if !monitor.services.isEmpty {
                 Divider()
-                ForEach(Array(monitor.services.prefix(3))) { service in HStack { VStack(alignment: .leading, spacing: 4) { Text(verbatim: L10n.text(service.name)).font(.system(size: 13, weight: .semibold)); Text(verbatim: L10n.text(service.model)).font(.system(size: 11)).foregroundStyle(Theme.muted).lineLimit(1) }; Spacer(); VStack(alignment: .trailing, spacing: 4) { Text(verbatim: L10n.text(service.memory.map(memoryLabel) ?? "—")).font(.system(size: 13)); Text(verbatim: L10n.text("CPU " + percentageLabel(service.cpu))).font(.system(size: 11)).foregroundStyle(Theme.muted) } } }
+                ForEach(Array(monitor.services.prefix(3))) { service in HStack { VStack(alignment: .leading, spacing: 4) { Text(verbatim: L10n.text(service.name)).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(service.model)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1) }; Spacer(); VStack(alignment: .trailing, spacing: 4) { Text(verbatim: L10n.text(service.memory.map(memoryLabel) ?? "—")).font(.system(size: TypeScale.body)); Text(verbatim: L10n.text("CPU " + percentageLabel(service.cpu))).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) } } }
             }
-            if let latest = performance.records.first { Divider(); HStack { Text(verbatim: L10n.text("最近实测 · " + latest.speedTitle)).font(.system(size: 12)).foregroundStyle(Theme.muted); Spacer(); Text(verbatim: L10n.text(rateLabel(latest.measuredRate))).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.linkColor) }; Text(latest.target.modelName).font(.system(size: 11)).foregroundStyle(Theme.muted).lineLimit(1) }
+            if let latest = performance.records.first { Divider(); HStack { Text(verbatim: L10n.text("最近实测 · " + latest.speedTitle)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted); Spacer(); Text(verbatim: L10n.text(rateLabel(latest.measuredRate))).font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(Theme.linkColor) }; Text(latest.target.modelName).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1) }
             StatusDownloads(store: store, downloads: store.downloads)
-            if performance.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text(performance.phase)).font(.system(size: 11)).foregroundStyle(Theme.linkColor).lineLimit(2); Spacer(); Button(L10n.text("取消")) { performance.cancel() }.font(.system(size: 12)) } }
-            if store.installation.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text("引擎安装或更新进行中")).font(.system(size: 12)).foregroundStyle(Theme.linkColor) } }
+            if performance.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text(performance.phase)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.linkColor).lineLimit(2); Spacer(); Button(L10n.text("取消")) { performance.cancel() }.font(.system(size: TypeScale.callout)) } }
+            if store.installation.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text("引擎安装或更新进行中")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.linkColor) } }
             Divider()
             HStack { Button(L10n.text("打开管理界面")) { store.showMainWindow?() }.buttonStyle(.borderedProminent).tint(Theme.accent); Spacer(); Button(L10n.text("资源与性能")) { store.tab = .monitor; store.showMainWindow?() }.buttonStyle(.bordered) }
             HStack {
-                Text(verbatim: L10n.text(store.windowCloseBehavior == .keepRunning ? "关闭主界面后继续后台运行" : "关闭主界面时会询问是否退出")).font(.system(size: 11)).foregroundStyle(Theme.muted)
+                Text(verbatim: L10n.text(store.windowCloseBehavior == .keepRunning ? "关闭主界面后继续后台运行" : "关闭主界面时会询问是否退出")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
                 Spacer()
-                Button(L10n.text("设置")) { store.showSettings?() }.font(.system(size: 12)).buttonStyle(.plain)
-                Button(L10n.text("退出")) { NSApplication.shared.terminate(nil) }.font(.system(size: 12)).buttonStyle(.plain)
+                Button(L10n.text("设置")) { store.showSettings?() }.font(.system(size: TypeScale.callout)).buttonStyle(.plain)
+                Button(L10n.text("退出")) { NSApplication.shared.terminate(nil) }.font(.system(size: TypeScale.callout)).buttonStyle(.plain)
             }
         }.padding(22).frame(width: 390).background(Theme.background)
     }
-    func bar(_ title: String, value: String, fraction: Double?, symbol: String) -> some View { VStack(spacing: 8) { HStack { Label(L10n.text(title), systemImage: symbol).font(.system(size: 13, weight: .medium)); Spacer(); Text(verbatim: L10n.text(value)).font(.system(size: 13)).monospacedDigit() }; ProgressView(value: min(1, max(0, fraction ?? 0))).tint(Theme.accent) }.accessibilityElement(children: .combine) }
+    func bar(_ title: String, value: String, fraction: Double?, symbol: String) -> some View { VStack(spacing: 8) { HStack { Label(L10n.text(title), systemImage: symbol).font(.system(size: TypeScale.body, weight: .medium)); Spacer(); Text(verbatim: L10n.text(value)).font(.system(size: TypeScale.body)).monospacedDigit() }; ProgressView(value: min(1, max(0, fraction ?? 0))).tint(Theme.accent) }.accessibilityElement(children: .combine) }
 }

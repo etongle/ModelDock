@@ -161,17 +161,17 @@ struct StartupProgressView: View {
         let failed = services.status(spec) == .failed
         VStack(alignment: .leading, spacing: compact ? 8 : 12) {
             HStack(spacing: 12) {
-                Text(verbatim: L10n.text(failed ? "启动中断 · " + progress.stage.title : progress.stage.title)).font(.system(size: compact ? 13 : 16, weight: .semibold))
+                Text(verbatim: L10n.text(failed ? "启动中断 · " + progress.stage.title : progress.stage.title)).font(.system(size: TypeScale.body, weight: .semibold))
                 Spacer()
                 if let percentage = progress.percentageLabel {
-                    Text(verbatim: L10n.text((compact ? "" : progress.measurement + " · ") + percentage)).font(.system(size: compact ? 13 : 15, weight: .semibold)).monospacedDigit().foregroundStyle(failed ? Color.red : Theme.linkColor)
+                    Text(verbatim: L10n.text((compact ? "" : progress.measurement + " · ") + percentage)).font(.system(size: TypeScale.body, weight: .semibold)).monospacedDigit().foregroundStyle(failed ? Color.red : Theme.linkColor)
                 } else if !failed { ProgressView().controlSize(.small) }
             }
             if let percentage = progress.percentage { ProgressView(value: percentage, total: 100).tint(failed ? .red : Theme.accent) }
             if !compact {
-                Text(verbatim: L10n.text(progress.detail)).font(.system(size: 13)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: L10n.text(progress.detail)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 if progress.percentage == nil && !failed {
-                    Text(verbatim: L10n.text("引擎尚未报告百分比，当前显示实际阶段。")).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                    Text(verbatim: L10n.text("引擎尚未报告百分比，当前显示实际阶段。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 }
             }
         }.padding(compact ? 12 : 18).frame(maxWidth: .infinity, alignment: .leading)
