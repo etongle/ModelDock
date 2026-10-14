@@ -12,7 +12,7 @@ Use an Apple Silicon Mac running macOS 14 or later. Download a DMG or ZIP from t
 
 Current packages use an ad-hoc signature and have not been Apple-notarized. If a trusted downloaded copy is blocked, attempt to open it, then follow the **Open Anyway** flow in **System Settings → Privacy & Security** described by [Apple](https://support.apple.com/102445). Only open distributions you trust.
 
-English is the default on first launch, including on non-English systems. Open **ModelDock → Settings…** (⌘,) and choose **English**, **简体中文**, **Français**, **Português**, or **Follow system**. The interface changes immediately and the choice is saved.
+English is the default on first launch, including on non-English systems. Click the **globe/language button at the top right of the main window**, then choose **English**, **简体中文**, **Français**, **Português**, or **Follow system**. In a narrow window, the button shows the globe and a language abbreviation such as **EN**. You can also open **ModelDock → Settings…** (⌘,) to change **Interface language**. The interface changes immediately and the choice is saved.
 
 ![Interface language and close behavior](assets/images/en-settings.png)
 

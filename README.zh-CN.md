@@ -45,7 +45,7 @@
 5. 选择模型与兼容基座，检查纯文本或多模态设置，再启动服务。
 6. 在“模型服务 → 一键接入”登记到 pi、OpenCode，或复制服务地址。
 
-**首次启动默认英语。**在“设置 → 界面语言”选择简体中文、法语、葡萄牙语或跟随系统，切换立即生效。
+**首次启动默认英语。**点击主界面右上角的**地球/语言按钮**，直接选择英语、简体中文、法语、葡萄牙语或跟随系统。也可按 **⌘,** 打开“设置 → 界面语言”，切换立即生效。
 
 完整操作、下载管理、草稿关联、版本更新、删除保护、网关及常见问题见[带配图的使用说明](docs/USER_GUIDE.zh-CN.md)。
 
@@ -73,7 +73,7 @@ python3 Tests/packaged_release_checks.py
 
 ## GitHub 网站
 
-`website/` 是无需构建的静态网站。上传仓库后，在 **Settings → Pages → Source** 选择 **GitHub Actions**；更新网站或手动运行附带工作流即可发布到 `https://etongle.github.io/ModelDock/`。维护方法见[网站说明](docs/WEBSITE.md)。
+访问[双语项目网站](https://etongle.github.io/ModelDock/)查看介绍和详细图文说明。`website/` 是无需构建的静态网站；更新网站或手动运行附带的 GitHub Actions 工作流即可部署。维护方法见[网站说明](docs/WEBSITE.md)。
 
 ## 许可：禁止商业使用
 

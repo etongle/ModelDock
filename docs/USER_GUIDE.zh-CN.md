@@ -12,7 +12,7 @@
 
 当前安装包使用临时签名，尚未经过 Apple 公证。如果可信来源的安装包被拦截，先尝试打开，再按照 [Apple 官方说明](https://support.apple.com/102445)，在“系统设置 → 隐私与安全性”选择“仍要打开”。只打开可信来源的程序。
 
-**首次启动默认英语**，不因系统为中文而改变。在菜单 **ModelDock → Settings…**（⌘,）中切换 English、简体中文、Français、Português 或跟随系统。语言立即生效并自动保存。
+**首次启动默认英语**，不因系统为中文而改变。点击主窗口**右上角的地球/语言按钮**，直接选择 English、简体中文、Français、Português 或跟随系统。窄窗口显示地球图标和 **EN** 等语言缩写。也可在菜单 **ModelDock → Settings…**（⌘,）中修改界面语言。切换立即生效并自动保存。
 
 ![语言选择与窗口关闭设置](assets/images/zh-Hans-settings.png)
 

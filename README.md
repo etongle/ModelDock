@@ -45,7 +45,7 @@ A format label does not guarantee that every engine can run every architecture. 
 5. Choose the model and a compatible engine, review text/multimodal settings, then start its service.
 6. Open **Services → One-click integration** to register it with pi or OpenCode, or copy its API endpoint.
 
-English is the first-launch default. Open **Settings → Interface language** to choose Chinese, French, Portuguese, or system language. Changes apply immediately.
+English is the first-launch default. Click the **globe/language button at the top right** to choose English, Chinese, French, Portuguese, or system language. You can also open **Settings → Interface language** with **⌘,**. Changes apply immediately.
 
 Read the [illustrated user guide](docs/USER_GUIDE.md) for download management, draft models, updates, deletion, gateway setup, troubleshooting, and keyboard shortcuts.
 
@@ -73,7 +73,7 @@ The app targets macOS 14 and later. The current release was tested on the develo
 
 ## Documentation website
 
-The buildless static site is in `website/`. After publishing this repository, choose **Settings → Pages → Source: GitHub Actions**. The included workflow publishes that directory to `https://etongle.github.io/ModelDock/` on pushes affecting the website, or through a manual workflow run. See [website maintenance](docs/WEBSITE.md).
+Visit the [bilingual documentation website](https://etongle.github.io/ModelDock/) for an introduction and illustrated guides. The buildless static site is in `website/`; the included GitHub Actions workflow deploys it on pushes affecting the website, or through a manual run. See [website maintenance](docs/WEBSITE.md).
 
 ## License
 

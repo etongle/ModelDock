@@ -55,6 +55,40 @@ extension ServiceStatus {
 }
 
 @MainActor
+struct LanguageMenu: View {
+    @ObservedObject var store: AppStore
+    var compact: Bool
+    private var shortName: String {
+        switch store.language {
+        case .english: return "EN"
+        case .chinese: return "中"
+        case .french: return "FR"
+        case .portuguese: return "PT"
+        case .system: return "Auto"
+        }
+    }
+    var body: some View {
+        Menu {
+            Picker(L10n.text("界面语言"), selection: $store.language) {
+                ForEach(AppLanguage.allCases, id: \.self) { language in
+                    Text(verbatim: language.name).tag(language)
+                }
+            }.pickerStyle(.inline).labelsHidden()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "globe").font(.system(size: 15))
+                Text(verbatim: compact ? shortName : store.language.name).font(.system(size: compact ? 11 : 13, weight: .medium))
+            }.frame(width: compact ? 44 : nil, height: 44)
+        }
+        .id(store.language)
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help(L10n.text("界面语言"))
+        .accessibilityLabel(L10n.text("界面语言"))
+        .accessibilityIdentifier("language-menu")
+    }
+}
+
+@MainActor
 struct MainView: View {
     @ObservedObject var store: AppStore
     @ObservedObject var services: ServiceController
@@ -62,13 +96,14 @@ struct MainView: View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 ZStack {
+                    let tabWidth = min(146, (geometry.size.width - 300) / CGFloat(AppTab.allCases.count))
                     HStack(spacing: 0) {
                         ForEach(Array(AppTab.allCases.enumerated()), id: \.element) { index, tab in
-                            Button { store.tab = tab } label: { Text(verbatim: L10n.text(tab.rawValue)).font(.system(size: 17, weight: .semibold)).frame(width: 146, height: 44).background(store.tab == tab ? Theme.accent : .clear, in: RoundedRectangle(cornerRadius: 11)).foregroundStyle(store.tab == tab ? Color.white : Color.primary) }
+                            Button { store.tab = tab } label: { Text(verbatim: L10n.text(tab.rawValue)).font(.system(size: 17, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8).frame(width: tabWidth, height: 44).background(store.tab == tab ? Theme.accent : .clear, in: RoundedRectangle(cornerRadius: 11)).foregroundStyle(store.tab == tab ? Color.white : Color.primary) }
                                 .buttonStyle(.plain).keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command).accessibilityIdentifier("tab-\(index)")
                         }
                     }.padding(3).background(Theme.line.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
-                    HStack { Spacer(); if store.scanning { ProgressView().controlSize(.small) }; Button { store.scan() } label: { Image(systemName: "arrow.clockwise").font(.system(size: 17)).frame(width: 44, height: 44) }.buttonStyle(.plain).help(L10n.text("重新扫描模型与引擎 · ⌘R")).keyboardShortcut("r", modifiers: .command).disabled(store.scanning) }.padding(.trailing, 20)
+                    HStack(spacing: 6) { Spacer(); if store.scanning { ProgressView().controlSize(.small) }; LanguageMenu(store: store, compact: geometry.size.width < 1200); Button { store.scan() } label: { Image(systemName: "arrow.clockwise").font(.system(size: 17)).frame(width: 44, height: 44) }.buttonStyle(.plain).help(L10n.text("重新扫描模型与引擎 · ⌘R")).keyboardShortcut("r", modifiers: .command).disabled(store.scanning) }.padding(.trailing, 20)
                 }.frame(height: 64)
                 Rectangle().fill(Theme.line).frame(height: 1)
                 let sidebarWidth = max(310, min(420, geometry.size.width * 0.292))

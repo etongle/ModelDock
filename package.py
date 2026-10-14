@@ -28,8 +28,9 @@ Apple Silicon (M-series) Macs · macOS 14 or later.
 
 1. Open the DMG and drag ModelDock.app to Applications.
 2. Open ModelDock from Applications. The first-launch language is English.
-3. Settings → Interface language supports English, 简体中文, Français,
-   Português and Follow system. Language changes apply immediately.
+3. Click the globe/language button at the top right to choose English,
+   简体中文, Français, Português or Follow system. Settings (⌘,) also has
+   Interface language. Language changes apply immediately.
 4. Select/install a compatible engine, then import or download a model.
    Homebrew-managed engines require Homebrew: https://brew.sh
    The manager includes the Python runtime used by its unified gateway.
@@ -51,8 +52,9 @@ in Contents/Resources. External engines/models retain their own licenses.
 Project and illustrated guides: https://github.com/etongle/ModelDock
 
 中文
-将 ModelDock.app 拖到“应用程序”并打开。首次默认英语，可在设置中切换中文、
-法语、葡萄牙语或跟随系统。可信安装包被拦截时参考上面的 Apple 官方说明。
+将 ModelDock.app 拖到“应用程序”并打开。首次默认英语，点击主界面右上角的地球
+语言按钮即可切换，也可按 ⌘, 打开设置。支持中文、法语、葡萄牙语或跟随系统。
+可信安装包被拦截时参考上面的 Apple 官方说明。
 默认关闭主窗口继续后台运行，点击菜单栏图标重新打开，点击面板外部自动收起。
 软件限于许可规定的非商业使用；第一方与第三方许可在应用资源中保留。
 本发行包不包含个人配置、密钥或模型权重。
