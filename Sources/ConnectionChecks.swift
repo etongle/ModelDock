@@ -41,6 +41,8 @@ enum ConnectionChecks {
                 try require(object["enabled_providers"] as? [String] == [target.providerID] && connection.arguments.contains("--pure"), "Local provider isolation lost")
                 try require(connection.environment["XDG_CONFIG_HOME"]?.hasPrefix(root.path) == true, "OpenCode user settings modified")
                 try require(connection.environment["OPENCODE_DISABLE_EXTERNAL_SKILLS"] == "1", "Global skill discovery not isolated")
+                try require(ConnectionFiles.opencodeArguments(version: "2.0.26", model: "\(target.providerID)/\(model)", webSearch: false) == ["--standalone"]
+                    && ConnectionFiles.opencodeArguments(version: "1.4.0", model: "m", webSearch: false) == ["--pure", "--model", "m"], "OpenCode 2.x launch arguments incorrect")
             case .pi:
                 let provider = (object["providers"] as? [String: Any])?[target.providerID] as? [String: Any]
                 let entry = (provider?["models"] as? [[String: Any]])?.first
