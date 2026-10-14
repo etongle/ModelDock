@@ -35,7 +35,7 @@ enum NetworkProbe {
             pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0 }
         }
     }
-    static func models(port: Int, ollama: Bool = false, studio: Bool = false) async -> ProbeResult {
+    static func models(port: Int, ollama: Bool = false, studio: Bool = false, strata: Bool = false) async -> ProbeResult {
         let endpoint = "http://127.0.0.1:\(port)" + (ollama ? "/api/tags" : "/v1/models")
         var request = URLRequest(url: URL(string: endpoint)!); request.timeoutInterval = 2
         do {
@@ -71,11 +71,19 @@ enum NetworkProbe {
                     if declared.known { for name in capabilities.keys where capabilities[name]?.known != true { capabilities[name] = declared } }
                 }
             }
-            return ProbeResult(alive: true, ready: code == 200 && entries != nil, models: (entries ?? []).compactMap { $0[ollama ? "name" : "id"] as? String }, code: code, capabilities: capabilities)
+            var ready = code == 200 && entries != nil
+            if strata && ready {
+                var health = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/health")!); health.timeoutInterval = 2
+                if let (bytes, response) = try? await URLSession.shared.data(for: health), (response as? HTTPURLResponse)?.statusCode == 200,
+                   let object = (try? JSONSerialization.jsonObject(with: bytes)) as? [String: Any], object["service"] as? String == "strata" { ready = object["loaded"] as? Bool == true }
+                else { ready = false }
+            }
+            return ProbeResult(alive: true, ready: ready, models: (entries ?? []).compactMap { $0[ollama ? "name" : "id"] as? String }, code: code, capabilities: capabilities)
         } catch { return ProbeResult(alive: portOccupied(port), ready: false, models: [], code: nil) }
     }
-    static func detect(port: Int, ollama: Bool, studio: Bool = false) async -> ProbeResult {
-        let result = await models(port: port, ollama: ollama, studio: studio)
+    static func detect(port: Int, ollama: Bool, studio: Bool = false, strata: Bool = false) async -> ProbeResult {
+        let result = await models(port: port, ollama: ollama, studio: studio, strata: strata)
+        if strata { return result }
         guard result.alive && !result.ready && !ollama else { return result }
         let fallback = await models(port: port, ollama: true)
         return fallback.ready ? fallback : result
@@ -192,6 +200,7 @@ final class ServiceController: ObservableObject {
         spec.inputMode = inputMode; spec.projectorPath = projectorPath?.isEmpty == false ? projectorPath : nil
         spec.engineVersion = plan.engineVersion; spec.engineExecutable = plan.executable
         if engine.kind == .splash, let prepared = model?.preparedForSplash(inputMode) { spec.modelPath = prepared.path }
+        if engine.kind == .strata, let prepared = model?.preparedForStrata(inputMode) { spec.modelPath = prepared.path; spec.modelName = prepared.name }
         if engine.kind == .ollama { spec.modelName = "Ollama 多模型服务"; spec.modelID = ""; spec.modelPath = ""; spec.maximumLoadedModels = maximumLoadedModels }
         spec.commandText = nil
         return try startPlan(spec: spec, plan: plan, engine: engine)
@@ -300,7 +309,8 @@ final class ServiceController: ObservableObject {
             for port in ports {
                 let native = before[port]?.contains { listener in listener.engineID == "ollama" || currentRecords.contains { spec in spec.engineID == "ollama" && listener.belongs(to: spec) } } == true
                 let studio = before[port]?.contains { listener in listener.engineID == "lmstudio" || currentRecords.contains { spec in spec.engineID == "lmstudio" && listener.belongs(to: spec) } } == true
-                group.addTask { (port, await NetworkProbe.detect(port: port, ollama: native, studio: studio)) }
+                let strata = before[port]?.contains { listener in listener.engineID == "strata" || currentRecords.contains { spec in spec.engineID == "strata" && listener.belongs(to: spec) } } == true
+                group.addTask { (port, await NetworkProbe.detect(port: port, ollama: native, studio: studio, strata: strata)) }
             }
             var results: [(Int, ProbeResult)] = []; for await result in group { results.append(result) }; return results
         }

@@ -16,6 +16,16 @@ struct ServiceComponentSnapshot: Codable, Hashable {
 }
 enum ServiceComponentEvidence {
     static func collect(spec: ServiceSpec, models: [LocalModel], log: String, capabilities: ModelCapabilities, status: ServiceStatus) -> ServiceComponentSnapshot? {
+        if spec.engineID == "strata" {
+            guard let line = ServiceStartupProgress.latestAttempt(log).components(separatedBy: .newlines).last(where: { $0.hasPrefix("[ModelDock Strata components] ") }),
+                  let data = line.dropFirst("[ModelDock Strata components] ".count).data(using: .utf8), let paths = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+            let titles = ["weights": "主模型权重", "ngram": "n-gram 配套表", "draft": "MTP 草稿加速", "vision": "视觉投影", "tokenizer": "Tokenizer"]
+            let entries = ["weights", "ngram", "draft", "vision", "tokenizer"].map { role -> ServiceComponent in
+                let path = paths[role] as? String
+                return .init(id: role, title: titles[role]!, name: path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "本次未启用", path: path, state: path == nil ? "未启用" : status == .running ? "已启用" : "本次启动已指定", confirmed: path == nil || status == .running)
+            }
+            return .init(processStart: spec.processStart, startedAt: spec.startedAt, entries: entries)
+        }
         guard ["splash", "mlx", "llama", "prism"].contains(spec.engineID) else { return nil }
         let attempt = ServiceStartupProgress.latestAttempt(log)
         let arguments = spec.launchArguments ?? ((try? ServiceCommand.words(spec.commandText ?? "")) ?? [])

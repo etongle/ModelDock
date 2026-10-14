@@ -28,14 +28,14 @@ enum ModalityChecks {
         let ports = try MultiModelPlanner.availablePorts(base: 30300, count: 4, occupied: NetworkProbe.portOccupied)
         let guide = Scanner.engines().filter { $0.kind != .llama && $0.kind != .splash }
         store.inventory = .init(engines: [splash, engine] + guide, models: [packed, model], storageBytes: 8, memoryBytes: 0, chip: "测试环境", roots: [root.path], warnings: [], scannedAt: Date())
-        try ConnectionChecks.require(ModalityPolicy.local(packed).badgeTitle == "仅文本", "Packed model was not clearly marked text-only")
+        try ConnectionChecks.require(ModalityPolicy.local(packed).badgeTitle == L10n.text("仅文本"), "Packed model was not clearly marked text-only")
         try ConnectionChecks.require(ModalityPolicy.local(model).inputs == ["text", "image"], "Image projector metadata lost")
         model.companion = audio.path
         try ConnectionChecks.require(ModalityPolicy.local(model).inputs == ["text", "audio"], "Audio projector was incorrectly marked as image")
         model.companion = image.path
         try ConnectionChecks.require(GGUFMetadata.read(partial).inputs == nil, "Incomplete negative flags claimed text-only")
         try ConnectionChecks.require(ModelCapabilities.declared(["capabilities": ["vision": true]]).inputs.contains("image"), "LM Studio capabilities dictionary ignored")
-        try ConnectionChecks.require(ModelCapabilities.declared(["capabilities": ["vision": false]]).badgeTitle == "仅文本", "LM Studio text-only declaration ignored")
+        try ConnectionChecks.require(ModelCapabilities.declared(["capabilities": ["vision": false]]).badgeTitle == L10n.text("仅文本"), "LM Studio text-only declaration ignored")
         var unknown = model; unknown.companion = nil; unknown.name = "Qwen-VL-视觉-模型"
         try ConnectionChecks.require(!ModalityPolicy.local(unknown).known && !ModalityPolicy.local(unknown).supportsMedia, "Model name fabricated vision capability")
         do { _ = try LaunchBuilder.plan(engine: engine, model: model, port: ports[0], inputMode: .multimodal, projectorPath: neither.path); throw LaunchError.message("Projector without encoders accepted") }
@@ -61,7 +61,7 @@ enum ModalityChecks {
             let text = try store.services.start(engine: engine, model: model, port: ports[1], context: 8192, inputMode: .text)
             for _ in 0..<60 { await store.services.refresh(); if store.services.status(media) == .running && store.services.status(text) == .running { break }; try await Task.sleep(nanoseconds: 100_000_000) }
             try ConnectionChecks.require(store.services.status(media) == .running && store.services.status(text) == .running, "Input fixtures did not become ready")
-            try ConnectionChecks.require(store.serviceCapabilities(media).supportsMedia && store.serviceCapabilities(text).badgeTitle == "仅文本", "Separate instances were mislabeled")
+            try ConnectionChecks.require(store.serviceCapabilities(media).supportsMedia && store.serviceCapabilities(text).badgeTitle == L10n.text("仅文本"), "Separate instances were mislabeled")
             let restored = ServiceController(stateDirectory: store.services.stateDirectory)
             try ConnectionChecks.require(restored.records.first { $0.id == media.id }?.inputMode == .multimodal && restored.records.first { $0.id == text.id }?.inputMode == .text, "Input settings did not persist")
             store.port = String(ports[0]); store.inputMode = .multimodal; try await capture?("llama-active-inputs")
@@ -75,7 +75,7 @@ enum ModalityChecks {
             let ambiguous = await NetworkProbe.models(port: ports[3])
             try ConnectionChecks.require(ambiguous.capabilities.values.allSatisfy { !$0.known }, "One shared props endpoint assigned vision to all models")
             let native = await NetworkProbe.models(port: ports[3], studio: true)
-            try ConnectionChecks.require(native.capabilities["text-model"]?.badgeTitle == "仅文本" && native.capabilities["vision-alias"]?.supportsMedia == true && native.capabilities["vision-alias"]?.context == 16384, "LM Studio model-specific native capabilities or context lost")
+            try ConnectionChecks.require(native.capabilities["text-model"]?.badgeTitle == L10n.text("仅文本") && native.capabilities["vision-alias"]?.supportsMedia == true && native.capabilities["vision-alias"]?.context == 16384, "LM Studio model-specific native capabilities or context lost")
             await EngineServiceChecks.cleanup(store: store)
             if processStartTime(studio.processIdentifier) == studioBirth { _ = kill(-studio.processIdentifier, SIGTERM) }
             let report: [String: Any] = ["result": "passed", "checks": ["Packed text-only labels and unsupported image option", "Image/audio/no-encoder/unknown projector metadata", "Names never fabricate model capabilities", "Native text command explicitly disables projector and inherited URL", "Native image command loads selected projector", "Batch preserves custom per-model projector", "Separate text/image instances expose independent input modes", "Intrinsic model capability survives text instance", "Settings persist after reopening", "LM Studio native metadata maps each loaded model without shared-props leakage", "Owned fixtures cleaned up"], "realModelsLoaded": false, "realServicesStopped": false]

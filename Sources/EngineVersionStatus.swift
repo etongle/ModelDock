@@ -20,6 +20,10 @@ struct EngineVersionRow: Identifiable {
 enum EngineVersionPolicy {
     static func state(installed: String?, available: String) -> EngineVersionState {
         guard let installed else { return .missing }
+        if let old = ServiceStartupProgress.match(#"^([0-9.]+)\+([a-f0-9]{12})$"#, in: installed), let new = ServiceStartupProgress.match(#"^([0-9.]+)\+([a-f0-9]{12})$"#, in: available) {
+            if old == new { return .current }
+            return old[1].compare(new[1], options: .numeric) == .orderedDescending ? .newer : .update
+        }
         func normalized(_ value: String) -> String? {
             let text = value.hasPrefix("v") ? String(value.dropFirst()) : value
             return text.range(of: #"^(?:b)?[0-9]+(?:[._,][0-9]+)*$"#, options: .regularExpression) != nil ? text : nil
@@ -42,6 +46,7 @@ enum EngineVersionPolicy {
             case "llama-app": installed = appVersion(engine.appPath, available: component.version)
             case "mlx-lm": installed = EnginePaths.manifest(.mlx)?.version ?? (URL(fileURLWithPath: engine.path).lastPathComponent == "mlx_lm.server" && engine.canServe ? engine.version.components(separatedBy: " · ").first : nil)
             case "mlx-vlm": installed = engine.visionPath == nil ? nil : engine.visionVersion ?? "版本未知"
+            case "strata": installed = engine.installed ? engine.version : nil
             default:
                 if !engine.installed { installed = nil }
                 else if engine.kind == .lmstudio { installed = appVersion(engine.appPath, available: component.version) }

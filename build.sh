@@ -6,6 +6,8 @@ MM_TARGET="arm64-apple-macosx14.0"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources" "$PWD/build/ModuleCache"
 cp "$PWD/Resources/AppIcon.icns" "$APP_PATH/Contents/Resources/AppIcon.icns"
 cp "$PWD/Resources/gateway.py" "$APP_PATH/Contents/Resources/gateway.py"
+cp "$PWD/Resources/strata.py" "$APP_PATH/Contents/Resources/strata.py"
+cp "$PWD/Resources/app_update.py" "$APP_PATH/Contents/Resources/app_update.py"
 cp "$PWD/LICENSE" "$PWD/LICENSE-NOTICE.txt" "$APP_PATH/Contents/Resources/"
 /usr/bin/ditto "$PWD/Resources/Localization" "$APP_PATH/Contents/Resources/Localization"
 if [ -d "$PWD/Resources/ThirdPartyNotices" ]; then
@@ -31,8 +33,8 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>ModelManager</string>
 <key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.8.2</string>
-<key>CFBundleVersion</key><string>29</string>
+<key>CFBundleShortVersionString</key><string>0.9.0</string>
+<key>CFBundleVersion</key><string>30</string>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string><string>fr</string><string>pt</string></array>
 <key>LSMinimumSystemVersion</key><string>14.0</string>

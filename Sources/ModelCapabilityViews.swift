@@ -5,7 +5,7 @@ import AppKit
 extension Engine {
     var modalityGuide: (summary: String, activation: String, url: String) {
         switch kind {
-        case .strata: return ("官方 Strata 主线面向 Windows/Linux，可通过兼容 API 接入。", "图片由原服务的视觉组件决定；Mac Metal PR 已关闭且未合并，当前不自动安装实验分支。", "https://github.com/Niko1221/Strata")
+        case .strata: return ("Apple Silicon Metal 引擎，准备 Flash-Next 主模型与匹配组件后启动。", "准备时勾选图片输入组件；启动时可选择纯文本或多模态。MTP 使用此模型的配套草稿，Mac 服务一次处理一个请求，多客户端排队。", "https://github.com/Niko1221/Strata/blob/main/docs/MAC.md")
         case .splash: return ("新版 Splash 支持匹配模型的图片和 PDF；旧 packed 模型仅支持文本。", "新版默认加载兼容视觉组件；纯文本使用 --language-only。当前旧 packed 模型不能通过开关增加视觉能力。", "https://github.com/incoai/splash/blob/main/DEVELOPMENT.md#vision")
         case .llama, .prism: return ("支持带匹配投影组件的视觉或音频模型，具体模态由模型和引擎版本决定。", "多模态加载所选 GGUF 投影文件；纯文本使用 --no-mmproj，不加载视觉或音频编码器。投影文件与主模型的匹配由引擎启动时验证。", "https://github.com/ggml-org/llama.cpp/blob/master/docs/multimodal.md")
         case .ollama: return ("支持视觉模型；普通文本模型仍仅支持文本。", "加载带 vision 能力的注册模型后自动启用图片；没有统一的 serve --vision 开关。启动后的模型能力由 /api/show 核实，纯文本输入限制在网关按模型设置。", "https://docs.ollama.com/capabilities/vision")
@@ -60,6 +60,7 @@ extension AppStore {
     }
     var selectedModelCapabilities: ModelCapabilities {
         guard let model = selectedModel else { return ModelCapabilities() }
+        if engine.kind == .strata { return ModalityPolicy.planned(engine: engine, model: model, projector: nil, mode: .automatic) }
         if [.llama, .prism].contains(engine.kind), !projectorPath.isEmpty { return ModalityPolicy.planned(engine: engine, model: model, projector: projectorPath, mode: .automatic) }
         return modelCapabilities(model)
     }

@@ -39,12 +39,15 @@ enum PortIdentity {
         let path = URL(fileURLWithPath: executable).resolvingSymlinksInPath().path
         let name = URL(fileURLWithPath: path).lastPathComponent.lowercased()
         if path.contains("/Cellar/splash/") { return "splash" }
+        if path.contains("/engines/strata/") || name == "modeldock-strata" || (name == "strata" && path.contains("/build-metal/")) { return "strata" }
         if path.contains("/engines/prism/") || path.contains("/llama.cpp-prism/") { return "prism" }
         if path.contains("/LM Studio.app/") || path.contains("/.lmstudio/") { return "lmstudio" }
         if name == "ollama" || path.contains("/Ollama.app/") { return "ollama" }
         if ["llama-server", "llama"].contains(name) { return "llama" }
         // Interpreter names and model formats do not identify a serving engine.
         let program = arguments.prefix(3).map { URL(fileURLWithPath: $0).lastPathComponent }
+        if program.contains("modeldock-strata") { return "strata" }
+        if arguments.prefix(3).contains(where: { $0.contains("/engines/strata/") && ["server.py", "modeldock_strata.py"].contains(URL(fileURLWithPath: $0).lastPathComponent) }) { return "strata" }
         if program.contains(where: { ["mlx_lm.server", "mlx_vlm.server"].contains($0) }) || zip(arguments, arguments.dropFirst()).contains(where: { $0.0 == "-m" && ["mlx_lm.server", "mlx_vlm.server"].contains($0.1) }) { return "mlx" }
         if program.contains("splash") { return "splash" }
         return nil

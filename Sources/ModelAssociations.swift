@@ -11,6 +11,7 @@ struct ModelAssociation: Codable, Hashable {
     var draftMode: DraftSelectionMode = .automatic
     var draftPath: String? = nil
     var projectorPath: String? = nil
+    var strataAssembly: String? = nil
 }
 enum ModelAssociationPolicy {
     static func draftPath(model: LocalModel?, engine: Engine) throws -> String? {
@@ -30,17 +31,20 @@ enum ModelAssociationPolicy {
     @Published var mode: DraftSelectionMode
     @Published var draftPath: String
     @Published var projectorPath: String
+    @Published var strataAssembly: String
     @Published var error: String?
     init(model: LocalModel) {
         self.model = model; mode = model.association?.draftMode ?? .automatic
         draftPath = model.association?.draftPath ?? ""; projectorPath = model.association?.projectorPath ?? ""
+        strataAssembly = model.association?.strataAssembly ?? ""
     }
 }
 @MainActor extension AppStore {
     func prepareAssociation(_ model: LocalModel) { associationDraft = .init(model: model) }
     func saveAssociation(_ draft: ModelAssociationDraft) {
         do {
-            let value = ModelAssociation(draftMode: draft.mode, draftPath: draft.mode == .local ? draft.draftPath : nil, projectorPath: draft.projectorPath.isEmpty ? nil : draft.projectorPath)
+            let value = ModelAssociation(draftMode: draft.mode, draftPath: draft.mode == .local ? draft.draftPath : nil, projectorPath: draft.projectorPath.isEmpty ? nil : draft.projectorPath, strataAssembly: draft.strataAssembly.isEmpty ? nil : draft.strataAssembly)
+            if !draft.strataAssembly.isEmpty, draft.model.strataAssemblies?.contains(draft.strataAssembly) != true { throw LaunchError.message("所选 Strata 配套组合不属于当前模型。") }
             var model = draft.model; model.association = value
             if draft.mode == .local {
                 guard !draft.draftPath.isEmpty else { throw LaunchError.message("请选择已下载的匹配草稿") }
@@ -67,7 +71,11 @@ enum ModelAssociationPolicy {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack { Text(verbatim: L10n.text("关联启动组件")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer(); Button(L10n.text("配置组件…")) { store.prepareAssociation(model) }.buttonStyle(.bordered).accessibilityIdentifier("model-association") }
-            if model.format.hasPrefix("GGUF") {
+            if let prepared = model.preparedForStrata(), let config = prepared.strataConfig.flatMap({ jsonFile(URL(fileURLWithPath: $0)) }) {
+                Text(verbatim: L10n.text("Strata：主权重、n-gram 与 tokenizer 已关联")).font(.system(size: TypeScale.body))
+                Text(verbatim: L10n.text(config["vision"] == nil ? "Strata 组合仅支持文本；可另行准备视觉组合。" : "Strata 组合支持文本 / 图片；启动时可选择纯文本。" )).font(.system(size: TypeScale.body))
+                Text(verbatim: L10n.text(model.association?.draftMode == .disabled ? "MTP：后续启动关闭草稿" : "MTP：使用所选组合的配套草稿" )).font(.system(size: TypeScale.body))
+            } else if model.format.hasPrefix("GGUF") {
                 Text(verbatim: L10n.text("视觉投影：" + (model.companion.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "未关联；多模态启动前需要选择"))).font(.system(size: TypeScale.body))
             } else if model.format.hasPrefix("Splash 4-bit") {
                 Text(verbatim: L10n.text("旧 packed 模型使用对应旧版引擎的内置配套组件。")).font(.system(size: TypeScale.body))
@@ -87,7 +95,22 @@ enum ModelAssociationPolicy {
             Text(verbatim: L10n.text("模型与配套组件")).font(.system(size: TypeScale.section, weight: .bold))
             Text(verbatim: L10n.text(draft.model.name)).font(.system(size: TypeScale.body, weight: .medium)).textSelection(.enabled)
             Divider()
-            if draft.model.format.hasPrefix("GGUF") {
+            if let assemblies = draft.model.strataAssemblies, !assemblies.isEmpty {
+                Picker(L10n.text("Strata 配套组合"), selection: $draft.strataAssembly) {
+                    Text(verbatim: L10n.text("自动选择最新准备的组合")).tag("")
+                    ForEach(assemblies, id: \.self) { folder in
+                        Text(verbatim: (StrataModelCatalog.model(URL(fileURLWithPath: folder)).map { $0.name + " · " + ModalityPolicy.local($0).badgeTitle } ?? URL(fileURLWithPath: folder).lastPathComponent) + " · " + String(URL(fileURLWithPath: folder).lastPathComponent.suffix(8))).tag(folder)
+                    }
+                }
+                Text(verbatim: L10n.text("可以切换旧的配套组合；选择只影响后续启动，运行中的服务保留本次组件。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+            }
+            if draft.model.strataConfig != nil || draft.model.strataAssemblies?.isEmpty == false {
+                Picker(L10n.text("MTP 草稿"), selection: $draft.mode) {
+                    Text(verbatim: L10n.text("使用已准备的 MTP" )).tag(DraftSelectionMode.automatic)
+                    Text(verbatim: L10n.text("关闭草稿（支持时）")).tag(DraftSelectionMode.disabled)
+                }
+                Text(verbatim: L10n.text("Strata 使用 Flash-Next 的配套 MTP，不能选择 DFlash2。图片能力取决于所选组合的视觉编码器；纯文本可在启动时选择。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+            } else if draft.model.format.hasPrefix("GGUF") {
                 Text(verbatim: L10n.text("视觉投影（mmproj）")).font(.system(size: TypeScale.body, weight: .semibold))
                 Picker(L10n.text("投影文件"), selection: $draft.projectorPath) {
                     Text(verbatim: L10n.text("使用自动匹配的投影")).tag("")

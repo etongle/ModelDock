@@ -44,6 +44,8 @@ struct LocalModel: Identifiable, Codable, Hashable {
     var splashVision: String? = nil
     var association: ModelAssociation? = nil
     var splashRegistrations: [SplashRegistration]? = nil
+    var strataConfig: String? = nil
+    var strataAssemblies: [String]? = nil
 
     var folder: String { URL(fileURLWithPath: path).hasDirectoryPath || (try? URL(fileURLWithPath: path).resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true ? path : URL(fileURLWithPath: path).deletingLastPathComponent().path }
     func compatible(with engine: Engine) -> Bool {
@@ -115,7 +117,7 @@ enum Scanner {
             Engine(kind: .mlx, name: "MLX · LM / VLM", version: (EnginePaths.manifest(.mlx)?.version ?? mlxVersion ?? "—") + (mlxVision.map { " · VLM " + $0.version } ?? ""), path: mlx ?? visionPath ?? "/opt/homebrew/Cellar/mlx", installed: mlxVersion != nil || mlx != nil || visionPath != nil, canServe: mlx != nil || visionPath != nil, installation: visionPath != nil ? "MLX-LM / MLX-VLM 模型服务" : mlx == nil ? "推理库 · 未发现服务程序" : "MLX-LM 模型服务", description: "苹果芯片文本与多模态推理组件", defaultPort: 8081, symbol: "cpu", visionPath: visionPath, visionVersion: mlxVision?.version),
             Engine(kind: .lmstudio, name: "LM Studio", version: lmInfo?["CFBundleShortVersionString"] as? String ?? "—", path: home.appendingPathComponent(".lmstudio").path, appPath: lmInfo == nil ? nil : "/Applications/LM Studio.app", installed: lmInfo != nil, canServe: false, installation: lmInfo == nil ? (hasLMComponents ? "仅残留组件" : "未安装") : "桌面应用", description: "模型管理与 MLX / llama.cpp 推理组件", defaultPort: 1234, symbol: "cube"),
             Engine(kind: .prism, name: "llama.cpp · Prism", version: EnginePaths.manifest(.prism)?.version ?? "本地编译版", path: prism, installed: present(prism), canServe: present(prism), installation: EnginePaths.manifest(.prism) == nil ? "本地编译工具" : "官方发行包 · 本工具管理", description: "支持 Bonsai 三值量化的 llama.cpp 引擎", defaultPort: 8080, symbol: "leaf"),
-            Engine(kind: .strata, name: "Strata", version: "外部服务", path: "", installed: false, canServe: false, installation: "官方 Mac 版待支持", description: "Niko1221/Strata · Flash-Next 推理与兼容 API", defaultPort: 8095, symbol: "square.3.layers.3d")
+            Engine(kind: .strata, name: "Strata", version: EnginePaths.manifest(.strata)?.version ?? "—", path: EnginePaths.executable(.strata) ?? "", installed: EnginePaths.executable(.strata) != nil, canServe: EnginePaths.executable(.strata) != nil, installation: "Apple Silicon · Metal 源码编译", description: "Niko1221/Strata · Flash-Next 推理与兼容 API", defaultPort: 8095, symbol: "square.3.layers.3d")
         ]
     }
 
@@ -206,6 +208,7 @@ enum Scanner {
 
         for file in files where file.pathExtension.lowercased() == "gguf" {
             let name = file.lastPathComponent.lowercased()
+            if name.contains("qwen3.8-flash-next"), name.range(of: #"-0000[2-6]-of-0000[2-6]\.gguf$"#, options: .regularExpression) != nil { continue }
             guard !name.contains("mmproj"), !name.hasPrefix("mtp-"), !name.hasPrefix("ggml-vocab-") else { continue }
             let actual = file.resolvingSymlinksInPath()
             let folder = file.deletingLastPathComponent()
@@ -214,13 +217,19 @@ enum Scanner {
             let companion = projectors.count == 1 ? projectors.first : nil
             let associated = siblings.filter { $0.lastPathComponent.lowercased().hasPrefix("mmproj") || $0.lastPathComponent.lowercased().hasPrefix("mtp-") }
             let kind: ModelKind = name.contains("lora") || file.path.contains("/adapters/") ? .adapter : name.contains("embed") ? .embedding : .language
-            let quant = ["PQ2_0", "PTQ1_0", "Q1_0", "Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M", "Q4_K_S", "Q4_0", "Q3_K_M", "Q2_K", "MXFP4"].first { file.lastPathComponent.contains($0) } ?? "GGUF"
+            let quant = ["UD-Q4_K_XL", "UD-Q5_K_XL", "UD-Q6_K_XL", "IQ3_XXS", "IQ3_S", "PQ2_0", "PTQ1_0", "Q1_0", "Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M", "Q4_K_S", "Q4_0", "Q3_K_M", "Q2_0", "Q2_K", "MXFP4"].first { file.lastPathComponent.contains($0) } ?? "GGUF"
             var label = file.deletingPathExtension().lastPathComponent
             if quant != "GGUF" { label = label.replacingOccurrences(of: "-\(quant)", with: "").replacingOccurrences(of: ".\(quant)", with: "") }
+            var weights = [file], missing: [String] = []
+            if name.contains("qwen3.8-flash-next"), let split = ServiceStartupProgress.match(#"^(.*)-00001-of-([0-9]{5})\.gguf$"#, in: file.lastPathComponent), let count = Int(split[2]), (2...6).contains(count) {
+                weights = (1...count).map { folder.appendingPathComponent(split[1] + String(format: "-%05d-of-%05d.gguf", $0, count)) }
+                missing = weights.filter { !fm.fileExists(atPath: $0.path) }.map(\.lastPathComponent)
+                label = label.replacingOccurrences(of: String(format: "-00001-of-%05d", count), with: "")
+            }
             var valid = false
             if let handle = try? FileHandle(forReadingFrom: file) { valid = (try? handle.read(upToCount: 4)) == Data("GGUF".utf8); try? handle.close() }
             let metadata = valid ? GGUFMetadata.read(file) : (architecture: nil as String?, prism: nil as Bool?, inputs: nil as [String]?)
-            add(LocalModel(id: "gguf:\(actual.path)", name: label, format: "GGUF \(quant == "GGUF" ? "" : quant)", path: file.path, kind: kind, bytes: actualSize(file) + (kind == .language ? associated.reduce(0) { $0 + actualSize($1) } : 0), complete: valid, verification: valid ? "文件存在 · GGUF 头部有效" : "文件头部异常", missingFiles: [], companion: companion?.path, removalPath: actual.path, architecture: metadata.architecture, prismRequired: metadata.prism))
+            add(LocalModel(id: "gguf:\(actual.path)", name: label, format: "GGUF \(quant == "GGUF" ? "" : quant)", path: file.path, kind: kind, bytes: weights.reduce(Int64(0)) { $0 + actualSize($1) } + (kind == .language ? associated.reduce(0) { $0 + actualSize($1) } : 0), complete: valid && missing.isEmpty, verification: !missing.isEmpty ? "缺少 \(missing.count) 项文件" : valid ? "文件存在 · GGUF 头部有效" : "文件头部异常", missingFiles: missing, companion: companion?.path, removalPath: actual.path, architecture: metadata.architecture, prismRequired: metadata.prism))
         }
 
         for (directory, entries) in normalizedFiles {
@@ -248,6 +257,7 @@ enum Scanner {
             add(LocalModel(id: "ollama:\(file.path)", name: modelName, format: "Ollama", path: file.path, kind: .language, bytes: bytes, complete: missing.isEmpty, verification: missing.isEmpty ? "模型层文件齐全" : "缺少模型层", repository: modelName, missingFiles: missing, removalPath: file.path))
         }
         for model in SplashAssemblyCatalog.scan() { add(model) }
+        for model in StrataModelCatalog.scan(roots: roots) { add(model) }
         for index in models.indices {
             if let origin = ModelOrigin.read(models[index]) {
                 models[index].origin = origin
@@ -302,7 +312,7 @@ enum LaunchError: LocalizedError {
 
 enum LaunchBuilder {
     static func plan(engine: Engine, model: LocalModel?, port: Int, context: Int = 8192, maximumLoadedModels: Int = 3, inputMode: InputMode = .automatic, projectorPath: String? = nil) throws -> LaunchPlan {
-        let model = engine.kind == .splash ? (model?.preparedForSplash(inputMode) ?? model) : model
+        let model = engine.kind == .splash ? (model?.preparedForSplash(inputMode) ?? model) : engine.kind == .strata ? (model?.preparedForStrata(inputMode) ?? model) : model
         guard (1024...65535).contains(port) else { throw LaunchError.message("端口需要在 1024–65535 之间") }
         guard (1024...262144).contains(context), (1...16).contains(maximumLoadedModels) else { throw LaunchError.message("上下文或常驻模型数量无效") }
         guard engine.canServe else { throw LaunchError.message("当前引擎没有可启动的服务程序") }
@@ -367,7 +377,14 @@ enum LaunchBuilder {
             if executable == engine.visionPath { args += ["--max-kv-size", String(context)] }
             env = ["HF_HUB_OFFLINE": "1"]
         case .lmstudio: throw LaunchError.message("请在 LM Studio 应用中启动服务")
-        case .strata: throw LaunchError.message("官方 Strata 暂无已发布的 Mac 引擎；请登记已启动的本机实验版或远程 Strata 接口。")
+        case .strata:
+            guard let config = model?.strataConfig else { throw LaunchError.message("请先准备 Strata 主模型及配套组件") }
+            try StrataModelCatalog.validate(config: config)
+            args = ["--config", config, "--port", String(port), "--context", String(context), "--mode", inputMode.rawValue,
+                    "--instance-dir", EnginePaths.root.deletingLastPathComponent().appendingPathComponent("strata-services").path]
+            if engine.launchSettings?.strataDraft == false || model?.association?.draftMode == .disabled { args += ["--draft", "off"] }
+            if let speculation = engine.launchSettings?.strataSpeculation { args += ["--speculation", String(speculation)] }
+            env["PYTHONDONTWRITEBYTECODE"] = "1"
         }
         if engine.kind == .splash, model?.splashSelection != nil {
             if engine.launchSettings?.ane == false { args += ["--disable-ane"] }

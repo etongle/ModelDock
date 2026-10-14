@@ -52,7 +52,9 @@ enum ModalityPolicy {
     }
     static func nativeMultimodalReason(engine: Engine, model: LocalModel?, projector: String?) -> String? {
         switch engine.kind {
-        case .strata: return "Strata 图片能力取决于原服务是否加载匹配视觉组件；登记接口后读取实际能力。"
+        case .strata:
+            guard let prepared = model?.preparedForStrata(.multimodal), prepared.complete else { return "请先准备包含匹配视觉编码器和投影的 Strata 模型，再开启多模态。" }
+            return nil
         case .llama, .prism:
             guard model?.kind == .language else { return "此模型不是可开启多模态的对话模型。" }
             guard let path = self.projector(model: model, override: projector) else { return "多模态需要与模型匹配的 GGUF 投影文件，请先选择投影文件。" }
@@ -71,6 +73,9 @@ enum ModalityPolicy {
     }
     static func local(_ model: LocalModel) -> ModelCapabilities {
         var result = ModelCapabilities()
+        if let path = model.strataConfig, let config = jsonFile(URL(fileURLWithPath: path)) {
+            result.inputs = config["vision"] == nil ? ["text"] : ["text", "image"]; result.known = true; result.source = "Strata 已准备组件"; return result
+        }
         if model.splashSelection != nil { result.inputs = model.splashVision == "none" ? ["text"] : ["text", "image", "file"]; result.known = true; result.source = "Splash 已准备组件"; return result }
         if model.format.hasPrefix("Splash") { result.known = true; result.source = "旧版 Splash packed 模型 · 不支持图片、PDF、音频或视频"; return result }
         if model.format.hasPrefix("GGUF"), let path = projector(model: model, override: nil) {
@@ -87,7 +92,7 @@ enum ModalityPolicy {
         return result
     }
     static func planned(engine: Engine, model: LocalModel?, projector: String?, mode: InputMode) -> ModelCapabilities {
-        let model = engine.kind == .splash ? (model?.preparedForSplash(mode) ?? model) : model
+        let model = engine.kind == .splash ? (model?.preparedForSplash(mode) ?? model) : engine.kind == .strata ? (model?.preparedForStrata(mode) ?? model) : model
         var value = model.map(local) ?? ModelCapabilities()
         if engine.kind == .mlx {
             if engine.visionPath != nil && (mode == .multimodal || (mode == .automatic && value.supportsMedia)) { value.source = "MLX-VLM 多模态组件 · 架构在启动时验证" }

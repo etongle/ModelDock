@@ -18,6 +18,16 @@ English is the default on first launch, including on non-English systems. Click 
 
 The main window closes to the background by default. A second option quits the app when closing its window, with a confirmation each time.
 
+### Update ModelDock itself
+
+Open **ModelDock → Check for app updates…**, or **Settings → App updates**. The section shows the installed app version, latest official GitHub version, check time, and download percentage/speed. Daily automatic checks and automatic download/installation are enabled by default; either can be disabled.
+
+Only a newer stable release from `etongle/ModelDock` is installed. The Apple Silicon ZIP must have a GitHub SHA-256 digest. ModelDock checks that digest, archive paths, bundle identity, version, architecture, minimum macOS and code signature before replacing the app. It does not downgrade or install prereleases.
+
+Installation waits for active model downloads, engine operations, model preparation and configuration sheets. The app then closes, replaces its bundle, and reopens, restoring menu-bar mode if hidden. Running model services retain their processes; model libraries and personal settings stay in place. The old app bundle is retained beside the installation as `.ModelDock-backup-…app`. A replacement or relaunch-command failure restores the original bundle. If the folder is not writable, install manually from Releases.
+
+The public packages currently use ad-hoc signing; automatic updating does not make them Apple-notarized. SHA-256 verifies the package published in the official repository.
+
 ## 2. Prepare an engine
 
 Open **Engines** and select an installed engine. An engine card can be selected anywhere in its area, including whitespace. **Global engine settings** controls which engines appear in normal lists; individual engine settings contain supported defaults and options.
@@ -30,6 +40,22 @@ Open **Engines** and select an installed engine. An engine card can be selected 
 - Review an uninstall or cleanup plan before applying it. Model files and personal data are retained by default; shared models and files in use are protected.
 
 Disabling an engine hides it from normal selection. Existing files and service records remain available for management.
+
+### Strata on Apple Silicon
+
+Strata's Metal backend is experimental and requires **macOS 15+**, Apple Silicon and Xcode Command Line Tools. In **Engines → Strata → Install & Update**, review the pinned official source revision and compile it. Installation builds the Metal runtime and image encoder in an independent environment; it does not automatically download the large model weights.
+
+![Strata source installation and model preparation](assets/images/en-strata.png)
+
+1. Choose a quantization from the official Mac catalogue: Q2_0, IQ3_XXS, IQ3_S or a supported Unsloth UD-Q4/Q5/Q6 variant. The control displays the expected main download size.
+2. Click **Download main model files…**. Review the selected main shards and n-gram table in Downloads & Import, then start the download. Use task/file progress, pause and resume there.
+3. Return to Strata and choose the completed GGUF shard directory. A matching completed download can be picked automatically when preparing.
+4. Enable **Prepare image input components** if needed, choose the destination, and click **Prepare model and components**. This phase uses upstream verification and prepares vocabulary, model packs, MTP and optional vision files. Its log shows component progress when the upstream downloader emits it. **Pause preparation** preserves partial files; repeating the same choices resumes an incomplete combination.
+5. Select the prepared model and choose automatic, text or multimodal launch mode, context and an unused port. Engine configuration can disable prepared MTP acceleration or adjust the supported speculation window. Strata's Mac server processes one request at a time and queues clients; separate service instances need their own ports and enough memory.
+
+Each prepared combination has a separate directory. **Model Files → Associated launch components** selects a retained combination for a later launch. Running services retain their original combination. Updating Strata changes its runtime, not model files; stop only Strata services before that update. Shared weights and components in use are protected from deletion or repair.
+
+Strata requires matched **Flash-Next weights + n-gram + vocabulary/model pack**. Its MTP component is not a Splash DFlash draft. Image support needs the prepared projection/encoder; this integration does not claim audio, video or PDF support. External Strata APIs can still be registered with the gateway and pi/OpenCode. See the [official Mac guide](https://github.com/Niko1221/Strata/blob/main/docs/MAC.md) for upstream architecture limits.
 
 ## 3. Download a model
 

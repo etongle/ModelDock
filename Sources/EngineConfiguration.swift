@@ -10,6 +10,8 @@ struct EngineConfiguration: Codable, Hashable {
     var ane: Bool? = nil
     var draftPath: String? = nil
     var maximumLoadedModels: Int? = nil
+    var strataDraft: Bool? = nil
+    var strataSpeculation: Int? = nil
     var isEnabled: Bool { enabled ?? true }
 }
 
@@ -25,11 +27,14 @@ final class EngineConfigurationDraft: ObservableObject, Identifiable {
     @Published var ane: Bool
     @Published var draftPath: String
     @Published var maximumLoadedModels: Int
+    @Published var strataDraft: Bool
+    @Published var strataSpeculation: Int
     @Published var error: String?
     init(engine: Engine, value: EngineConfiguration) {
         self.engine = engine; enabled = value.isEnabled; port = String(value.port ?? engine.defaultPort)
-        context = value.context ?? 8192; inputMode = value.inputMode ?? .automatic; gpu = value.gpu ?? true
+        context = value.context ?? (engine.kind == .strata ? 32768 : 8192); inputMode = value.inputMode ?? .automatic; gpu = value.gpu ?? true
         ane = value.ane ?? true; draftPath = value.draftPath ?? ""; maximumLoadedModels = value.maximumLoadedModels ?? 3
+        strataDraft = value.strataDraft ?? true; strataSpeculation = value.strataSpeculation ?? 2
     }
     func value() throws -> EngineConfiguration {
         guard let port = Int(port), (1024...65535).contains(port), (1024...262144).contains(context),
@@ -38,7 +43,8 @@ final class EngineConfigurationDraft: ObservableObject, Identifiable {
             guard let config = jsonFile(URL(fileURLWithPath: draftPath).appendingPathComponent("config.json")), DraftModelPolicy.isDraft(config),
                   FileManager.default.fileExists(atPath: URL(fileURLWithPath: draftPath).appendingPathComponent("model.safetensors").path) else { throw LaunchError.message("请选择文件齐全的 DFlash2 草稿目录") }
         }
-        return .init(enabled: enabled, port: port, context: context, inputMode: inputMode, gpu: gpu, ane: ane, draftPath: draftPath.isEmpty ? nil : draftPath, maximumLoadedModels: maximumLoadedModels)
+        guard (1...4).contains(strataSpeculation) else { throw LaunchError.message("Strata 推测窗口需要在 1–4 之间") }
+        return .init(enabled: enabled, port: port, context: context, inputMode: inputMode, gpu: gpu, ane: ane, draftPath: draftPath.isEmpty ? nil : draftPath, maximumLoadedModels: maximumLoadedModels, strataDraft: engine.kind == .strata ? strataDraft : nil, strataSpeculation: engine.kind == .strata ? strataSpeculation : nil)
     }
 }
 
@@ -123,7 +129,12 @@ final class EngineConfigurationDraft: ObservableObject, Identifiable {
                         }.disabled(draft.engine.kind == .splash ? !modern : draft.engine.visionPath == nil)
                         Text(verbatim: L10n.text("本地 DFlash2 先核对主模型尺寸，再由引擎验证加载。每个模型可保存自己的组件关联。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                     }
-                    if [.lmstudio, .strata].contains(draft.engine.kind) { Text(verbatim: L10n.text("通过原应用或外部服务启动；实际参数和能力以原服务为准。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
+                    if draft.engine.kind == .strata {
+                        Toggle(L10n.text("启用已准备的 MTP 草稿"), isOn: $draft.strataDraft).toggleStyle(.checkbox)
+                        Stepper("推测窗口：\(draft.strataSpeculation)", value: $draft.strataSpeculation, in: 1...4)
+                        Text(verbatim: L10n.text("自动使用本模型准备的 MTP；小内存流式模型可能未启用 MTP。关闭后只运行主模型。每个服务独立保存启动配置，修改只影响后续启动。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                    }
+                    if draft.engine.kind == .lmstudio { Text(verbatim: L10n.text("通过原应用或外部服务启动；实际参数和能力以原服务为准。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
                 }.padding(.trailing, 5)
             }.disabled(!draft.enabled)
             if let error = draft.error { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.errorText) }

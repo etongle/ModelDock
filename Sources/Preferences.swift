@@ -23,6 +23,9 @@ struct PreferencesView: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
+                Section(L10n.text("应用更新")) {
+                    AppUpdateSettings(updates: store.appUpdates).id(store.language.rawValue)
+                }
                 Section(L10n.text("界面语言")) {
                     Picker(L10n.text("语言"), selection: $store.language) {
                         ForEach(AppLanguage.allCases, id: \.self) { language in Text(verbatim: language.name).tag(language) }
@@ -48,6 +51,45 @@ struct PreferencesView: View {
                 Spacer()
                 Button(L10n.text("完成"), action: close).keyboardShortcut(.defaultAction)
             }.padding(.horizontal, 24).padding(.bottom, 20)
-        }.frame(width: 580, height: 450).background(Theme.background).environment(\.locale, L10n.locale)
+        }.frame(width: 580, height: 660).background(Theme.background).environment(\.locale, L10n.locale)
+    }
+}
+
+struct AppUpdateSettings: View {
+    @ObservedObject var updates: AppUpdateController
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(verbatim: L10n.text("当前应用版本：\(AppUpdateCatalog.installedVersion)"))
+                Spacer()
+                if let latest = updates.release { Text(verbatim: L10n.text("GitHub 正式版：\(latest.version)")) }
+            }.font(.system(size: 12)).textSelection(.enabled)
+            Toggle(L10n.text("每天自动检查 GitHub 新版本"), isOn: $updates.automaticCheck).accessibilityIdentifier("automatic-app-update-check")
+            Toggle(L10n.text("自动下载并覆盖安装，完成后重新打开"), isOn: $updates.automaticInstall).accessibilityIdentifier("automatic-app-update-install")
+            Text(verbatim: L10n.text("模型文件和设置保留，运行中的模型服务继续运行。安装引擎、下载或准备模型时会延后更新。"))
+                .font(.system(size: 12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: L10n.text(updates.status)).font(.system(size: 12)).foregroundStyle(Theme.linkColor).fixedSize(horizontal: false, vertical: true)
+            if updates.busy {
+                if updates.received > 0, let release = updates.release {
+                    ProgressView(value: updates.progress)
+                    HStack {
+                        Text(verbatim: String(format: "%.1f%%", updates.progress * 100) + " · " + sizeLabel(updates.received) + " / " + sizeLabel(release.bytes))
+                        Spacer()
+                        Text(verbatim: updates.speed > 0 ? sizeLabel(Int64(updates.speed)) + "/s" : "—")
+                    }.font(.system(size: 11)).monospacedDigit().foregroundStyle(Theme.muted)
+                } else { ProgressView().controlSize(.small) }
+            }
+            if let error = updates.error { Text(verbatim: L10n.text(error)).font(.system(size: 12)).foregroundStyle(Theme.errorText).fixedSize(horizontal: false, vertical: true) }
+            HStack {
+                Button(L10n.text("检查应用更新…")) { updates.check() }.disabled(updates.busy || updates.applying).accessibilityIdentifier("check-app-update")
+                if updates.available {
+                    Button(L10n.text(updates.ready != nil ? "安装并重新打开" : "下载并覆盖安装")) { updates.download(installWhenReady: true) }
+                        .disabled(updates.busy || updates.applying).accessibilityIdentifier("install-app-update")
+                }
+                Spacer()
+                Link(L10n.text("发行说明"), destination: updates.release?.page ?? URL(string: "https://github.com/etongle/ModelDock/releases")!)
+            }
+            if let last = updates.lastCheck { Text(verbatim: L10n.text("上次检查：\(last.formatted(date: .abbreviated, time: .shortened))")).font(.system(size: 11)).foregroundStyle(Theme.muted) }
+        }
     }
 }

@@ -41,6 +41,9 @@ try:
         output = root / label
         policy = '(version 1)(allow default)(deny file-read* (subpath "/opt/homebrew") (subpath "/usr/local") (literal "/usr/bin/python3") (subpath "/Applications/Llama.app") (subpath "/Applications/LM Studio.app"))(deny process-exec (subpath "/opt/homebrew") (subpath "/usr/local") (literal "/usr/bin/python3"))'
         subprocess.run(['/usr/bin/sandbox-exec', '-p', policy, str(app / 'Contents/MacOS/ModelManager'), '--distribution-checks', '--state-dir', str(home / 'Library/Application Support/ModelManager'), '--check-dir', str(output)], env=env, check=True, timeout=45)
+        python = app / 'Contents/Resources/PythonRuntime/bin/python3'
+        for helper in ('strata.py', 'app_update.py'):
+            subprocess.run(['/usr/bin/sandbox-exec', '-p', policy, str(python), '-B', str(app / 'Contents/Resources' / helper), '--help'], env=env, check=True, stdout=subprocess.DEVNULL, timeout=15)
         subprocess.run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)], check=True)
         assert not list(app.rglob('__pycache__'))
     report = {'result':'passed','version':version,'checks':['DMG/ZIP hashes match release manifest','DMG has application, Applications shortcut and instructions','both extracted apps have valid signatures and macOS 14 target','relocated gateway runs using bundled Python while external runtimes are blocked','signatures remain valid after runtime use','temporary test ports released','personal configuration and models excluded by clean application staging'],'olderOSHardwareTested':False}

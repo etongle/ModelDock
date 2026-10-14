@@ -21,6 +21,7 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 - **Run services:** configure ports, context windows, text or multimodal input, and supported runtime options; manage several independent instances; see startup stages and associated draft/vision components.
 - **Connect clients:** register models with pi or OpenCode while preserving existing settings. Choose a direct endpoint or the OpenAI-compatible gateway; add remote compatible APIs to the same gateway.
 - **Stay in the menu bar:** monitor CPU, memory, disk usage, download progress, and measured model performance. Closing the main window keeps the app running by default; clicking outside the menu-bar panel dismisses it.
+- **Update ModelDock:** check official GitHub Releases, automatically download and verify a newer Apple Silicon package, replace the app and reopen it. Model files, settings and running model services are preserved.
 
 ## Engine support
 
@@ -32,7 +33,7 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 | MLX-LM / MLX-VLM | MLX Safetensors directories | MLX-LM for text; MLX-VLM for supported multimodal models |
 | LM Studio | GGUF / MLX, depending on its runtime | Models are loaded through the application or its supported CLI |
 | llama.cpp · Prism | Compatible GGUF | Options and architecture support depend on the local build |
-| Strata | External compatible API | Connect an upstream service; a native Mac installation is not bundled |
+| Strata · Niko1221 | Prepared Flash-Next GGUF / Metal assemblies | Experimental Apple Silicon source installation on macOS 15+; matched MTP and optional images; local or external API |
 
 A format label does not guarantee that every engine can run every architecture. ModelDock checks local files and launch constraints; the runtime validates the actual architecture and auxiliary components.
 
@@ -48,6 +49,10 @@ A format label does not guarantee that every engine can run every architecture. 
 English is the first-launch default. Click the **globe/language button at the top right** to choose English, Chinese, French, Portuguese, or system language. You can also open **Settings → Interface language** with **⌘,**. Changes apply immediately.
 
 Read the [illustrated user guide](docs/USER_GUIDE.md) for download management, draft models, updates, deletion, gateway setup, troubleshooting, and keyboard shortcuts.
+
+**Settings → App updates** controls daily GitHub checks and automatic installation. **ModelDock → Check for app updates…** checks immediately. Updates wait for downloads, engine operations and model preparation to finish.
+
+For Strata, compile its official Metal source build from **Engines**, download a supported Flash-Next quantization, then **Prepare model and components** before starting a service. Ordinary Qwen 27B weights or Splash DFlash drafts are not interchangeable with Strata's Flash-Next/MTP assembly. This integration was verified with an actual Metal/vision build and isolated API fixtures; full Flash-Next inference has not been tested in this release.
 
 ## Build from source
 

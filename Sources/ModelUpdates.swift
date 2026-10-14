@@ -132,6 +132,7 @@ final class ModelUpdateDraft: ObservableObject, Identifiable {
         guard let listing, !selectedFiles.isEmpty, !checking, !updating else { return }
         guard checkedAddress == address else { error = "仓库地址已变化，请重新检查版本"; return }
         guard store.downloads.activeID == nil, !store.maintaining else { error = "请先暂停当前下载或等待清理完成"; return }
+        guard !store.strata.uses(model.path) else { error = "此模型正在准备 Strata 配套组件，请等待操作完成。"; return }
         store.downloads.address = address; store.downloads.token = token
         store.downloads.listing = listing; store.downloads.selected = selected
         store.downloads.createJob()

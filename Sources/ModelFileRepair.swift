@@ -60,6 +60,7 @@ enum ModelFileRepair {
         Task {
             defer { repairingFile = nil }
             do {
+                if strata.uses(entry.path) { throw LaunchError.message("此位置正在准备 Strata 配套组件，请等待操作完成。") }
                 let (source, target, relative) = try ModelFileRepair.reference(model: model, entry: entry)
                 await services.refresh()
                 guard !ModelFileSafety.used(model, removal: target, services: services.records, external: services.external, models: models) else { throw LaunchError.message("此文件正在被服务使用，请先停止相关服务；修复不会改动其他文件") }

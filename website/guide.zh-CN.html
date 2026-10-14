@@ -1,8 +1,14 @@
 <!doctype html><html lang="zh-Hans"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>使用说明 — ModelDock</title><meta name="description" content="Illustrated ModelDock usage guide"><link rel="icon" href="assets/logo.png"><link rel="stylesheet" href="site.css"></head><body data-page="guide" data-language="zh"><a class="skip-link" href="#main" data-i18n="skip">Skip to content</a><header class="site-header"><div class="wrap header-inner"><a class="brand" href="./"><img src="assets/logo.png" width="36" height="36" alt=""><span>ModelDock</span></a><nav aria-label="Main navigation"><a href="./#workflow" data-i18n="navHow">How it works</a><a href="https://github.com/etongle/ModelDock">GitHub ↗</a></nav><button type="button" id="language" class="language">中文</button></div></header><main id="main" class="wrap guide-layout"><aside class="guide-toc" aria-label="目录"><div class="toc">
 <ul>
 <li><a href="#modeldock">ModelDock 模型坞使用说明</a><ul>
-<li><a href="#1">1. 安装与语言选择</a></li>
-<li><a href="#2">2. 准备模型基座</a></li>
+<li><a href="#1">1. 安装与语言选择</a><ul>
+<li><a href="#modeldock_1">更新 ModelDock 应用自身</a></li>
+</ul>
+</li>
+<li><a href="#2">2. 准备模型基座</a><ul>
+<li><a href="#apple-silicon-strata">Apple Silicon 上的 Strata</a></li>
+</ul>
+</li>
 <li><a href="#3">3. 下载模型</a><ul>
 <li><a href="#_1">看每个文件的进度，调整下载顺序</a></li>
 <li><a href="#_2">删除任务与清理未完成文件</a></li>
@@ -33,6 +39,11 @@
 <p><strong>首次启动默认英语</strong>，不因系统为中文而改变。点击主窗口<strong>右上角的地球/语言按钮</strong>，直接选择 English、简体中文、Français、Português 或跟随系统。窄窗口显示地球图标和 <strong>EN</strong> 等语言缩写。也可在菜单 <strong>ModelDock → Settings…</strong>（⌘,）中修改界面语言。切换立即生效并自动保存。</p>
 <p><img alt="语言选择与窗口关闭设置" src="assets/zh-Hans-settings.png" /></p>
 <p>默认关闭主窗口后保持后台运行。也可以选择关闭窗口时退出，每次退出都会再次确认。</p>
+<h3 id="modeldock_1">更新 ModelDock 应用自身</h3>
+<p>打开 <strong>ModelDock → 检查应用更新…</strong> 或 <strong>设置 → 应用更新</strong>，查看已安装版本、GitHub 正式版、上次检查时间和下载百分比/速度。每天自动检查、自动下载并覆盖安装默认开启，可以分别关闭。</p>
+<p>只安装 <code>etongle/ModelDock</code> 中更新的正式 Release。Apple Silicon ZIP 必须有 GitHub 提供的 SHA-256；应用会核对哈希、包内路径、应用标识、版本、架构、最低 macOS 和代码签名。不会自动降级，也不安装预发行版本。</p>
+<p>正在下载模型、安装/清理引擎、准备模型或编辑配置弹窗时，先等待操作结束。随后应用关闭、替换自身并重新打开，原来隐藏到菜单栏时恢复该模式。运行中的模型服务继续保留，模型库和个人设置不移动。旧应用保存在安装目录旁的 <code>.ModelDock-backup-…app</code>；替换或重新打开命令失败时恢复原应用。安装目录不可写时，改用 Release 安装包手动安装。</p>
+<p>当前发行包采用临时签名，自动更新并不代表已经通过 Apple 公证；SHA-256 用于核对官方仓库发布的文件。</p>
 <h2 id="2">2. 准备模型基座</h2>
 <p>打开“运行引擎”，选择已安装的基座。卡片的整块区域都能点击，包括留白。“全局引擎设置”控制基座是否在常规列表中展示，单个“引擎配置”保存该基座支持的默认值及选项。</p>
 <p><img alt="运行引擎及多模态启动配置" src="assets/zh-Hans-engines.png" /></p>
@@ -43,6 +54,18 @@
 <li>卸载和清理残留前先核对范围。模型和个人数据默认保留；共享模型与使用中的文件受到保护。</li>
 </ul>
 <p>禁用基座会把它从常规选择中隐藏，已有文件和服务记录仍可管理。</p>
+<h3 id="apple-silicon-strata">Apple Silicon 上的 Strata</h3>
+<p>Strata 的 Metal 后端为实验性支持，需要 <strong>macOS 15+</strong>、Apple Silicon 和 Xcode Command Line Tools。在 <strong>运行引擎 → Strata → 安装与更新</strong> 核对官方源码版本后编译。安装在独立环境构建 Metal 引擎和图片编码器，不会同时自动下载大体积模型权重。</p>
+<p><img alt="Strata 源码安装与模型准备" src="assets/zh-Hans-strata.png" /></p>
+<ol>
+<li>选择官方 Mac 列表中的 Q2_0、IQ3_XXS、IQ3_S 或支持的 Unsloth UD-Q4/Q5/Q6 量化版本，界面显示主文件预估下载量。</li>
+<li>点击 <strong>下载主模型文件…</strong>，在“下载导入”核对已选的主权重分片和 n-gram 表，再开始下载。这里可查看单文件进度、暂停与续传。</li>
+<li>下载完成后返回 Strata，选择完整 GGUF 分片目录；准备时也会优先使用匹配的已完成下载任务。</li>
+<li>需要图片时勾选 <strong>准备图片输入组件</strong>，选择保存位置，点击 <strong>准备模型与组件</strong>。按上游流程校验并准备词表、模型包、MTP 和可选视觉文件；上游输出的组件进度在日志中显示。<strong>暂停准备</strong>保留未完成文件，再次使用相同选择时继续未完成组合。</li>
+<li>选中已准备模型，设置自动/纯文本/多模态、上下文和空闲端口，启动服务。引擎配置可关闭已准备的 MTP，调整支持的推测窗口。Mac 服务一次处理一个请求，多客户端排队；多个独立服务需要不同端口和足够内存。</li>
+</ol>
+<p>每次准备保存为独立组合。在 <strong>模型文件 → 关联启动组件</strong>选择保留的组合供后续启动。已启动服务保留原组合；更新 Strata 只更换运行组件，保留模型文件，只要求停止 Strata 自己的服务。使用中的共用权重和组件不能删除或替换修复。</p>
+<p>Strata 需要匹配的 <strong>Flash-Next 主权重 + n-gram + 词表/模型包</strong>，MTP 不是 Splash 的 DFlash 草稿。图片需要已准备的投影和编码器；此集成不宣称支持音频、视频或 PDF。仍可把外部 Strata 接口加入网关和 pi/OpenCode。架构限制见<a href="https://github.com/Niko1221/Strata/blob/main/docs/MAC.md">官方 Mac 说明</a>。</p>
 <h2 id="3">3. 下载模型</h2>
 <p>在“下载导入”选择模型库位置，输入模型 ID 或完整地址，例如：</p>
 <pre><code class="language-text">mlx-community/Qwen3.8-27B-4bit

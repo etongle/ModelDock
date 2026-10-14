@@ -51,6 +51,8 @@ final class AppStore: ObservableObject {
     let connections: ConnectionController
     let modelFiles = ModelFileController()
     let gateway: GatewayController
+    let strata = StrataController()
+    let appUpdates: AppUpdateController
     @Published var multiModel: MultiModelDraft?
     @Published var commandDraft: CommandDraft?
     @Published var modelUpdate: ModelUpdateDraft?
@@ -75,6 +77,8 @@ final class AppStore: ObservableObject {
         installation = EngineInstallController(directory: stateDirectory)
         connections = ConnectionController(directory: stateDirectory)
         gateway = GatewayController(directory: stateDirectory)
+        appUpdates = AppUpdateController(directory: stateDirectory)
+        strata.restore(directory: stateDirectory)
         engineConfigurations = (try? Data(contentsOf: stateDirectory.appendingPathComponent("engine-configurations.json"))).flatMap { try? JSONDecoder().decode([String: EngineConfiguration].self, from: $0) } ?? [:]
         modelAssociations = (try? Data(contentsOf: stateDirectory.appendingPathComponent("model-associations.json"))).flatMap { try? JSONDecoder().decode([String: ModelAssociation].self, from: $0) } ?? [:]
         settingsURL = stateDirectory.appendingPathComponent("locations.json")
@@ -90,6 +94,8 @@ final class AppStore: ObservableObject {
         services.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
         modelFiles.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
         gateway.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
+        strata.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
+        appUpdates.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
         services.$logRevision.dropFirst().sink { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -167,7 +173,7 @@ final class AppStore: ObservableObject {
     var currentStatus: ServiceStatus { currentService.map { services.status($0) } ?? .stopped }
     var occupiedExternally: Bool { parsedPort.map { candidate in services.external.contains { $0.port == candidate } } ?? false }
     var portConflict: String? { parsedPort.flatMap { services.portConflict($0, excluding: currentService?.id) } }
-    var canStart: Bool { engineEnabled(engineID) && !scanning && !(maintaining && maintenanceEngineID == engineID) && installation.activeEngineID != engineID && engine.canServe && parsedPort != nil && (selectedModel != nil || engine.kind == .ollama) && portConflict == nil && currentService?.pid == nil && (inputMode != .multimodal || ModalityPolicy.nativeMultimodalReason(engine: engine, model: selectedModel, projector: projectorPath) == nil) }
+    var canStart: Bool { engineEnabled(engineID) && !scanning && !(engineID == "strata" && strata.busy) && !(maintaining && maintenanceEngineID == engineID) && installation.activeEngineID != engineID && engine.canServe && parsedPort != nil && (selectedModel != nil || engine.kind == .ollama) && portConflict == nil && currentService?.pid == nil && (inputMode != .multimodal || ModalityPolicy.nativeMultimodalReason(engine: engine, model: selectedModel, projector: projectorPath) == nil) }
     var filteredModels: [LocalModel] {
         models.filter { model in
             modelMatchesEngineFilter(model) && (modelFilter == "全部" || (modelFilter == "主模型" ? model.kind == .language : model.kind != .language)) && (search.isEmpty || (model.name + model.format + model.path).localizedCaseInsensitiveContains(search))
@@ -200,7 +206,7 @@ final class AppStore: ObservableObject {
     func chooseEngine(_ id: String) {
         engineID = id
         inputMode = engine.launchSettings?.inputMode ?? .automatic; projectorPath = ""
-        context = engine.launchSettings?.context ?? 8192; maximumLoadedModels = engine.launchSettings?.maximumLoadedModels ?? 3
+        context = engine.launchSettings?.context ?? (engine.kind == .strata ? 32768 : 8192); maximumLoadedModels = engine.launchSettings?.maximumLoadedModels ?? 3
         if selectedModels[id] == nil { selectedModels[id] = compatibleModels.first?.id }
         if let active = services.records.first(where: { $0.engineID == id && $0.pid != nil && (id == "ollama" || selectedModel == nil || selectedModel?.matchesID($0.modelID) == true) }) {
             port = String(active.port); context = active.context
@@ -224,6 +230,7 @@ final class AppStore: ObservableObject {
         tab = .services
     }
     func start() {
+        guard !(engineID == "strata" && strata.busy), !appUpdates.applying else { message = "请等待当前模型准备或应用更新完成"; return }
         guard engineEnabled(engineID) else { message = "此基座已停用，请在引擎配置中启用"; return }
         guard let selectedPort = parsedPort else { message = "请输入 1024–65535 之间的端口"; return }
         guard installation.activeEngineID != engineID else { message = "请等待此引擎安装或更新完成"; return }
@@ -263,11 +270,19 @@ final class AppStore: ObservableObject {
         extraRoots += panel.urls.map { $0.resolvingSymlinksInPath().path }.filter { !existing.contains($0) }
         do { try JSONEncoder().encode(extraRoots).write(to: settingsURL, options: .atomic); scan() } catch { message = "目录保存失败：\(error.localizedDescription)" }
     }
+    func registerModelRoot(_ path: String) throws {
+        let root = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        if root != Scanner.defaultRoot.path && !extraRoots.contains(root) {
+            var next = extraRoots; next.append(root)
+            try JSONEncoder().encode(next).write(to: settingsURL, options: .atomic); extraRoots = next
+        }
+    }
     func launch(model: LocalModel, engine: Engine) { selectedModels[engine.id] = model.id; chooseEngine(engine.id); tab = .engines }
 
     func maintenanceBlockers(_ plan: MaintenancePlan, selectedIDs: Set<String>? = nil, includeDownloads: Bool = true) -> [String] {
         var blockers = plan.blockers
         let chosen = plan.items.filter { selectedIDs?.contains($0.id) ?? $0.selectedByDefault }
+        if plan.engine.kind == .strata && strata.busy { blockers.append("请等待 Strata 模型准备操作完成。") }
         if includeDownloads { blockers += EngineMaintenance.downloadBlockers(chosen, jobs: downloads.jobs) }
         if services.records.contains(where: { $0.engineID == plan.engine.id && $0.pid != nil }) { blockers.append("请先在“模型服务”中停止此引擎的服务。") }
         let agent = Scanner.home.appendingPathComponent("Library/LaunchAgents/homebrew.mxcl.ollama.plist").path

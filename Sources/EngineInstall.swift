@@ -29,12 +29,13 @@ enum EnginePaths {
         ["/opt/homebrew/opt/python@3.13/bin/python3.13", "/opt/homebrew/opt/python@3.12/bin/python3.12", "/opt/homebrew/bin/python3"].first { FileManager.default.isExecutableFile(atPath: $0) } ?? bundledPython
     }
 }
-enum InstallMethod: String, Codable { case brew, python, archive }
+enum InstallMethod: String, Codable { case brew, python, archive, source }
 struct EngineRelease: Codable {
     var kind: EngineKind; var version: String; var source: String; var method: InstallMethod
     var asset: URL?; var sha256: String?; var bytes: Int64?; var checkedAt = Date()
     var visionVersion: String? = nil
     var components: [EngineComponentRelease]? = nil
+    var sourceRevision: String? = nil
 }
 struct InstallCommand: Codable {
     var executable: String; var arguments: [String]; var title: String
@@ -55,7 +56,7 @@ enum EngineCatalog {
     }
     static func release(_ kind: EngineKind) async throws -> EngineRelease {
         switch kind {
-        case .strata: throw LaunchError.message("官方 Strata 尚未发布 Mac 安装包，Metal PR #1449 已关闭且未合并。可在引擎页面登记本机实验版或远程服务。")
+        case .strata: return try await StrataRuntime.release()
         case .splash:
             let value = try await object("https://api.github.com/repos/incoai/splash/releases/latest")
             guard let version = value["tag_name"] as? String else { throw LaunchError.message("Splash 版本信息缺失") }
@@ -124,6 +125,11 @@ enum EngineCatalog {
             notes.append("MLX-LM 与 MLX-VLM 安装到本工具的独立 Python 环境；保留系统 MLX 库与旧运行环境。文本模式使用 MLX-LM，多模态模式使用 MLX-VLM。")
         case .archive:
             notes.append("下载后验证 SHA-256；新版本独立保存，验证通过后切换服务入口，保留旧版程序。")
+        case .source:
+            blockers += StrataRuntime.installProblems()
+            if python == nil { blockers.append("未发现可用的 Python 运行环境，请使用包含运行环境的安装包或安装 Python 后重试。") }
+            notes.append("从 Niko1221/Strata 官方固定提交编译 Metal 引擎，使用独立 Python 环境。模型单独下载准备；此次安装不会下载大模型。")
+            notes.append("源码版本独立保存；新引擎验证通过后切换入口，保留旧版和现有模型配置。")
         }
         if release.kind != engine.kind { blockers.append("版本信息不属于所选引擎") }
         return .init(engine: engine, release: release, commands: commands, notes: notes, blockers: blockers, updating: updating)
@@ -190,7 +196,15 @@ enum InstallExecutor {
         guard directory.resolvingSymlinksInPath().path.hasPrefix(root.resolvingSymlinksInPath().path + "/") else { throw LaunchError.message("引擎安装目录包含越界链接") }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var binary: URL
-        if plan.release.method == .python {
+        if plan.release.method == .source {
+            guard plan.engine.kind == .strata, let revision = plan.release.sourceRevision,
+                  StrataRuntime.validRevision(revision), let python = EnginePaths.bundledPython ?? EnginePaths.python,
+                  let helper = StrataRuntime.helper else { throw LaunchError.message("Strata 源码安装信息无效") }
+            let target = directory.appendingPathComponent("runtime")
+            let portable = python == EnginePaths.bundledPython ? Bundle.main.resourceURL.map { ["--python-runtime", $0.appendingPathComponent("PythonRuntime").path] } ?? [] : []
+            _ = try await run(.init(executable: python, arguments: ["-u", helper, "install", "--revision", revision, "--destination", target.path] + portable, title: "编译 Strata Metal"), log: log)
+            binary = target.appendingPathComponent("modeldock-strata")
+        } else if plan.release.method == .python {
             guard plan.engine.kind == .mlx, let python = EnginePaths.python, EngineCatalog.validVersion(plan.release.version) else { throw LaunchError.message("MLX-LM 安装信息无效") }
             let environment = directory.appendingPathComponent("venv")
             _ = try await run(.init(executable: python, arguments: ["-m", "venv", environment.path], title: "创建独立环境"), log: log)

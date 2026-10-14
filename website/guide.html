@@ -1,8 +1,14 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>User guide — ModelDock</title><meta name="description" content="Illustrated ModelDock usage guide"><link rel="icon" href="assets/logo.png"><link rel="stylesheet" href="site.css"></head><body data-page="guide" data-language="en"><a class="skip-link" href="#main" data-i18n="skip">Skip to content</a><header class="site-header"><div class="wrap header-inner"><a class="brand" href="./"><img src="assets/logo.png" width="36" height="36" alt=""><span>ModelDock</span></a><nav aria-label="Main navigation"><a href="./#workflow" data-i18n="navHow">How it works</a><a href="https://github.com/etongle/ModelDock">GitHub ↗</a></nav><button type="button" id="language" class="language">中文</button></div></header><main id="main" class="wrap guide-layout"><aside class="guide-toc" aria-label="Contents"><div class="toc">
 <ul>
 <li><a href="#modeldock-user-guide">ModelDock user guide</a><ul>
-<li><a href="#1-install-and-choose-a-language">1. Install and choose a language</a></li>
-<li><a href="#2-prepare-an-engine">2. Prepare an engine</a></li>
+<li><a href="#1-install-and-choose-a-language">1. Install and choose a language</a><ul>
+<li><a href="#update-modeldock-itself">Update ModelDock itself</a></li>
+</ul>
+</li>
+<li><a href="#2-prepare-an-engine">2. Prepare an engine</a><ul>
+<li><a href="#strata-on-apple-silicon">Strata on Apple Silicon</a></li>
+</ul>
+</li>
 <li><a href="#3-download-a-model">3. Download a model</a><ul>
 <li><a href="#per-file-progress-and-prioritization">Per-file progress and prioritization</a></li>
 <li><a href="#delete-a-task-or-clean-partial-files">Delete a task or clean partial files</a></li>
@@ -33,6 +39,11 @@
 <p>English is the default on first launch, including on non-English systems. Click the <strong>globe/language button at the top right of the main window</strong>, then choose <strong>English</strong>, <strong>简体中文</strong>, <strong>Français</strong>, <strong>Português</strong>, or <strong>Follow system</strong>. In a narrow window, the button shows the globe and a language abbreviation such as <strong>EN</strong>. You can also open <strong>ModelDock → Settings…</strong> (⌘,) to change <strong>Interface language</strong>. The interface changes immediately and the choice is saved.</p>
 <p><img alt="Interface language and close behavior" src="assets/en-settings.png" /></p>
 <p>The main window closes to the background by default. A second option quits the app when closing its window, with a confirmation each time.</p>
+<h3 id="update-modeldock-itself">Update ModelDock itself</h3>
+<p>Open <strong>ModelDock → Check for app updates…</strong>, or <strong>Settings → App updates</strong>. The section shows the installed app version, latest official GitHub version, check time, and download percentage/speed. Daily automatic checks and automatic download/installation are enabled by default; either can be disabled.</p>
+<p>Only a newer stable release from <code>etongle/ModelDock</code> is installed. The Apple Silicon ZIP must have a GitHub SHA-256 digest. ModelDock checks that digest, archive paths, bundle identity, version, architecture, minimum macOS and code signature before replacing the app. It does not downgrade or install prereleases.</p>
+<p>Installation waits for active model downloads, engine operations, model preparation and configuration sheets. The app then closes, replaces its bundle, and reopens, restoring menu-bar mode if hidden. Running model services retain their processes; model libraries and personal settings stay in place. The old app bundle is retained beside the installation as <code>.ModelDock-backup-…app</code>. A replacement or relaunch-command failure restores the original bundle. If the folder is not writable, install manually from Releases.</p>
+<p>The public packages currently use ad-hoc signing; automatic updating does not make them Apple-notarized. SHA-256 verifies the package published in the official repository.</p>
 <h2 id="2-prepare-an-engine">2. Prepare an engine</h2>
 <p>Open <strong>Engines</strong> and select an installed engine. An engine card can be selected anywhere in its area, including whitespace. <strong>Global engine settings</strong> controls which engines appear in normal lists; individual engine settings contain supported defaults and options.</p>
 <p><img alt="Engine and multimodal launch configuration" src="assets/en-engines.png" /></p>
@@ -43,6 +54,18 @@
 <li>Review an uninstall or cleanup plan before applying it. Model files and personal data are retained by default; shared models and files in use are protected.</li>
 </ul>
 <p>Disabling an engine hides it from normal selection. Existing files and service records remain available for management.</p>
+<h3 id="strata-on-apple-silicon">Strata on Apple Silicon</h3>
+<p>Strata's Metal backend is experimental and requires <strong>macOS 15+</strong>, Apple Silicon and Xcode Command Line Tools. In <strong>Engines → Strata → Install &amp; Update</strong>, review the pinned official source revision and compile it. Installation builds the Metal runtime and image encoder in an independent environment; it does not automatically download the large model weights.</p>
+<p><img alt="Strata source installation and model preparation" src="assets/en-strata.png" /></p>
+<ol>
+<li>Choose a quantization from the official Mac catalogue: Q2_0, IQ3_XXS, IQ3_S or a supported Unsloth UD-Q4/Q5/Q6 variant. The control displays the expected main download size.</li>
+<li>Click <strong>Download main model files…</strong>. Review the selected main shards and n-gram table in Downloads &amp; Import, then start the download. Use task/file progress, pause and resume there.</li>
+<li>Return to Strata and choose the completed GGUF shard directory. A matching completed download can be picked automatically when preparing.</li>
+<li>Enable <strong>Prepare image input components</strong> if needed, choose the destination, and click <strong>Prepare model and components</strong>. This phase uses upstream verification and prepares vocabulary, model packs, MTP and optional vision files. Its log shows component progress when the upstream downloader emits it. <strong>Pause preparation</strong> preserves partial files; repeating the same choices resumes an incomplete combination.</li>
+<li>Select the prepared model and choose automatic, text or multimodal launch mode, context and an unused port. Engine configuration can disable prepared MTP acceleration or adjust the supported speculation window. Strata's Mac server processes one request at a time and queues clients; separate service instances need their own ports and enough memory.</li>
+</ol>
+<p>Each prepared combination has a separate directory. <strong>Model Files → Associated launch components</strong> selects a retained combination for a later launch. Running services retain their original combination. Updating Strata changes its runtime, not model files; stop only Strata services before that update. Shared weights and components in use are protected from deletion or repair.</p>
+<p>Strata requires matched <strong>Flash-Next weights + n-gram + vocabulary/model pack</strong>. Its MTP component is not a Splash DFlash draft. Image support needs the prepared projection/encoder; this integration does not claim audio, video or PDF support. External Strata APIs can still be registered with the gateway and pi/OpenCode. See the <a href="https://github.com/Niko1221/Strata/blob/main/docs/MAC.md">official Mac guide</a> for upstream architecture limits.</p>
 <h2 id="3-download-a-model">3. Download a model</h2>
 <p>Open <strong>Downloads &amp; Import</strong>, choose the destination library, and enter either:</p>
 <pre><code class="language-text">mlx-community/Qwen3.8-27B-4bit

@@ -15,7 +15,7 @@ version = info['CFBundleShortVersionString']
 assert info['LSMinimumSystemVersion'] == '14.0'
 assert (app / 'Contents/Resources/PythonRuntime/bin/python3').is_file()
 assert (app / 'Contents/Resources/ThirdPartyNotices').is_dir()
-allowed = {'AppIcon.icns', 'gateway.py', 'ProcessIdentity.dylib', 'PythonRuntime', 'python-runtime.json', 'ThirdPartyNotices', 'Localization', 'LICENSE', 'LICENSE-NOTICE.txt'}
+allowed = {'AppIcon.icns', 'gateway.py', 'strata.py', 'app_update.py', 'ProcessIdentity.dylib', 'PythonRuntime', 'python-runtime.json', 'ThirdPartyNotices', 'Localization', 'LICENSE', 'LICENSE-NOTICE.txt'}
 assert {p.name for p in (app / 'Contents/Resources').iterdir()} == allowed, 'Unexpected application resources'
 assert not list(app.rglob('__pycache__')), 'Bytecode should not be embedded in distribution'
 subprocess.run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)], check=True)
@@ -34,7 +34,10 @@ Apple Silicon (M-series) Macs · macOS 14 or later.
 4. Select/install a compatible engine, then import or download a model.
    Homebrew-managed engines require Homebrew: https://brew.sh
    The manager includes the Python runtime used by its unified gateway.
-5. Close the main window to keep downloads/monitoring running. Use the
+5. Settings → App updates checks official GitHub Releases daily and can
+   automatically download, verify and install newer versions. Model files,
+   settings and existing model service processes are preserved.
+6. Close the main window to keep downloads/monitoring running. Use the
    menu-bar icon to reopen it; clicking outside its panel dismisses it.
 
 This distribution is ad-hoc signed and is not Apple-notarized. If a trusted

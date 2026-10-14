@@ -97,6 +97,16 @@ enum ModelFileCatalog {
                 add(URL(fileURLWithPath: path), name: "Splash / " + name, role: name.hasPrefix("draft/") ? "草稿组件" : name.hasPrefix("vision/") ? "视觉组件" : "引擎配置", expected: expected, references: max(1, references))
             }
         }
+        let strata = model.strataConfig != nil ? [model.path] : model.strataAssemblies ?? []
+        for assembly in strata {
+            guard let files = jsonFile(URL(fileURLWithPath: assembly).appendingPathComponent("modeldock-strata.json"))?["files"] as? [String: [String: Any]] else { continue }
+            for (name, item) in files {
+                guard let path = item["path"] as? String, path.hasPrefix("/") else { continue }
+                let expected = (item["bytes"] as? NSNumber)?.int64Value
+                if let index = rows.firstIndex(where: { $0.path == path }) { rows[index].expectedBytes = expected }
+                else { add(URL(fileURLWithPath: path), name: "Strata / " + name, role: name.hasPrefix("draft") ? "草稿组件" : name.hasPrefix("vision") ? "视觉组件" : name.hasPrefix("weights") ? "主模型权重" : name.hasPrefix("ngram") ? "n-gram 配套表" : "引擎配置", expected: expected) }
+            }
+        }
         return rows.sorted { if $0.valid != $1.valid { return !$0.valid }; return $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 }

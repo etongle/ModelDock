@@ -22,7 +22,7 @@ enum MultiModelPlanner {
     }
 }
 extension Engine {
-    var independentModels: Bool { [.splash, .llama, .prism, .mlx].contains(kind) }
+    var independentModels: Bool { [.splash, .llama, .prism, .mlx, .strata].contains(kind) }
     var multiModelDescription: String {
         switch kind {
         case .ollama: return "一个服务管理多个模型；实际常驻数量由内存和加载设置决定。"
@@ -100,6 +100,7 @@ final class MultiModelDraft: ObservableObject, Identifiable {
 
 extension AppStore {
     func prepareMultiModel() {
+        guard !(engineID == "strata" && strata.busy), !appUpdates.applying else { message = "请等待当前模型准备或应用更新完成"; return }
         guard installation.activeEngineID != engineID && !(maintaining && maintenanceEngineID == engineID) && !preparingMulti else { return }
         preparingMulti = true
         let engine = engine; let models = compatibleModels; let port = parsedPort ?? engine.defaultPort; let context = context
@@ -133,6 +134,7 @@ extension AppStore {
     }
     func runMultiModel(_ draft: MultiModelDraft) {
         guard !draft.running && installation.activeEngineID != draft.engine.id && !(maintaining && maintenanceEngineID == draft.engine.id) else { return }
+        guard !(draft.engine.kind == .strata && strata.busy), !appUpdates.applying else { draft.errors = ["请等待当前模型准备或应用更新完成"]; return }
         draft.errors = []; draft.done = false
         let choices = draft.selectedChoices
         guard !choices.isEmpty, choices.count <= 16, let base = Int(draft.basePort), (1024...65535).contains(base) else { draft.errors = ["请选择 1–16 个模型和有效端口"]; return }

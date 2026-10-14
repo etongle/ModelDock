@@ -13,12 +13,17 @@ enum DocumentationScreens {
         try FileManager.default.createDirectory(at: mainPath, withIntermediateDirectories: true)
         try ConnectionFiles.json(["model_type": "qwen3_5", "vision_config": ["model_type": "qwen3_5"], "quantization": ["bits": 4]]).write(to: mainPath.appendingPathComponent("config.json"))
         let model = LocalModel(id: "demo-main", name: "Qwen3.8-27B-4bit", format: "MLX 4-bit", path: mainPath.path, kind: .language, bytes: 16_080_000_000, complete: true, verification: "3 个分片与配置齐全", repository: "mlx-community/Qwen3.8-27B-4bit", missingFiles: [], removalPath: mainPath.path, origin: .init(site: .huggingface, repository: "mlx-community/Qwen3.8-27B-4bit", revision: String(repeating: "a", count: 40), files: []))
-        let engines: [Engine] = [
+        var engines: [Engine] = [
             .init(kind: .splash, name: "Splash", version: "1.3.1", path: "/opt/modeldock/splash", installed: true, canServe: true, installation: "命令行工具", description: "面向 Apple Silicon 的本地推理引擎", defaultPort: 8000, symbol: "water.waves"),
             .init(kind: .llama, name: "Llama", version: "0.6.0_1", path: "/opt/modeldock/llama-server", installed: true, canServe: true, installation: "命令行服务", description: "使用 llama.cpp 运行本地 GGUF 模型", defaultPort: 8080, symbol: "bolt.fill"),
             .init(kind: .mlx, name: "MLX · LM / VLM", version: "0.32.0", path: "/opt/modeldock/mlx_lm.server", installed: true, canServe: true, installation: "MLX-LM / MLX-VLM 模型服务", description: "文本与多模态模型服务", defaultPort: 8083, symbol: "cpu", visionPath: "/opt/modeldock/mlx_vlm.server", visionVersion: "0.7.6"),
             .init(kind: .ollama, name: "Ollama", version: "—", path: "/opt/modeldock/ollama", installed: false, canServe: false, installation: "未安装", description: "本地模型运行与管理服务", defaultPort: 11434, symbol: "shippingbox"),
             .init(kind: .lmstudio, name: "LM Studio", version: "—", path: "/Applications/LM Studio.app", installed: false, canServe: false, installation: "未安装", description: "GGUF 与 MLX 桌面应用", defaultPort: 1234, symbol: "cube")]
+        let strataPath = "/opt/modeldock/strata/modeldock-strata"
+        engines.append(.init(kind: .strata, name: "Strata", version: "0.1.44.1+296b59d2f73c", path: strataPath, installed: true, canServe: true, installation: "官方 Metal 源码编译", description: "Flash-Next 分层本地推理服务", defaultPort: 8095, symbol: "square.3.layers.3d"))
+        store.strata.enginePath = strataPath
+        store.strata.variants = [.init(name: "Q2_0", repository: "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF", revision: String(repeating: "b", count: 40), files: [], downloadGB: 66.4), .init(name: "IQ3_S", repository: "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF", revision: String(repeating: "b", count: 40), files: [], downloadGB: 83.5)]
+        store.strata.vision = true
         store.inventory = .init(engines: engines, models: [model], storageBytes: model.bytes, memoryBytes: 137_438_953_472, chip: "Apple Silicon", roots: [demo.appendingPathComponent("Models").path], warnings: [], scannedAt: Date())
         store.engineID = "mlx"; store.selectedModels["mlx"] = model.id; store.selectedFileID = model.id; store.context = 32768
         let spec = ServiceSpec(id: "demo-service", engineID: "mlx", modelID: model.id, modelName: "mlx-community/Qwen3.8-27B-4bit", modelPath: model.path, port: 8083, context: 32768, engineVersion: "0.32.0 · VLM 0.7.6", engineExecutable: "/opt/modeldock/mlx_vlm.server", inputMode: .multimodal)
@@ -47,6 +52,9 @@ enum DocumentationScreens {
             app.showSettings(); try await Task.sleep(nanoseconds: 300_000_000)
             if let content = app.settingsWindow?.contentView { try app.captureView(content, name: language.rawValue + "-settings", folder: folder) }
             app.settingsWindow?.orderOut(nil)
+            store.tab = .engines; store.engineID = "strata"; store.port = "8095"
+            try await Task.sleep(nanoseconds: 400_000_000); try app.capture(language.rawValue + "-strata", folder: folder)
+            store.engineID = "mlx"; store.port = "8083"
         }
         store.language = .english
         try ConnectionFiles.json(["result": "passed", "demoData": true, "languages": ["en", "zh-Hans", "fr", "pt"], "realModelProcessesStarted": false, "realConfigurationUsed": false]).write(to: folder.appendingPathComponent("result.json"))

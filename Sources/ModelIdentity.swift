@@ -44,6 +44,7 @@ enum ModelIdentity {
         return file.path
     }
     static func weights(_ model: LocalModel) -> Set<String> {
+        if let config = model.strataConfig, let record = jsonFile(URL(fileURLWithPath: config)), let main = StrataModelCatalog.argument("--native", in: record) { return [physical(main)] }
         if model.splashSelection != nil, let files = jsonFile(URL(fileURLWithPath: model.path).appendingPathComponent("model.json"))?["files"] as? [String: [String: Any]] {
             return Set(files.compactMap { name, entry in
                 guard name.hasPrefix("target/"), ["safetensors", "gguf"].contains(URL(fileURLWithPath: name).pathExtension), !name.lowercased().contains("mmproj"), let path = entry["path"] as? String, path.hasPrefix("/") else { return nil }
@@ -59,7 +60,7 @@ enum ModelIdentity {
         return []
     }
     static func coalesce(_ models: [LocalModel]) -> [LocalModel] {
-        var result = models.filter { $0.splashSelection == nil }
+        var result = models.filter { $0.splashSelection == nil && $0.strataConfig == nil }
         let weightSets = result.map(weights)
         var standalone = [LocalModel]()
         for assembly in models where assembly.splashSelection != nil {
@@ -76,6 +77,12 @@ enum ModelIdentity {
                     registrations[existing].aliases = Array(Set(registrations[existing].aliases + [assembly.id])).sorted()
                 } else { registrations.append(.init(assembly)) }
                 result[index].splashRegistrations = registrations
+            } else if !standalone.contains(where: { $0.path == assembly.path }) { standalone.append(assembly) }
+        }
+        for assembly in models where assembly.strataConfig != nil {
+            let signature = weights(assembly)
+            if let index = result.indices.first(where: { !signature.isEmpty && weights(result[$0]) == signature }) {
+                result[index].strataAssemblies = Array(Set((result[index].strataAssemblies ?? []) + [assembly.path])).sorted()
             } else if !standalone.contains(where: { $0.path == assembly.path }) { standalone.append(assembly) }
         }
         return result + standalone

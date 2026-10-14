@@ -76,6 +76,11 @@ enum ModelFileSafety {
         let resolved = removal.resolvingSymlinksInPath().path
         return services.contains { spec in
             guard spec.pid != nil else { return false }
+            if spec.engineID == "strata", let files = jsonFile(URL(fileURLWithPath: spec.modelPath).appendingPathComponent("modeldock-strata.json"))?["files"] as? [String: [String: Any]],
+               files.values.compactMap({ $0["path"] as? String }).contains(where: {
+                   let path = URL(fileURLWithPath: $0).resolvingSymlinksInPath().path
+                   return EngineMaintenance.contains(resolved, path) || EngineMaintenance.contains(path, resolved)
+               }) { return true }
             for path in ([spec.draftModelPath, spec.projectorPath].compactMap({ $0 }) + (spec.componentSnapshot?.entries.compactMap(\.path) ?? [])) where path.hasPrefix("/") {
                 let component = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
                 if EngineMaintenance.contains(resolved, component) || EngineMaintenance.contains(component, resolved) { return true }
@@ -121,6 +126,7 @@ extension AppStore {
                     let path = try ModelFileSafety.removalURL(model, models: models, roots: inventory?.roots ?? [])
                     let source = URL(fileURLWithPath: model.path).resolvingSymlinksInPath()
                     @MainActor func checkUse() throws {
+                        if self.strata.uses(source.path) || self.strata.uses(path.path) { throw LaunchError.message("此模型位置正在准备 Strata 配套组件，请等待操作完成。") }
                         if let active = self.downloads.jobs.first(where: { $0.id == self.downloads.activeID }) {
                             let folder = URL(fileURLWithPath: active.root).appendingPathComponent(active.folder).path
                             guard !EngineMaintenance.contains(path.path, folder) && !EngineMaintenance.contains(folder, path.path) else { throw LaunchError.message("此模型目录正在下载，请先暂停对应下载任务") }

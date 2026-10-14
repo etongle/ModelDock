@@ -62,6 +62,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             window.makeKeyAndOrderFront(nil); NSApplication.shared.activate(ignoringOtherApps: true)
         }
         makeMenu(); makeStatusBar()
+        if !passiveTesting && !capturing && !CommandLine.arguments.contains("--documentation-ui") {
+            store.appUpdates.installBlocker = { [weak self] in
+                guard let self else { return "应用正在退出" }
+                if self.store.maintaining || self.store.installation.running || self.store.multiModel?.running == true || self.store.strata.busy || self.store.downloads.activeID != nil || self.store.repairingFile != nil || self.store.preparingInstall || self.store.preparingMaintenance { return "请等待引擎操作、模型准备或下载完成后安装应用更新。" }
+                if self.window.attachedSheet != nil || self.store.commandDraft != nil || self.store.associationDraft != nil || self.store.engineConfigurationDraft != nil || self.store.modelUpdate != nil { return "请先完成或关闭当前配置窗口，再安装应用更新。" }
+                return nil
+            }
+            store.appUpdates.hidden = { [weak self] in self?.store.hiddenToStatusBar ?? false }
+            store.appUpdates.onApply = { NSApplication.shared.terminate(nil) }
+            store.appUpdates.begin()
+            if CommandLine.arguments.contains("--start-hidden") { hideMainWindow() }
+        }
         if !CommandLine.arguments.contains("--documentation-ui") { store.services.beginMonitoring(); store.scan(); store.beginResourceMonitoring() }
         if let task = argumentValue("--resume-download-job"), UUID(uuidString: task) != nil, store.downloads.jobs.contains(where: { $0.id == task }) {
             store.downloads.showTask(task); store.tab = .downloads; store.downloads.resume(task)
@@ -121,7 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc func showSettings() {
         statusPopover.performClose(nil)
         if settingsWindow == nil {
-            let preferences = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 450), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let preferences = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 660), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             preferences.title = L10n.text("设置"); preferences.isReleasedWhenClosed = false; preferences.delegate = self
             preferences.contentView = NSHostingView(rootView: PreferencesView(store: store, close: { [weak self] in self?.settingsWindow?.performClose(nil) }))
             preferences.backgroundColor = .windowBackgroundColor
@@ -174,6 +186,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     }
     func applicationWillTerminate(_ notification: Notification) {
         outsideClicks.stop()
+        store.strata.pause()
         store.resources.end(); store.performance.cancel()
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
         onWillTerminate?()
@@ -188,6 +201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         return alert
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if store.appUpdates.applying { return .terminateNow }
         let fromWindowClose = exitRequestedByClose; exitRequestedByClose = false
         if showingExitConfirmation { return .terminateCancel }
         if store.maintaining || store.installation.running || store.multiModel?.running == true {
@@ -208,6 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let main = NSMenu(); let app = NSMenu(); let appItem = NSMenuItem(); appItem.submenu = app
         app.addItem(withTitle: L10n.text("关于模型管理"), action: #selector(about), keyEquivalent: "").target = self
         app.addItem(withTitle: L10n.text("设置…"), action: #selector(showSettings), keyEquivalent: ",").target = self
+        app.addItem(withTitle: L10n.text("检查应用更新…"), action: #selector(checkAppUpdate), keyEquivalent: "").target = self
         app.addItem(.separator()); app.addItem(withTitle: L10n.text("退出模型管理"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(appItem)
         let file = NSMenu(title: L10n.text("文件")); let fileItem = NSMenuItem(title: L10n.text("文件"), action: nil, keyEquivalent: ""); fileItem.submenu = file
@@ -223,6 +238,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         windows.addItem(withTitle: L10n.text("最小化"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
         main.addItem(windowsItem); NSApplication.shared.windowsMenu = windows
     }
+    @objc func checkAppUpdate() { showSettings(); store.appUpdates.check() }
     @objc func about() { NSApplication.shared.orderFrontStandardAboutPanel(options: [.applicationName: L10n.text("模型管理"), .applicationVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "", .credits: NSAttributedString(string: L10n.text("模型与下载任务管理、命令启动和统一网关"))]) }
     @objc func addFolder() { store.addLocation() }
     @objc func rescan() { store.scan() }
@@ -564,6 +580,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
 enum Entry {
     @MainActor static func main() {
         let args = CommandLine.arguments
+        if let job = argumentValue("--apply-app-update") { exit(AppUpdateWorker.run(job)) }
+        if args.contains("--app-update-checks") { Task { do { try await AppUpdateChecks.run(); exit(0) } catch { fputs("APP UPDATE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if let index = args.firstIndex(of: "--child-exec") { ChildExecutor.run(arguments: Array(args.dropFirst(index + 1))) }
         if args.contains("--launch-associated-test") { Task { do { try await ReleaseChecks.startAssociated() } catch { fputs("ASSOCIATED TEST FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if let path = argumentValue("--validate-connection") {
@@ -575,6 +593,7 @@ enum Entry {
             do { print(String(decoding: try encoder.encode(Scanner.scan()), as: UTF8.self)) } catch { fputs("\(error)\n", stderr); exit(1) }; return
         }
         if args.contains("--self-test") { selfTest(); return }
+        if args.contains("--strata-checks") { Task { do { try await StrataChecks.run(); exit(0) } catch { fputs("STRATA CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--localization-checks") { do { try LocalizationChecks.run() } catch { fputs("LOCALIZATION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--live-context-checks") || argumentValue("--repair-connection-context") != nil {
             Task { do { try await ConnectionLive.run(repairPort: argumentValue("--repair-connection-context").flatMap(Int.init)); exit(0) }

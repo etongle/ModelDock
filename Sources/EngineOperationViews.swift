@@ -4,6 +4,7 @@ import AppKit
 extension AppStore {
     func installBlockers(_ engine: Engine) -> [String] {
         var result: [String] = []
+        if engine.kind == .strata && strata.busy { result.append("请等待 Strata 模型准备操作完成。") }
         if (maintaining || preparingMaintenance) && maintenanceEngineID == engine.id { result.append("请等待 \(engine.name) 清理完成。") }
         let active = services.records.filter { $0.engineID == engine.id && $0.pid != nil }
         for spec in active { result.append("\(engine.name) · 端口 \(spec.port) · \(spec.modelName)，请先停止此服务。") }
@@ -28,11 +29,10 @@ struct EngineInstallPanel: View {
             HStack {
                 VStack(alignment: .leading, spacing: 7) {
                     Label(L10n.text("安装与更新"), systemImage: "arrow.down.app").font(.system(size: TypeScale.body, weight: .semibold))
-                    Text(verbatim: L10n.text(store.engine.kind == .strata ? "官方尚未提供 Mac 安装包；可接入已运行的外部服务" : installer.releases[store.engineID].map { EngineVersionPolicy.summary(EngineVersionPolicy.rows(engine: store.engine, release: $0)) + " · 检查于 " + $0.checkedAt.formatted(date: .omitted, time: .shortened) } ?? "检查后显示已安装版本、最新版本与更新状态")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                    Text(verbatim: L10n.text(installer.releases[store.engineID].map { EngineVersionPolicy.summary(EngineVersionPolicy.rows(engine: store.engine, release: $0)) + " · 检查于 " + $0.checkedAt.formatted(date: .omitted, time: .shortened) } ?? (store.engine.kind == .strata ? "官方 Metal 源码编译 · Apple Silicon · macOS 15+" : "检查后显示已安装版本、最新版本与更新状态"))).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 }
                 Spacer(minLength: 10)
-                if store.engine.kind == .strata { Link("官方安装说明", destination: URL(string: "https://www.stratat.com/en/install")!).font(.system(size: TypeScale.body)) }
-                else if installer.checking == store.engineID { ProgressView().controlSize(.small); Text(verbatim: L10n.text("检查中…")).font(.system(size: TypeScale.body)) }
+                if installer.checking == store.engineID { ProgressView().controlSize(.small); Text(verbatim: L10n.text("检查中…")).font(.system(size: TypeScale.body)) }
                 else { Button { store.checkInstall() } label: { Label(L10n.text(store.engine.kind == .mlx && !store.engine.canServe ? "安装 MLX-LM…" : store.engine.installed ? "检查更新…" : "安装引擎…"), systemImage: "arrow.triangle.2.circlepath") }.buttonStyle(.bordered).controlSize(.large).disabled(installer.checking != nil || installer.running || (store.maintaining && store.maintenanceEngineID == store.engineID)) }
             }
             if installer.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text("正在安装或更新；完成后自动扫描引擎。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.linkColor) } }

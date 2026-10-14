@@ -80,6 +80,30 @@ enum ServiceCommand {
         var port = engine.defaultPort, context = 8192
         var reference = "", localPath = "", projector: String?, mode: InputMode = .automatic
         var downloadsModel = false
+        if engine.kind == .strata {
+            let allowed: Set<String> = ["--config", "--port", "--context", "--mode", "--draft", "--speculation", "--instance-dir"]
+            guard args.count % 2 == 0, stride(from: 0, to: args.count, by: 2).allSatisfy({ allowed.contains(args[$0]) }) else { throw LaunchError.message("Strata 命令需要已准备的 --config，以及端口、上下文和输入模式参数。") }
+            guard let value = try option(["--config"]) else { throw LaunchError.message("Strata 启动命令缺少 --config") }
+            let config = URL(fileURLWithPath: expanded(value)).resolvingSymlinksInPath().path
+            let prepared = models.flatMap { model -> [LocalModel] in
+                model.strataConfig != nil ? [model] : (model.strataAssemblies ?? []).compactMap { StrataModelCatalog.model(URL(fileURLWithPath: $0)) }
+            }
+            guard let model = prepared.first(where: { $0.strataConfig.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path } == config }) else { throw LaunchError.message("请先在 Strata 页面准备并登记这个模型配置。") }
+            if let value = try option(["--port"]) { guard let parsed = Int(value) else { throw LaunchError.message("端口需要是整数") }; port = parsed }
+            if let value = try option(["--context"]) { guard let parsed = Int(value) else { throw LaunchError.message("上下文需要是整数") }; context = parsed }
+            if let value = try option(["--mode"]) { guard let parsed = InputMode(rawValue: value) else { throw LaunchError.message("Strata 输入模式无效") }; mode = parsed }
+            var plan = try LaunchBuilder.plan(engine: engine, model: model, port: port, context: context, inputMode: mode)
+            for flag in ["--draft", "--speculation"] {
+                if let value = try option([flag]) {
+                    guard flag == "--draft" ? ["automatic", "on", "off"].contains(value) : ["1", "2", "3", "4"].contains(value) else { throw LaunchError.message("Strata 草稿或推测窗口参数无效") }
+                    if let index = plan.arguments.firstIndex(of: flag) { plan.arguments.removeSubrange(index...index + 1) }
+                    plan.arguments += [flag, value]
+                }
+            }
+            // The manager always assigns its own service directory.
+            let display = ([plan.executable] + plan.arguments).map(quote).joined(separator: " ")
+            return .init(engine: engine, plan: plan, modelID: model.id, modelName: model.name, modelPath: model.path, port: port, context: context, mode: mode, projector: nil, display: display, downloadsModel: false)
+        }
         if engine.kind == .ollama {
             guard args.isEmpty else { throw LaunchError.message("Ollama serve 使用命令前的 OLLAMA_HOST 等环境参数配置") }
             let host = environment["OLLAMA_HOST"] ?? "127.0.0.1:\(port)"
@@ -179,6 +203,7 @@ extension AppStore {
     }
     func startCommand(_ draft: CommandDraft) {
         guard let engine = engines.first(where: { $0.id == draft.engineID }), !maintaining, !installation.running else { message = "请等待引擎操作完成"; return }
+        guard !(engine.kind == .strata && strata.busy), !appUpdates.applying else { message = "请等待当前模型准备或应用更新完成"; return }
         do {
             let command = try ServiceCommand.parse(draft.text, engine: engine, models: models)
             let spec = try services.start(command: command)

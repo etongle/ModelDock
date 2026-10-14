@@ -19,7 +19,7 @@ struct ModelCompatibility {
 extension Engine {
     var modelRule: String {
         switch kind {
-        case .strata: return "Flash-Next 配套权重 · 外部服务接入"
+        case .strata: return "Flash-Next · Metal 主模型与配套组件"
         case .splash: return SplashRuntime.current(self)?.supportsPacked == false ? "新版上游模型 · packed 使用匹配旧组件" : "Splash 专属封装"
         case .llama: return "通用 GGUF · 不含 Prism 特殊格式"
         case .prism: return "GGUF · 支持 Bonsai 2 专属变换"
@@ -36,6 +36,7 @@ extension LocalModel {
         return prismRequired == true || format.contains("PQ2") || format.contains("PTQ1") || label.contains("bonsai-2") || label.contains("bonsai 2") || label.contains("prism-fork-required")
     }
     var exclusiveEngine: EngineKind? {
+        if strataConfig != nil { return .strata }
         if format.hasPrefix("Splash") { return .splash }
         if format.hasPrefix("GGUF") && needsPrism { return .prism }
         if format == "Ollama" { return .ollama }
@@ -48,6 +49,7 @@ extension LocalModel {
         case .splash: return "Splash 专属"
         case .prism: return "Prism 专属"
         case .ollama: return "Ollama 注册格式"
+        case .strata: return "Strata 配套组合"
         default:
             if format.hasPrefix("GGUF") { return "可共用 · GGUF" }
             if format.hasPrefix("MLX") { return "可共用 · MLX 生态" }
@@ -61,6 +63,7 @@ extension LocalModel {
         case .splash: return splashSelection != nil ? "此目录包含 Splash 准备的目标权重、草稿模型和视觉组件。原始 MLX / GGUF 权重可以供其他匹配引擎使用。" : "Splash packed 是旧版专用封装，需要支持此格式的 Splash 组件。新版 Splash 从上游 MLX / GGUF 加载；这类 packed 文件仍不能直接交给其他引擎。"
         case .prism: return "检测到 Prism 专属量化或 Bonsai 2 特殊变换。仅使用已支持这些变换的 Prism 引擎；普通 llama.cpp 即使能读取文件也可能输出错误结果。"
         case .ollama: return "这是 Ollama 的注册清单和模型层，需要由 Ollama 管理；不能把清单当作 GGUF 权重加载。"
+        case .strata: return "Strata Metal 使用匹配的 Flash-Next 主权重、n-gram、词表和模型包；MTP 加速与图片组件按准备及启动设置启用。"
         default:
             if format.hasPrefix("GGUF") { return "Llama 与 Prism 可直接加载；Ollama 需要先导入，LM Studio 需要对应运行时。格式适配还取决于引擎版本对该架构的支持。" }
             if format.hasPrefix("MLX") { return "MLX-LM 用于文本，MLX-VLM 用于多模态；LM Studio 可在应用内加载。新版 Splash 还需匹配的草稿模型。实际适配取决于模型架构和引擎版本。" }
@@ -69,7 +72,11 @@ extension LocalModel {
     }
     func compatibility(with engine: Engine) -> ModelCompatibility {
         if kind == .draft { return .init(level: .unsupported, reason: "草稿模型应在主模型的引擎配置中选择，不单独启动服务。") }
-        if engine.kind == .strata { return .init(level: .unsupported, reason: "Strata 主线使用 Flash-Next 配套权重，当前 Mac 通过已启动的接口接入。普通 Qwen 27B、MLX 和 Splash packed 不能直接混用。") }
+        if engine.kind == .strata {
+            guard let prepared = preparedForStrata() else { return .init(level: .unsupported, reason: "Strata Metal 需要已准备的 Flash-Next 主权重、n-gram、词表及匹配组件；请在 Strata 页面准备模型。") }
+            return .init(level: prepared.complete ? .direct : .incomplete, reason: prepared.complete ? "Strata Metal 配套组件齐全" : "Strata 配套组件缺失，请重新准备模型。")
+        }
+        if strataConfig != nil { return .init(level: .unsupported, reason: "这是 Strata 配套模型配置，请使用 Strata Metal；原始 GGUF 权重按其架构适配其他引擎。") }
         guard complete else { return .init(level: .incomplete, reason: "先补齐或修复模型文件。") }
         guard kind != .adapter else { return .init(level: .unsupported, reason: "附属适配器需要匹配基座，不能单独启动服务。") }
         if engine.kind == .splash, let prepared = preparedForSplash(), splashSelection == nil { return prepared.compatibility(with: engine) }
