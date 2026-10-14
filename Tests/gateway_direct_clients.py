@@ -2,6 +2,7 @@ from pathlib import Path
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -10,6 +11,14 @@ root = Path(sys.argv[1]).resolve()
 exports = json.loads((root / 'live-exports.json').read_text())
 originals = [Path.home() / name for name in ['.config/opencode/opencode.json', '.pi/agent/models.json',
     '.pi/agent/settings.json', '.pi/agent/auth.json']]
+def opencode_run(executable, model):
+    # OpenCode 2.x dropped --pure and attaches to a shared background service that ignores this
+    # environment; --standalone keeps the isolated configuration in effect.
+    version = subprocess.run([executable, '--version'], capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout
+    found = re.search(r'(\d+)\.\d+', version)
+    if found and int(found.group(1)) >= 2:
+        return [executable, 'run', '--standalone', '--model', model, '--format', 'json']
+    return [executable, '--pure', 'run', '--model', model, '--format', 'json']
 def fingerprints():
     return {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in originals if path.is_file()}
 before = fingerprints()
@@ -30,11 +39,11 @@ for entry in exports:
         env['OPENCODE_CONFIG_CONTENT'] = json.dumps(config)
         for selector in ['DATA', 'CACHE', 'STATE']:
             env['XDG_' + selector + '_HOME'] = str(root / 'direct-native' / selector.lower())
-        command = [entry['executable'], '--pure', 'run', '--model', entry['providerID'] + '/' + entry['model'], '--format', 'json', prompt]
+        command = opencode_run(entry['executable'], entry['providerID'] + '/' + entry['model']) + [prompt]
     else:
         command = [entry['executable']] + entry['arguments'] + ['--offline', '--no-session', '--print', prompt]
     started = time.monotonic()
-    done = subprocess.run(command, cwd=entry['project'], env=env, capture_output=True, text=True, timeout=150)
+    done = subprocess.run(command, cwd=entry['project'], env=env, capture_output=True, text=True, timeout=150, stdin=subprocess.DEVNULL)
     (root / (entry['client'] + '-direct.stdout')).write_text(done.stdout)
     (root / (entry['client'] + '-direct.stderr')).write_text(done.stderr)
     passed = done.returncode == 0 and 'MODEL_MANAGER_CONTEXT_READ_FIXTURE' in done.stdout
