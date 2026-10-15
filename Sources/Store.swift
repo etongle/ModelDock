@@ -3,13 +3,14 @@ import AppKit
 import SwiftUI
 import Combine
 
-enum AppTab: String, CaseIterable { case engines = "运行引擎", models = "模型文件", services = "模型服务", downloads = "下载导入", monitor = "资源与性能" }
+/// Ordered by everyday use: running services first, one-time engine setup later. Order drives the tab bar and ⌘1–⌘5.
+enum AppTab: String, CaseIterable { case services = "模型服务", models = "模型文件", downloads = "下载导入", engines = "运行引擎", monitor = "资源与性能" }
 
 @MainActor
 final class AppStore: ObservableObject {
     @Published var inventory: Inventory?
     @Published var scanning = false
-    @Published var tab: AppTab = .engines
+    @Published var tab: AppTab = .services
     @Published var engineID = "splash"
     @Published var engineConfigurations: [String: EngineConfiguration] = [:]
     @Published var engineConfigurationDraft: EngineConfigurationDraft?
