@@ -1423,5 +1423,9 @@
   "由 ModelDock 管理": "Gerenciados pelo ModelDock",
   "本机已发现": "Encontrados neste Mac",
   "新建下载": "Novo download",
-  "访问令牌（可选）": "Token de acesso (opcional)"
+  "访问令牌（可选）": "Token de acesso (opcional)",
+  "启动模型服务": "Iniciar serviço de modelo",
+  "启动服务…": "Iniciar serviço…",
+  "概览": "Visão geral",
+  "维护": "Manutenção"
 }

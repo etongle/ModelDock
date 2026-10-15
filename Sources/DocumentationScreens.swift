@@ -43,7 +43,7 @@ enum DocumentationScreens {
         for language in [AppLanguage.english, .chinese, .french, .portuguese] {
             store.language = language
             for tab in [AppTab.engines, .models, .services, .downloads, .monitor] {
-                store.tab = tab; store.downloads.selectedTaskID = nil
+                store.tab = tab; store.engineSection = .overview; store.downloads.selectedTaskID = nil
                 try await Task.sleep(nanoseconds: 450_000_000)
                 try app.capture(language.rawValue + "-" + [AppTab.engines: "engines", .models: "models", .services: "services", .downloads: "downloads", .monitor: "resources"][tab]!, folder: folder)
             }
@@ -52,7 +52,7 @@ enum DocumentationScreens {
             app.showSettings(); try await Task.sleep(nanoseconds: 300_000_000)
             if let content = app.settingsWindow?.contentView { try app.captureView(content, name: language.rawValue + "-settings", folder: folder) }
             app.settingsWindow?.orderOut(nil)
-            store.tab = .engines; store.engineID = "strata"; store.port = "8095"
+            store.tab = .engines; store.engineSection = .configuration; store.engineID = "strata"; store.port = "8095"
             try await Task.sleep(nanoseconds: 400_000_000); try app.capture(language.rawValue + "-strata", folder: folder)
             store.engineID = "mlx"; store.port = "8083"
         }

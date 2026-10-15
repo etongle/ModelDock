@@ -3,6 +3,9 @@ import AppKit
 import SwiftUI
 import Combine
 
+/// Engine detail is split into segments instead of one long page.
+enum EngineSection: String, CaseIterable { case overview = "概览", services = "服务实例", configuration = "配置", maintenance = "维护" }
+
 /// Ordered by everyday use: running services first, one-time engine setup later. Order drives the tab bar and ⌘1–⌘5.
 enum AppTab: String, CaseIterable { case services = "模型服务", models = "模型文件", downloads = "下载导入", engines = "运行引擎", monitor = "资源与性能" }
 
@@ -11,6 +14,9 @@ final class AppStore: ObservableObject {
     @Published var inventory: Inventory?
     @Published var scanning = false
     @Published var tab: AppTab = .services
+    @Published var engineSection: EngineSection = .overview
+    /// One launch sheet for every entry point (engine, model, service); the store already holds its selections.
+    @Published var showLaunch = false
     @Published var engineID = "splash"
     @Published var engineConfigurations: [String: EngineConfiguration] = [:]
     @Published var engineConfigurationDraft: EngineConfigurationDraft?
@@ -257,8 +263,8 @@ final class AppStore: ObservableObject {
         port = String(spec.port); context = spec.context
         inputMode = spec.inputMode ?? .automatic; projectorPath = spec.projectorPath ?? ""
         maximumLoadedModels = spec.maximumLoadedModels ?? maximumLoadedModels
-        tab = .engines
         normalizeStartupMode()
+        showLaunch = true
     }
     /// Pending destructive action awaiting confirmation in the main view.
     @Published var serviceRemoval: ServiceSpec?
@@ -290,7 +296,7 @@ final class AppStore: ObservableObject {
             try JSONEncoder().encode(next).write(to: settingsURL, options: .atomic); extraRoots = next
         }
     }
-    func launch(model: LocalModel, engine: Engine) { selectedModels[engine.id] = model.id; chooseEngine(engine.id); tab = .engines }
+    func launch(model: LocalModel, engine: Engine) { selectedModels[engine.id] = model.id; chooseEngine(engine.id); showLaunch = true }
 
     func maintenanceBlockers(_ plan: MaintenancePlan, selectedIDs: Set<String>? = nil, includeDownloads: Bool = true) -> [String] {
         var blockers = plan.blockers

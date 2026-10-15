@@ -246,6 +246,7 @@ struct MainView: View {
             } message: { Text(verbatim: L10n.text("保留模型文件和运行日志")) }
             .alert(L10n.text("模型管理"), isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) { Button(L10n.text("好")) { store.message = nil } } message: { Text(verbatim: L10n.text(store.message ?? "")) }
             .sheet(item: $store.maintenancePlan) { plan in MaintenanceView(store: store, plan: plan) }
+            .sheet(isPresented: $store.showLaunch) { LaunchSheet(store: store, services: services) }
             .sheet(item: Binding(get: { store.installation.plan }, set: { store.installation.plan = $0 })) { plan in EngineInstallView(store: store, installer: store.installation, plan: plan) }
             .sheet(item: $store.multiModel) { draft in MultiModelView(store: store, draft: draft) }
             .sheet(item: $store.commandDraft) { draft in CommandLaunchView(store: store, draft: draft) }
@@ -293,14 +294,30 @@ struct EngineWorkspace: View {
                         Button(L10n.text("全局引擎设置")) { store.showGlobalEngines = true }.buttonStyle(.bordered)
                     } else {
                     HStack(spacing: 18) { EngineIcon(engine: store.engine, size: 64); VStack(alignment: .leading, spacing: 6) { Text(verbatim: L10n.text(store.engine.name)).font(.system(size: TypeScale.display, weight: .bold)); Text(verbatim: L10n.text(store.engine.description)).font(.system(size: TypeScale.section)).foregroundStyle(Theme.muted) }; Spacer() }.padding(.vertical, 8)
-                    EngineInstallPanel(store: store, installer: store.installation).padding(.top, 20)
-                    EngineServicesView(store: store, services: services).padding(.top, 28)
+                    Picker(L10n.text("运行引擎"), selection: $store.engineSection) { ForEach(EngineSection.allCases, id: \.self) { Text(verbatim: L10n.text($0.rawValue)).tag($0) } }
+                        .pickerStyle(.segmented).labelsHidden().fixedSize().padding(.top, 16).padding(.bottom, 20).accessibilityIdentifier("engine-sections")
+                    switch store.engineSection {
+                    case .overview:
+                    EngineInstallPanel(store: store, installer: store.installation)
+                    Text(verbatim: L10n.text("引擎信息")).font(.system(size: TypeScale.section, weight: .semibold)).padding(.top, 28).padding(.bottom, 20)
+                    HStack(spacing: 16) {
+                        InfoCell(symbol: "gearshape", title: L10n.text("版本"), value: store.engine.version)
+                        Divider().frame(height: 48)
+                        InfoCell(symbol: "laptopcomputer", title: L10n.text("运行设备"), value: store.inventory?.chip ?? "本机 Mac")
+                        Divider().frame(height: 48)
+                        InfoCell(symbol: "memorychip", title: L10n.text("系统内存"), value: "\((store.inventory?.memoryBytes ?? 0) / 1_073_741_824) GB")
+                    }.padding(.bottom, 24)
+                    HStack(spacing: 18) { Image(systemName: "internaldrive").font(.system(size: 30)).foregroundStyle(Theme.muted); VStack(alignment: .leading, spacing: 7) { Text(verbatim: L10n.text("模型与缓存")).foregroundStyle(Theme.muted).font(.system(size: TypeScale.body)); Text(verbatim: L10n.text(sizeLabel(store.inventory?.storageBytes ?? 0))).font(.system(size: TypeScale.body)) }; Spacer(); if let app = store.engine.appPath { Button(L10n.text("打开应用")) { NSWorkspace.shared.open(URL(fileURLWithPath: app)) }.buttonStyle(PlainAction()) } }.padding(.top, 20).overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
+                    Button { store.reveal(store.engine.path) } label: { Label(L10n.text("查看引擎安装位置"), systemImage: "folder") }.buttonStyle(PlainAction()).font(.system(size: TypeScale.body)).padding(.top, 16)
+                    case .services:
+                    EngineServicesView(store: store, services: services)
                     HStack {
+                        Button { store.showLaunch = true } label: { Label(L10n.text("启动服务…"), systemImage: "play.fill") }.buttonStyle(AccentButton()).disabled(!store.engine.canServe).accessibilityIdentifier("open-launch")
                         Button { store.prepareCommand() } label: { Label(L10n.text("按命令行启动…"), systemImage: "terminal") }.buttonStyle(.bordered).disabled(!store.engine.canServe || store.installation.running || store.maintaining).accessibilityIdentifier("command-launch-entry")
                         Spacer()
                         if let model = store.selectedModel { Button(L10n.text("检查模型更新…")) { store.modelUpdate = ModelUpdateDraft(model: model) }.buttonStyle(.bordered) }
                     }.padding(.top, 16)
-                    Divider().padding(.vertical, 20)
+                    case .configuration:
                     HStack { Text(verbatim: L10n.text("兼容的本地模型")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer(); Button { store.showEngineModels(store.engineID) } label: { Label(L10n.text("管理模型文件"), systemImage: "folder") }.buttonStyle(PlainAction()).font(.system(size: TypeScale.body)) }.padding(.bottom, 22)
                     HStack(spacing: 6) { Text(verbatim: L10n.text(store.engine.modelRule)).font(.system(size: TypeScale.body, weight: .medium)); InfoTip(text: store.engine.modalityGuide.summary) }.padding(.bottom, 14)
                     HStack { Button(L10n.text("引擎配置…")) { store.prepareEngineConfiguration() }.buttonStyle(.bordered).accessibilityIdentifier("engine-configuration"); if !store.engineEnabled(store.engineID) { Text(verbatim: L10n.text("此基座已停用")).foregroundStyle(Theme.warningText) } }.padding(.bottom, 14)
@@ -315,20 +332,7 @@ struct EngineWorkspace: View {
                                 }.buttonStyle(.plain).help(L10n.text(model.path))
                         } }
                     }
-                    Text(verbatim: L10n.text("启动配置")).font(.system(size: TypeScale.section, weight: .semibold)).padding(.top, 24)
-                    LaunchPanel(store: store, services: services).padding(.top, 16)
-                    Divider().padding(.vertical, 20)
-                    Text(verbatim: L10n.text("引擎信息")).font(.system(size: TypeScale.section, weight: .semibold)).padding(.bottom, 24)
-                    HStack(spacing: 16) {
-                        InfoCell(symbol: "gearshape", title: L10n.text("版本"), value: store.engine.version)
-                        Divider().frame(height: 48)
-                        InfoCell(symbol: "laptopcomputer", title: L10n.text("运行设备"), value: store.inventory?.chip ?? "本机 Mac")
-                        Divider().frame(height: 48)
-                        InfoCell(symbol: "memorychip", title: L10n.text("系统内存"), value: "\((store.inventory?.memoryBytes ?? 0) / 1_073_741_824) GB")
-                    }.padding(.bottom, 24)
-                    HStack(spacing: 18) { Image(systemName: "internaldrive").font(.system(size: 30)).foregroundStyle(Theme.muted); VStack(alignment: .leading, spacing: 7) { Text(verbatim: L10n.text("模型与缓存")).foregroundStyle(Theme.muted).font(.system(size: TypeScale.body)); Text(verbatim: L10n.text(sizeLabel(store.inventory?.storageBytes ?? 0))).font(.system(size: TypeScale.body)) }; Spacer(); if let app = store.engine.appPath { Button(L10n.text("打开应用")) { NSWorkspace.shared.open(URL(fileURLWithPath: app)) }.buttonStyle(PlainAction()) } }.padding(.top, 20).overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
-                    Button { store.reveal(store.engine.path) } label: { Label(L10n.text("查看引擎安装位置"), systemImage: "folder") }.buttonStyle(PlainAction()).font(.system(size: TypeScale.body)).padding(.top, 16)
-                    Divider().padding(.vertical, 18)
+                    case .maintenance:
                     HStack(spacing: 18) {
                         Button { store.prepareMaintenance(.uninstall) } label: { Label(L10n.text("卸载引擎…"), systemImage: "trash") }.buttonStyle(.bordered).tint(.red)
                         Button { store.prepareMaintenance(.residues) } label: { Label(L10n.text("清理残留…"), systemImage: "sparkles") }.buttonStyle(.bordered)
@@ -336,6 +340,7 @@ struct EngineWorkspace: View {
                         if store.preparingMaintenance { ProgressView().controlSize(.small) }
                     }.disabled(store.preparingMaintenance || store.maintaining || store.scanning || store.installation.running)
                     if let warnings = store.inventory?.warnings, !warnings.isEmpty { Text(verbatim: L10n.text(warnings.joined(separator: "\n"))).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.warningText).padding(.top, 12) }
+                    }
                     }
                 }.padding(30)
             }.frame(maxWidth: .infinity)
@@ -533,7 +538,10 @@ struct ServiceWorkspace: View {
         HStack(spacing: 0) {
             if !store.sidebarHidden {
             VStack(alignment: .leading, spacing: SidebarMetrics.spacing) {
-                SidebarHeader(title: "模型服务") { SidebarToggleButton(store: store) }.padding(.bottom, 4)
+                SidebarHeader(title: "模型服务") {
+                    SidebarIconButton(symbol: "plus", help: "启动服务…") { store.showLaunch = true }.accessibilityIdentifier("new-service")
+                    SidebarToggleButton(store: store)
+                }.padding(.bottom, 4)
                 Picker(L10n.text("模型基座"), selection: $store.serviceEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.engines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.serviceEngineFilter) { _, _ in store.selectVisibleService() }
                 List(selection: Binding(get: { serviceSelection }, set: { selectService($0) })) {
                     HStack(spacing: 10) { SidebarSymbol(symbol: "point.3.connected.trianglepath.dotted"); VStack(alignment: .leading, spacing: 3) { Text(verbatim: L10n.text("统一网关")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(store.gateway.ready ? "运行中 · \(store.gateway.routes.filter(\.enabled).count) 个模型" : "本机与外部接口统一接入")).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary) }; Spacer(minLength: 0) }.padding(.vertical, 4).tag(ServiceListSelection.gateway).listRowSeparator(.hidden).accessibilityIdentifier("show-gateway")
@@ -606,7 +614,7 @@ struct ServiceWorkspace: View {
                         Button(role: .destructive) { store.serviceRemoval = spec } label: { Label(L10n.text("删除服务配置…"), systemImage: "trash") }.buttonStyle(.bordered).disabled(!services.canRemoveConfiguration(spec)).help(L10n.text("保留模型文件和运行日志"))
                     } else {
                         EmptyMessage(symbol: "server.rack", title: L10n.text("服务尚未配置"), detail: "在“运行引擎”选择兼容模型，即可启动本地服务。")
-                        Button(L10n.text("选择引擎与模型")) { store.tab = .engines }.buttonStyle(AccentButton())
+                        Button(L10n.text("启动服务…")) { store.showLaunch = true }.buttonStyle(AccentButton())
                         if !services.external.isEmpty { Text(verbatim: L10n.text("左侧已列出检测到的外部服务。")).foregroundStyle(Theme.muted) }
                     }
                 }.padding(34)

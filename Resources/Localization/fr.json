@@ -1423,5 +1423,9 @@
   "由 ModelDock 管理": "Gérés par ModelDock",
   "本机已发现": "Détectés sur ce Mac",
   "新建下载": "Nouveau téléchargement",
-  "访问令牌（可选）": "Jeton d'accès (facultatif)"
+  "访问令牌（可选）": "Jeton d'accès (facultatif)",
+  "启动模型服务": "Démarrer un service de modèle",
+  "启动服务…": "Démarrer le service…",
+  "概览": "Aperçu",
+  "维护": "Maintenance"
 }
