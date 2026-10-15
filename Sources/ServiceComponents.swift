@@ -97,7 +97,7 @@ enum ServiceComponentEvidence {
     var spec: ServiceSpec
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(verbatim: L10n.text(spec.pid == nil ? "上次启动的配套组件" : "本次配套组件")).font(.system(size: TypeScale.body, weight: .semibold))
+            HStack(spacing: 6) { Text(verbatim: L10n.text(spec.pid == nil ? "上次启动的配套组件" : "本次配套组件")).font(.system(size: TypeScale.body, weight: .semibold)); InfoTip(text: "按本次启动命令和运行日志显示；修改模型关联只影响后续启动。") }
             if let snapshot = store.serviceComponents(spec) {
                 ForEach(snapshot.entries) { item in
                     HStack(spacing: 12) {
@@ -109,7 +109,6 @@ enum ServiceComponentEvidence {
                     }
                 }
             } else { Text(verbatim: L10n.text("本次启动尚未提供组件信息，正在等待引擎日志。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
-            Text(verbatim: L10n.text("按本次启动命令和运行日志显示；修改模型关联只影响后续启动。")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
         }.padding(16).background(Theme.selection.opacity(0.45), in: RoundedRectangle(cornerRadius: 12)).accessibilityIdentifier("service-components")
     }
 }

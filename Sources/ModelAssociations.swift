@@ -70,7 +70,7 @@ enum ModelAssociationPolicy {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack { Text(verbatim: L10n.text("关联启动组件")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer(); Button(L10n.text("配置组件…")) { store.prepareAssociation(model) }.buttonStyle(.bordered).accessibilityIdentifier("model-association") }
+            HStack(spacing: 6) { Text(verbatim: L10n.text("关联启动组件")).font(.system(size: TypeScale.section, weight: .semibold)); InfoTip(text: "选择的组件随本模型保存。已启动的服务记录实际路径；后续修改只影响新启动。"); Spacer(); Button(L10n.text("配置组件…")) { store.prepareAssociation(model) }.buttonStyle(.bordered).accessibilityIdentifier("model-association") }
             if let prepared = model.preparedForStrata(), let config = prepared.strataConfig.flatMap({ jsonFile(URL(fileURLWithPath: $0)) }) {
                 Text(verbatim: L10n.text("Strata：主权重、n-gram 与 tokenizer 已关联")).font(.system(size: TypeScale.body))
                 Text(verbatim: L10n.text(config["vision"] == nil ? "Strata 组合仅支持文本；可另行准备视觉组合。" : "Strata 组合支持文本 / 图片；启动时可选择纯文本。" )).font(.system(size: TypeScale.body))
@@ -83,7 +83,6 @@ enum ModelAssociationPolicy {
                 Text(verbatim: L10n.text("tokenizer / 视觉配置：随主模型加载")).font(.system(size: TypeScale.body))
                 Text(verbatim: L10n.text("草稿模型：" + (model.association?.draftMode == .local ? draftName : model.association?.draftMode == .disabled ? "已关闭；新版 Splash 必须开启" : "按引擎默认；Splash 使用已登记组件"))).font(.system(size: TypeScale.body))
             }
-            Text(verbatim: L10n.text("选择的组件随本模型保存。已启动的服务记录实际路径；后续修改只影响新启动。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
         }.padding(18).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
     }
 }

@@ -181,6 +181,15 @@ struct SidebarRail: View {
     }
 }
 
+/// Secondary explanation behind an ⓘ: shown on hover and read by VoiceOver, instead of a permanent paragraph.
+struct InfoTip: View {
+    var text: String
+    var body: some View {
+        Image(systemName: "info.circle").font(.system(size: 12)).foregroundStyle(.secondary)
+            .help(L10n.text(text)).accessibilityLabel(L10n.text(text))
+    }
+}
+
 /// Last scan time with an inline rescan control, shown under the engine and model lists that a scan refreshes.
 @MainActor
 struct ScanStatus: View {
@@ -293,8 +302,7 @@ struct EngineWorkspace: View {
                     }.padding(.top, 16)
                     Divider().padding(.vertical, 20)
                     HStack { Text(verbatim: L10n.text("兼容的本地模型")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer(); Button { store.showEngineModels(store.engineID) } label: { Label(L10n.text("管理模型文件"), systemImage: "folder") }.buttonStyle(PlainAction()).font(.system(size: TypeScale.body)) }.padding(.bottom, 22)
-                    Text(verbatim: L10n.text(store.engine.modelRule)).font(.system(size: TypeScale.body, weight: .medium)).padding(.bottom, 8)
-                    Text(verbatim: L10n.text(store.engine.modalityGuide.summary)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.bottom, 14)
+                    HStack(spacing: 6) { Text(verbatim: L10n.text(store.engine.modelRule)).font(.system(size: TypeScale.body, weight: .medium)); InfoTip(text: store.engine.modalityGuide.summary) }.padding(.bottom, 14)
                     HStack { Button(L10n.text("引擎配置…")) { store.prepareEngineConfiguration() }.buttonStyle(.bordered).accessibilityIdentifier("engine-configuration"); if !store.engineEnabled(store.engineID) { Text(verbatim: L10n.text("此基座已停用")).foregroundStyle(Theme.warningText) } }.padding(.bottom, 14)
                     if store.engine.kind == .strata { StrataIntegrationView(store: store).padding(.bottom, 18) }
                     if let model = store.selectedModel { UsageBadge(model: model).padding(.bottom, 12) }
@@ -324,9 +332,9 @@ struct EngineWorkspace: View {
                     HStack(spacing: 18) {
                         Button { store.prepareMaintenance(.uninstall) } label: { Label(L10n.text("卸载引擎…"), systemImage: "trash") }.buttonStyle(.bordered).tint(.red)
                         Button { store.prepareMaintenance(.residues) } label: { Label(L10n.text("清理残留…"), systemImage: "sparkles") }.buttonStyle(.bordered)
+                        InfoTip(text: "先预览安装包、残留和关联模型。专属权重可单独勾选，共享目录保留。")
                         if store.preparingMaintenance { ProgressView().controlSize(.small) }
                     }.disabled(store.preparingMaintenance || store.maintaining || store.scanning || store.installation.running)
-                    Text(verbatim: L10n.text("先预览安装包、残留和关联模型。专属权重可单独勾选，共享目录保留。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).padding(.top, 12)
                     if let warnings = store.inventory?.warnings, !warnings.isEmpty { Text(verbatim: L10n.text(warnings.joined(separator: "\n"))).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.warningText).padding(.top, 12) }
                     }
                 }.padding(30)

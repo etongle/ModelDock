@@ -28,6 +28,7 @@ struct DownloadFileDetails: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text(verbatim: L10n.text("总体进度")).font(.system(size: TypeScale.body, weight: .semibold))
+                    InfoTip(text: "每次处理一个文件。暂停某个文件后继续处理其他文件；优先下载会保留当前文件断点并立即切换。")
                     Spacer()
                     Text(verbatim: L10n.text(job.percentageLabel)).monospacedDigit()
                 }
@@ -44,7 +45,6 @@ struct DownloadFileDetails: View {
                     if rows.contains(where: { $0.state == .paused }) { Text(verbatim: L10n.text("已暂停 \(rows.filter { $0.state == .paused }.count)")) }
                     if rows.contains(where: { $0.state == .failed }) { Text(verbatim: L10n.text("需重试 \(rows.filter { $0.state == .failed }.count)")).foregroundStyle(Theme.errorText) }
                 }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
-                Text(verbatim: L10n.text("每次处理一个文件。暂停某个文件后继续处理其他文件；优先下载会保留当前文件断点并立即切换。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 if !(job.pausedFiles ?? []).isEmpty { Button(L10n.text("继续所有暂停文件")) { downloads.resumeAllFiles(job.id) }.buttonStyle(.bordered).controlSize(.small).disabled(!downloads.canControlFiles(job.id)) }
             }.padding(18).background(Theme.selection.opacity(0.5), in: RoundedRectangle(cornerRadius: 12)).accessibilityIdentifier("download-files-summary")
             VStack(alignment: .leading, spacing: 6) {
