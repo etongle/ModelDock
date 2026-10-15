@@ -138,7 +138,17 @@ struct SidebarSymbol: View {
     }
 }
 
+/// Selection for the services sidebar, which mixes the gateway, managed services and discovered endpoints.
+enum ServiceListSelection: Hashable { case gateway, managed(String), external(Int) }
+
 extension View {
+    /// Native sidebar list: arrow-key navigation, context menus and system selection, tinted with the app accent.
+    /// The negative inset lines rows up with the sidebar header.
+    func sidebarList() -> some View {
+        // .inset draws a solid rounded selection (no sidebar vibrancy), which also renders in offscreen
+        // documentation captures; rows hide separators so the list reads like a source list.
+        listStyle(.inset).scrollContentBackground(.hidden).tint(Theme.accent).padding(.horizontal, -10)
+    }
     /// Row chrome shared by all sidebar lists.
     func sidebarRow(selected: Bool) -> some View {
         padding(10).frame(maxWidth: .infinity, alignment: .leading)
@@ -252,15 +262,16 @@ struct EngineWorkspace: View {
                     SidebarIconButton(symbol: "slider.horizontal.3", help: "全局引擎设置") { store.showGlobalEngines = true }.accessibilityIdentifier("global-engine-settings")
                     SidebarToggleButton(store: store)
                 }.padding(.bottom, 4)
-                ScrollView {
-                    VStack(spacing: 4) {
-                        ForEach(store.enabledEngines) { engine in
-                            Button { store.chooseEngine(engine.id) } label: {
-                                engineRow(engine).sidebarRow(selected: store.engineID == engine.id)
-                            }.buttonStyle(.plain).help(L10n.text(engine.path)).accessibilityAddTraits(store.engineID == engine.id ? .isSelected : []).accessibilityIdentifier("engine-\(engine.id)")
-                        }
+                List(selection: Binding(get: { store.engineID as String? }, set: { if let id = $0, id != store.engineID { store.chooseEngine(id) } })) {
+                    ForEach(store.enabledEngines) { engine in
+                        engineRow(engine).padding(.vertical, 4).tag(engine.id).listRowSeparator(.hidden)
+                            .help(L10n.text(engine.path)).accessibilityIdentifier("engine-\(engine.id)")
+                            .contextMenu {
+                                Button(L10n.text("在 Finder 中打开")) { store.reveal(engine.path) }
+                                Button(L10n.text("全局引擎设置")) { store.showGlobalEngines = true }
+                            }
                     }
-                }
+                }.sidebarList()
                 Spacer(minLength: 0)
                 ScanStatus(store: store)
             }.padding(SidebarMetrics.padding).frame(width: sidebarWidth).background(Theme.sidebar)
@@ -335,10 +346,10 @@ struct EngineWorkspace: View {
                     Text(verbatim: L10n.text(status))
                     // Uninstalled engines report a "—" placeholder version; hide it instead of showing noise.
                     if engine.version != "—", !engine.version.isEmpty { Text(verbatim: "· " + L10n.text(EngineVersionPolicy.displayVersion(engine))) }
-                }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(1)
+                }.font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).lineLimit(1)
                 let detail = services > 0 ? "\(services) 个服务实例" : engine.installation
-                if detail != status { Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1) }
-                Text(verbatim: L10n.text(engine.modelRule)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1)
+                if detail != status { Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.caption)).foregroundStyle(.secondary).lineLimit(1) }
+                Text(verbatim: L10n.text(engine.modelRule)).font(.system(size: TypeScale.caption)).foregroundStyle(.secondary).lineLimit(1)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -427,8 +438,8 @@ struct ModelWorkspace: View {
                 TextField(L10n.text("搜索名称、格式或路径"), text: $store.search).textFieldStyle(.roundedBorder).font(.system(size: TypeScale.body)).accessibilityIdentifier("model-search").onChange(of: store.search) { _, _ in selectVisibleModel() }
                 Picker(L10n.text("模型基座"), selection: $store.modelEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.enabledEngines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelEngineFilter) { _, _ in selectVisibleModel() }
                 Picker(L10n.text("模型分类"), selection: $store.modelFilter) { ForEach(["全部", "主模型", "附属模型"], id: \.self) { Text(verbatim: L10n.text($0)) } }.pickerStyle(.segmented).labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelFilter) { _, _ in selectVisibleModel() }.padding(.bottom, 4)
-                ScrollView { VStack(spacing: 6) { ForEach(store.filteredModels) { model in
-                    Button { store.selectedFileID = model.id } label: {
+                List(selection: $store.selectedFileID) {
+                    ForEach(store.filteredModels) { model in
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: model.kind == .speech ? "waveform" : model.kind == .adapter ? "slider.horizontal.3" : model.kind == .embedding ? "text.magnifyingglass" : "cube").font(.system(size: 14)).foregroundStyle(Theme.linkColor)
                                 .frame(width: 28, height: 28).background(Theme.linkColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
@@ -439,7 +450,7 @@ struct ModelWorkspace: View {
                                     Circle().fill(model.complete ? Color.green : Color.orange).frame(width: 6, height: 6)
                                     Text(verbatim: L10n.text("\(model.format) · \(sizeLabel(model.bytes))")).lineLimit(1)
                                     if !model.complete { Text(verbatim: L10n.text("文件不完整")).foregroundStyle(Theme.warningText) }
-                                }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                                }.font(.system(size: TypeScale.callout)).foregroundStyle(.secondary)
                                     .accessibilityElement(children: .combine).accessibilityLabel(L10n.text("\(model.format) · \(sizeLabel(model.bytes)) · " + (model.complete ? "文件检查通过" : "文件不完整")))
                                 ViewThatFits(in: .horizontal) {
                                     HStack(spacing: 6) { UsageBadge(model: model); ModelCapabilityBadge(capabilities: store.modelCapabilities(model), compact: true) }
@@ -447,9 +458,15 @@ struct ModelWorkspace: View {
                                 }
                             }
                             Spacer(minLength: 0)
-                        }.sidebarRow(selected: store.selectedFileID == model.id)
-                    }.buttonStyle(.plain).help(L10n.text(model.path))
-                } } }
+                        }.padding(.vertical, 4).tag(Optional(model.id)).listRowSeparator(.hidden).help(L10n.text(model.path))
+                        .contextMenu {
+                            Button(L10n.text("在 Finder 中打开")) { store.reveal(model.path) }
+                            Button(L10n.text("删除模型…"), role: .destructive) { store.deleteModel(model) }
+                        }
+                    }
+                }.sidebarList()
+                // ⌫ goes through deleteModel, which always asks first (Cancel is the default button).
+                .onDeleteCommand { if let model = store.selectedFile { store.deleteModel(model) } }
                 HStack { Text(verbatim: L10n.text("\(store.filteredModels.count) 个模型条目")); Spacer(); Text(verbatim: L10n.text("目录总占用 " + sizeLabel(store.inventory?.storageBytes ?? 0))) }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 ScanStatus(store: store)
             }.padding(20).frame(width: sidebarWidth).background(Theme.sidebar)
@@ -510,24 +527,29 @@ struct ServiceWorkspace: View {
             VStack(alignment: .leading, spacing: SidebarMetrics.spacing) {
                 SidebarHeader(title: "模型服务") { SidebarToggleButton(store: store) }.padding(.bottom, 4)
                 Picker(L10n.text("模型基座"), selection: $store.serviceEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.engines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.serviceEngineFilter) { _, _ in store.selectVisibleService() }
-                Button { store.gatewaySelected = true; store.synchronizeGateway(); Task { await store.gateway.poll() } } label: {
-                    HStack(spacing: 10) { SidebarSymbol(symbol: "point.3.connected.trianglepath.dotted"); VStack(alignment: .leading, spacing: 3) { Text(verbatim: L10n.text("统一网关")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(store.gateway.ready ? "运行中 · \(store.gateway.routes.filter(\.enabled).count) 个模型" : "本机与外部接口统一接入")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }; Spacer(minLength: 0) }.sidebarRow(selected: store.gatewaySelected)
-                }.buttonStyle(.plain).accessibilityIdentifier("show-gateway")
-                ScrollView { VStack(alignment: .leading, spacing: 4) {
-                    SidebarSectionTitle(title: "由 ModelDock 管理").padding(.top, 8).padding(.bottom, 2)
-                    if store.visibleServices.isEmpty { Text(verbatim: L10n.text("此范围还没有配置服务")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.vertical, 15) }
-                    ForEach(store.visibleServices) { spec in
-                        HStack(spacing: 0) {
-                            Button { store.showService(spec) } label: { serviceRow(title: store.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, detail: "\(spec.modelName) · \(spec.port)", status: services.statusTitle(spec), color: services.status(spec).color, selected: store.selectedServiceID == spec.id && store.selectedExternal == nil && !store.gatewaySelected, engine: store.engines.first { $0.id == spec.engineID }) }.buttonStyle(.plain)
-                        }.contextMenu {
-                            Button(L10n.text("复制接口地址")) { store.copy("http://127.0.0.1:\(spec.port)/v1") }
-                            Button(L10n.text("删除服务配置…"), role: .destructive) { store.serviceRemoval = spec }.disabled(!services.canRemoveConfiguration(spec))
+                List(selection: Binding(get: { serviceSelection }, set: { selectService($0) })) {
+                    HStack(spacing: 10) { SidebarSymbol(symbol: "point.3.connected.trianglepath.dotted"); VStack(alignment: .leading, spacing: 3) { Text(verbatim: L10n.text("统一网关")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(store.gateway.ready ? "运行中 · \(store.gateway.routes.filter(\.enabled).count) 个模型" : "本机与外部接口统一接入")).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary) }; Spacer(minLength: 0) }.padding(.vertical, 4).tag(ServiceListSelection.gateway).listRowSeparator(.hidden).accessibilityIdentifier("show-gateway")
+                    Section { 
+                        if store.visibleServices.isEmpty { Text(verbatim: L10n.text("此范围还没有配置服务")).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).listRowSeparator(.hidden) }
+                        ForEach(store.visibleServices) { spec in
+                            serviceRow(title: store.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, detail: "\(spec.modelName) · \(spec.port)", status: services.statusTitle(spec), color: services.status(spec).color, engine: store.engines.first { $0.id == spec.engineID })
+                                .tag(ServiceListSelection.managed(spec.id)).listRowSeparator(.hidden)
+                                .contextMenu {
+                                    Button(L10n.text("复制接口地址")) { store.copy("http://127.0.0.1:\(spec.port)/v1") }
+                                    Button(L10n.text("删除服务配置…"), role: .destructive) { store.serviceRemoval = spec }.disabled(!services.canRemoveConfiguration(spec))
+                                }
                         }
-                    }
-                    SidebarSectionTitle(title: "本机已发现").padding(.top, 16).padding(.bottom, 2)
-                    if store.visibleExternalServices.isEmpty { Text(verbatim: L10n.text("未发现此范围的本地接口")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.vertical, 15) }
-                    ForEach(store.visibleExternalServices) { item in Button { store.gatewaySelected = false; store.selectedExternal = item.port } label: { serviceRow(title: item.engineName, detail: "127.0.0.1:\(item.port)", status: item.ready ? "接口可用" : "端口已占用", color: item.ready ? .green : .orange, selected: store.selectedExternal == item.port && !store.gatewaySelected) }.buttonStyle(.plain) }
-                } }
+                    } header: { SidebarSectionTitle(title: "由 ModelDock 管理") }
+                    Section {
+                        if store.visibleExternalServices.isEmpty { Text(verbatim: L10n.text("未发现此范围的本地接口")).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).listRowSeparator(.hidden) }
+                        ForEach(store.visibleExternalServices) { item in
+                            serviceRow(title: item.engineName, detail: "127.0.0.1:\(item.port)", status: item.ready ? "接口可用" : "端口已占用", color: item.ready ? .green : .orange)
+                                .tag(ServiceListSelection.external(item.port)).listRowSeparator(.hidden)
+                        }
+                    } header: { SidebarSectionTitle(title: "本机已发现") }
+                }.sidebarList()
+                // ⌫ only asks to delete a managed configuration; the confirmation alert does the rest.
+                .onDeleteCommand { if case .managed(let id) = serviceSelection, let spec = services.records.first(where: { $0.id == id }), services.canRemoveConfiguration(spec) { store.serviceRemoval = spec } }
                 Text(verbatim: L10n.text("每 3 秒检查本机常用模型端口")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
             }.padding(SidebarMetrics.padding).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
@@ -584,15 +606,28 @@ struct ServiceWorkspace: View {
             }.frame(maxWidth: .infinity)
         }
     }
-    func serviceRow(title: String, detail: String, status: String, color: Color, selected: Bool, engine: Engine? = nil) -> some View {
+    var serviceSelection: ServiceListSelection? {
+        if store.gatewaySelected { return .gateway }
+        if let port = store.selectedExternal { return .external(port) }
+        return store.selectedServiceID.map { .managed($0) }
+    }
+    func selectService(_ selection: ServiceListSelection?) {
+        switch selection {
+        case .gateway: store.gatewaySelected = true; store.synchronizeGateway(); Task { await store.gateway.poll() }
+        case .managed(let id): if let spec = services.records.first(where: { $0.id == id }) { store.showService(spec) }
+        case .external(let port): store.gatewaySelected = false; store.selectedExternal = port
+        case nil: break
+        }
+    }
+    func serviceRow(title: String, detail: String, status: String, color: Color, engine: Engine? = nil) -> some View {
         HStack(alignment: .top, spacing: 10) {
             if let engine { EngineIcon(engine: engine, size: 32) } else { SidebarSymbol(symbol: "network") }
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1)
-                Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
-                HStack(spacing: 6) { Circle().fill(color).frame(width: 6, height: 6); Text(verbatim: L10n.text(status)) }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                HStack(spacing: 6) { Circle().fill(color).frame(width: 6, height: 6); Text(verbatim: L10n.text(status)) }.font(.system(size: TypeScale.callout)).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-        }.sidebarRow(selected: selected)
+        }.padding(.vertical, 4)
     }
 }
