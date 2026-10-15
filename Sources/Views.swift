@@ -99,6 +99,31 @@ struct LanguageMenu: View {
     }
 }
 
+/// Collapse/expand control placed at the trailing edge of each sidebar header (and on the collapsed rail).
+@MainActor
+struct SidebarToggleButton: View {
+    @ObservedObject var store: AppStore
+    var body: some View {
+        let title = store.sidebarHidden ? "显示边栏" : "隐藏边栏"
+        Button { store.toggleSidebar() } label: {
+            Image(systemName: store.sidebarHidden ? "chevron.right" : "chevron.left").font(.system(size: 13, weight: .semibold)).frame(width: 28, height: 28).contentShape(Rectangle())
+        }.buttonStyle(.borderless).foregroundStyle(Theme.muted)
+            .help(L10n.text(title + " · ⌃⌘S")).accessibilityLabel(L10n.text(title)).accessibilityIdentifier("toggle-sidebar")
+    }
+}
+
+/// Collapsed sidebar: a slim rail that keeps the expand control where the collapse control was.
+@MainActor
+struct SidebarRail: View {
+    @ObservedObject var store: AppStore
+    var body: some View {
+        HStack(spacing: 0) {
+            VStack { SidebarToggleButton(store: store).padding(.top, 24); Spacer() }.frame(width: 44).frame(maxHeight: .infinity).background(Theme.sidebar)
+            Rectangle().fill(Theme.line).frame(width: 1)
+        }
+    }
+}
+
 /// Last scan time with an inline rescan control, shown under the engine and model lists that a scan refreshes.
 @MainActor
 struct ScanStatus: View {
@@ -134,13 +159,7 @@ struct MainView: View {
                         }
                     }.padding(3).background(Theme.line.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
                     // Rescan lives beside the lists it refreshes (ScanStatus) and in File ▸ Rescan (⌘R).
-                    HStack(spacing: 6) {
-                        // Standard sidebar toggle, right of the traffic lights; also View ▸ Hide Sidebar (⌃⌘S).
-                        Button { store.toggleSidebar() } label: { Image(systemName: "sidebar.left").font(.system(size: 15)).frame(width: 30, height: 28).contentShape(Rectangle()) }
-                            .buttonStyle(.borderless).help(L10n.text((store.sidebarHidden ? "显示边栏" : "隐藏边栏") + " · ⌃⌘S"))
-                            .accessibilityLabel(L10n.text(store.sidebarHidden ? "显示边栏" : "隐藏边栏")).accessibilityIdentifier("toggle-sidebar")
-                        Spacer(); LanguageMenu(store: store, compact: geometry.size.width < 1200)
-                    }.padding(.leading, 84).padding(.trailing, 20)
+                    HStack(spacing: 6) { Spacer(); LanguageMenu(store: store, compact: geometry.size.width < 1200) }.padding(.trailing, 20)
                 }.frame(height: 64)
                 Rectangle().fill(Theme.line).frame(height: 1)
                 let sidebarWidth = max(310, min(420, geometry.size.width * 0.292))
@@ -178,7 +197,7 @@ struct EngineWorkspace: View {
         HStack(spacing: 0) {
             if !store.sidebarHidden {
             VStack(alignment: .leading, spacing: 0) {
-                Text(verbatim: L10n.text("运行引擎")).font(.system(size: TypeScale.title, weight: .bold)).padding(.bottom, 6)
+                HStack { Text(verbatim: L10n.text("运行引擎")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); SidebarToggleButton(store: store) }.padding(.bottom, 6)
                 Text(verbatim: L10n.text("本地引擎、安装与更新")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.bottom, 16)
                 Button { store.showGlobalEngines = true } label: { Label(L10n.text("全局引擎设置"), systemImage: "slider.horizontal.3") }.buttonStyle(.bordered).padding(.bottom, 14).accessibilityIdentifier("global-engine-settings")
                 ScrollView {
@@ -194,7 +213,7 @@ struct EngineWorkspace: View {
                 ScanStatus(store: store).padding(.top, 18)
             }.padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 20).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
-            }
+            } else { SidebarRail(store: store) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if store.enabledEngines.isEmpty {
@@ -270,7 +289,6 @@ struct EngineWorkspace: View {
                 if detail != status { Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1) }
                 Text(verbatim: L10n.text(engine.modelRule)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.linkColor).lineLimit(1)
             }.frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
         }
     }
 }
@@ -351,7 +369,7 @@ struct ModelWorkspace: View {
         HStack(spacing: 0) {
             if !store.sidebarHidden {
             VStack(alignment: .leading, spacing: 12) {
-                HStack { Text(verbatim: L10n.text("模型文件")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); Button { store.importLocalModels() } label: { Image(systemName: "plus").font(.system(size: 15)).frame(width: 30, height: 28).contentShape(Rectangle()) }.buttonStyle(.borderless).help(L10n.text("导入本地模型文件或目录")).accessibilityLabel(L10n.text("导入本地模型")) }.padding(.bottom, 4)
+                HStack { Text(verbatim: L10n.text("模型文件")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); Button { store.importLocalModels() } label: { Image(systemName: "plus").font(.system(size: 15)).frame(width: 30, height: 28).contentShape(Rectangle()) }.buttonStyle(.borderless).help(L10n.text("导入本地模型文件或目录")).accessibilityLabel(L10n.text("导入本地模型")); SidebarToggleButton(store: store) }.padding(.bottom, 4)
                 TextField(L10n.text("搜索名称、格式或路径"), text: $store.search).textFieldStyle(.roundedBorder).font(.system(size: TypeScale.body)).accessibilityIdentifier("model-search").onChange(of: store.search) { _, _ in selectVisibleModel() }
                 Picker(L10n.text("模型基座"), selection: $store.modelEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.enabledEngines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelEngineFilter) { _, _ in selectVisibleModel() }
                 Picker(L10n.text("模型分类"), selection: $store.modelFilter) { ForEach(["全部", "主模型", "附属模型"], id: \.self) { Text(verbatim: L10n.text($0)) } }.pickerStyle(.segmented).labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelFilter) { _, _ in selectVisibleModel() }.padding(.bottom, 4)
@@ -382,7 +400,7 @@ struct ModelWorkspace: View {
                 ScanStatus(store: store)
             }.padding(20).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
-            }
+            } else { SidebarRail(store: store) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     if let model = store.selectedFile {
@@ -436,11 +454,11 @@ struct ServiceWorkspace: View {
         HStack(spacing: 0) {
             if !store.sidebarHidden {
             VStack(alignment: .leading, spacing: 18) {
-                Text(verbatim: L10n.text("模型服务")).font(.system(size: TypeScale.title, weight: .bold))
+                HStack { Text(verbatim: L10n.text("模型服务")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); SidebarToggleButton(store: store) }
                 Text(verbatim: L10n.text("本工具服务与现有本地接口")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                 Picker(L10n.text("模型基座"), selection: $store.serviceEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.engines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.onChange(of: store.serviceEngineFilter) { _, _ in store.selectVisibleService() }
                 Button { store.gatewaySelected = true; store.synchronizeGateway(); Task { await store.gateway.poll() } } label: {
-                    HStack(spacing: 12) { Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(Theme.linkColor); VStack(alignment: .leading, spacing: 5) { Text(verbatim: L10n.text("统一网关")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(store.gateway.ready ? "运行中 · \(store.gateway.routes.filter(\.enabled).count) 个模型" : "本机与外部接口统一接入")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }; Spacer(); Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(Theme.muted) }.padding(14).background(store.gatewaySelected ? Theme.selection : Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
+                    HStack(spacing: 12) { Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(Theme.linkColor); VStack(alignment: .leading, spacing: 5) { Text(verbatim: L10n.text("统一网关")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(store.gateway.ready ? "运行中 · \(store.gateway.routes.filter(\.enabled).count) 个模型" : "本机与外部接口统一接入")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }; Spacer() }.padding(14).background(store.gatewaySelected ? Theme.selection : Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
                 }.buttonStyle(.plain).accessibilityIdentifier("show-gateway")
                 ScrollView { VStack(alignment: .leading, spacing: 8) {
                     Text(verbatim: L10n.text("本工具管理")).font(.system(size: TypeScale.callout, weight: .semibold)).foregroundStyle(Theme.muted).padding(.top, 12)
@@ -463,7 +481,7 @@ struct ServiceWorkspace: View {
                 Text(verbatim: L10n.text("每 3 秒检查本机常用模型端口")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
             }.padding(24).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
-            }
+            } else { SidebarRail(store: store) }
             ScrollView {
                 if store.gatewaySelected { GatewayWorkspace(store: store, gateway: store.gateway) }
                 else {
