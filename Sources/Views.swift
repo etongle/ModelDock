@@ -146,7 +146,9 @@ struct MainView: View {
                 case .monitor: MonitorWorkspace(store: store, services: services, monitor: store.resources, performance: store.performance)
                 }
             }.background(Theme.background)
-        }.frame(minWidth: 980, minHeight: 700).ignoresSafeArea().environment(\.locale, L10n.locale)
+        // Child views translate inside their own body; an unchanged input (e.g. StateLabel("未启动")) would keep
+        // the previous language, so rebuild the tree when the language changes.
+        }.frame(minWidth: 980, minHeight: 700).ignoresSafeArea().environment(\.locale, L10n.locale).id(store.language)
             .alert(L10n.text("模型管理"), isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) { Button(L10n.text("好")) { store.message = nil } } message: { Text(verbatim: L10n.text(store.message ?? "")) }
             .sheet(item: $store.maintenancePlan) { plan in MaintenanceView(store: store, plan: plan) }
             .sheet(item: Binding(get: { store.installation.plan }, set: { store.installation.plan = $0 })) { plan in EngineInstallView(store: store, installer: store.installation, plan: plan) }
