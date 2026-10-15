@@ -16,7 +16,8 @@ struct DownloadFileDetails: View {
                     Text(verbatim: L10n.text(job.site.rawValue + " · " + job.state.rawValue)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                 }
                 Spacer()
-                Button(L10n.text("返回下载选择")) { downloads.selectedTaskID = nil }.buttonStyle(.bordered).accessibilityIdentifier("back-to-download-selection")
+                // The sidebar's + returns to the new-download form; the header carries the task's own actions.
+                DownloadTaskActions(store: store, downloads: downloads, job: job)
             }
             if let target = job.repairTarget {
                 Text(verbatim: L10n.text("单文件修复：" + target)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled)
@@ -27,14 +28,15 @@ struct DownloadFileDetails: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text(verbatim: L10n.text("总体进度")).font(.system(size: TypeScale.body, weight: .semibold))
+                    InfoTip(text: "每次处理一个文件。暂停某个文件后继续处理其他文件；优先下载会保留当前文件断点并立即切换。")
                     Spacer()
                     Text(verbatim: L10n.text(job.percentageLabel)).monospacedDigit()
                 }
-                if job.totalKnown && job.total > 0 { ProgressView(value: min(Double(job.received), Double(job.total)), total: Double(job.total)).tint(Theme.accent) }
+                if job.totalKnown && job.total > 0 { UsageBar(fraction: Double(job.received) / Double(job.total), progress: true) }
                 HStack {
                     Text(verbatim: L10n.text(job.totalKnown ? "\(sizeLabel(job.received)) / \(sizeLabel(job.total))" : "\(sizeLabel(job.received)) · 总量待确认"))
                     Spacer()
-                    Text(verbatim: L10n.text("下载速度 " + downloads.speedLabel(job.id))).foregroundStyle(Theme.linkColor)
+                    Text(verbatim: L10n.text("下载速度 " + downloads.speedLabel(job.id))).foregroundStyle(Theme.muted)
                 }.font(.system(size: TypeScale.body)).monospacedDigit()
                 HStack(spacing: 18) {
                     Text(verbatim: L10n.text("已完成 \(rows.filter { $0.state == .complete }.count) / \(rows.count)"))
@@ -43,7 +45,6 @@ struct DownloadFileDetails: View {
                     if rows.contains(where: { $0.state == .paused }) { Text(verbatim: L10n.text("已暂停 \(rows.filter { $0.state == .paused }.count)")) }
                     if rows.contains(where: { $0.state == .failed }) { Text(verbatim: L10n.text("需重试 \(rows.filter { $0.state == .failed }.count)")).foregroundStyle(Theme.errorText) }
                 }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
-                Text(verbatim: L10n.text("每次处理一个文件。暂停某个文件后继续处理其他文件；优先下载会保留当前文件断点并立即切换。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 if !(job.pausedFiles ?? []).isEmpty { Button(L10n.text("继续所有暂停文件")) { downloads.resumeAllFiles(job.id) }.buttonStyle(.bordered).controlSize(.small).disabled(!downloads.canControlFiles(job.id)) }
             }.padding(18).background(Theme.selection.opacity(0.5), in: RoundedRectangle(cornerRadius: 12)).accessibilityIdentifier("download-files-summary")
             VStack(alignment: .leading, spacing: 6) {
@@ -54,7 +55,6 @@ struct DownloadFileDetails: View {
             HStack {
                 Text(verbatim: L10n.text("文件 · \(rows.count)")).font(.system(size: TypeScale.body, weight: .semibold))
                 Spacer()
-                Button(L10n.text("打开目录")) { store.reveal(URL(fileURLWithPath: job.root).appendingPathComponent(job.folder).path) }.buttonStyle(.bordered)
             }
             VStack(spacing: 0) {
                 ForEach(rows) { progress in
@@ -95,11 +95,11 @@ struct DownloadFileRow: View {
                 Text(verbatim: L10n.text(progress.percentageLabel))
                 Text(verbatim: L10n.text(progress.file.bytes > 0 ? "\(sizeLabel(progress.received)) / \(sizeLabel(progress.file.bytes))" : sizeLabel(progress.received)))
                 Spacer(minLength: 8)
-                if let speed = progress.speed { Text(verbatim: L10n.text(sizeLabel(Int64(max(0, min(Double(Int64.max / 2), speed.isFinite ? speed : 0)))) + "/s")).foregroundStyle(Theme.linkColor) }
+                if let speed = progress.speed { Text(verbatim: L10n.text(sizeLabel(Int64(max(0, min(Double(Int64.max / 2), speed.isFinite ? speed : 0)))) + "/s")).foregroundStyle(Theme.muted) }
                 else if progress.state == .complete { Text(verbatim: L10n.text(progress.file.sha256 == nil ? "大小检查通过" : "SHA-256 已校验")) }
             }.font(.system(size: TypeScale.caption)).monospacedDigit().foregroundStyle(Theme.muted)
             if progress.state != .complete, progress.received > 0, progress.file.bytes > 0 {
-                ProgressView(value: min(Double(progress.received), Double(progress.file.bytes)), total: Double(progress.file.bytes)).tint(Theme.accent)
+                UsageBar(fraction: progress.file.bytes > 0 ? Double(progress.received) / Double(progress.file.bytes) : 0, progress: true)
             }
             if let error = progress.error { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
             if progress.state != .complete {

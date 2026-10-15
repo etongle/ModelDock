@@ -65,9 +65,9 @@ struct StrataIntegrationView: View {
                 Button(L10n.text("准备模型与组件")) { controller.prepare(store: store) }.buttonStyle(.borderedProminent).tint(Theme.accent).disabled(controller.busy || controller.variants.isEmpty || store.installation.running || store.maintaining)
                 Text(verbatim: L10n.text("每次准备保存为独立组合；旧模型保留，正在使用的组合不会被覆盖。准备时先停止 Strata 实例，其他基座不参与此次操作。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
             }
-            if controller.busy { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text(controller.progress)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.linkColor); Spacer(); Button(L10n.text("暂停准备")) { controller.pause() }.buttonStyle(.bordered) } }
-            if let component = controller.componentProgress { Text(verbatim: component).font(.system(size: TypeScale.caption, design: .monospaced)).foregroundStyle(Theme.linkColor).textSelection(.enabled) }
-            if let message = controller.message { Text(verbatim: L10n.text(message)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.linkColor).textSelection(.enabled) }
+            if controller.busy { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text(controller.progress)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted); Spacer(); Button(L10n.text("暂停准备")) { controller.pause() }.buttonStyle(.bordered) } }
+            if let component = controller.componentProgress { Text(verbatim: component).font(.system(size: TypeScale.caption, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled) }
+            if let message = controller.message { Label(L10n.text(message), systemImage: controller.messageIsError ? "exclamationmark.triangle.fill" : "info.circle").font(.system(size: TypeScale.callout)).foregroundStyle(controller.messageIsError ? Theme.errorText : Theme.muted).textSelection(.enabled) }
             if !controller.log.isEmpty { DisclosureGroup("准备日志与组件下载进度") { ScrollView { Text(verbatim: String(controller.log.suffix(18_000))).font(.system(size: TypeScale.caption, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 180) }.font(.system(size: TypeScale.callout)) }
         }.task(id: store.engine.path) { controller.load(engine: store.engine) }
     }

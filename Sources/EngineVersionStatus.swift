@@ -75,7 +75,7 @@ struct EngineVersionTable: View {
                     Text(verbatim: L10n.text(row.installed ?? "未安装")).frame(width: 85, alignment: .leading)
                     Text(verbatim: L10n.text(row.available)).frame(width: 85, alignment: .leading)
                     Spacer(minLength: 4)
-                    Label(L10n.text(row.state.title), systemImage: row.state == .current || row.state == .newer ? "checkmark.circle" : row.state == .update ? "arrow.up.circle" : "info.circle").foregroundStyle(row.state == .update ? Theme.warningText : Theme.linkColor).frame(width: 115, alignment: .leading)
+                    Label(L10n.text(row.state.title), systemImage: row.state == .current || row.state == .newer ? "checkmark.circle" : row.state == .update ? "arrow.up.circle" : "info.circle").foregroundStyle(row.state == .update ? Theme.warningText : Theme.muted).frame(width: 115, alignment: .leading)
                 }.font(.system(size: TypeScale.callout)).textSelection(.enabled).accessibilityElement(children: .combine)
             }
         }.padding(14).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))

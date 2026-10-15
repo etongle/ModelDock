@@ -120,7 +120,7 @@ struct MonitorWorkspace: View {
                         HStack(spacing: 20) { Picker(L10n.text("输出上限"), selection: $performance.outputLimit) { ForEach([64, 128, 256], id: \.self) { Text(verbatim: L10n.text("\($0) tokens")).tag($0) } }.frame(width: 220).disabled(performance.running); Spacer(); if performance.running { ProgressView().controlSize(.small); Button(L10n.text("取消测量")) { performance.cancel() }.buttonStyle(.bordered) } else { Button { if let current { performance.measure(current, chip: store.inventory?.chip ?? "本机 Mac") } } label: { Label(L10n.text("一键实测"), systemImage: "speedometer") }.buttonStyle(AccentButton()).disabled(store.maintaining) } }
                         SecureField(L10n.text("本地服务访问密钥（可选，仅本次打开有效）"), text: $performance.apiKey).textFieldStyle(.roundedBorder).disabled(performance.running)
                         Text(verbatim: L10n.text("使用固定短提示进行一次推理。首个输出包含思考和排队等待；对比时请使用相同输出长度，留意缓存与其他服务负载。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
-                        if !performance.phase.isEmpty { Text(verbatim: L10n.text(performance.phase)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.linkColor) }
+                        if !performance.phase.isEmpty { Text(verbatim: L10n.text(performance.phase)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
                         if let message = performance.message { Text(verbatim: L10n.text(message)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
                     }.padding(22).background(Theme.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: 13))
                 }
@@ -187,15 +187,15 @@ struct StatusBarPanel: View {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) { Text(verbatim: L10n.text("最近实测 · " + latest.speedTitle)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted); Text(latest.target.modelName).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1) }
                     Spacer()
-                    Text(verbatim: L10n.text(rateLabel(latest.measuredRate))).font(.system(size: TypeScale.body, weight: .semibold)).monospacedDigit().foregroundStyle(Theme.linkColor)
+                    Text(verbatim: L10n.text(rateLabel(latest.measuredRate))).font(.system(size: TypeScale.body, weight: .semibold)).monospacedDigit()
                 }.padding(16)
             }
             StatusDownloads(store: store, downloads: store.downloads)
             if performance.running || store.installation.running {
                 Divider()
                 VStack(alignment: .leading, spacing: 8) {
-                    if performance.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text(performance.phase)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.linkColor).lineLimit(2); Spacer(); Button(L10n.text("取消")) { performance.cancel() }.controlSize(.small) } }
-                    if store.installation.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text("引擎安装或更新进行中")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.linkColor) } }
+                    if performance.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text(performance.phase)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(2); Spacer(); Button(L10n.text("取消")) { performance.cancel() }.controlSize(.small) } }
+                    if store.installation.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text("引擎安装或更新进行中")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) } }
                 }.padding(16)
             }
             Divider()
@@ -219,15 +219,19 @@ struct StatusBarPanel: View {
     }
 }
 
-/// Thin usage meter drawn with explicit colors, so it keeps its tint when the popover is not key.
+/// Thin meter drawn with explicit colors, so it keeps its tint when the popover is not key.
+/// Usage (default) warns as it fills: orange from 75%, red from 90%. Progress is the opposite —
+/// filling up is good — so it stays accent while running and turns green when complete.
 struct UsageBar: View {
     var fraction: Double?
+    var progress = false
     var body: some View {
         let value = min(1, max(0, fraction ?? 0))
+        let tint = progress ? (value >= 1 ? Color.green : Theme.accent) : (value >= 0.9 ? Color.red : value >= 0.75 ? Color.orange : Theme.accent)
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 Capsule().fill(Theme.line)
-                Capsule().fill(value >= 0.9 ? Color.red : value >= 0.75 ? Color.orange : Theme.accent).frame(width: geometry.size.width * value)
+                Capsule().fill(tint).frame(width: geometry.size.width * value)
             }
         }.frame(height: 5)
     }

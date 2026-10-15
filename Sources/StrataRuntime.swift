@@ -139,7 +139,10 @@ final class StrataPreparationProcess: @unchecked Sendable {
     @Published var busy = false
     @Published var loading = false
     @Published var log = ""
-    @Published var message: String?
+    /// Guidance or result text; errors set `messageIsError` so the view renders them as errors, not info.
+    @Published var message: String? { didSet { messageIsError = false } }
+    @Published var messageIsError = false
+    func fail(_ error: Error) { message = error.localizedDescription; messageIsError = true }
     @Published var progress = ""
     @Published var currentRoot: String?
     private var currentInputs: [String] = []
@@ -170,7 +173,7 @@ final class StrataPreparationProcess: @unchecked Sendable {
                 let value = try await InstallExecutor.run(.init(executable: StrataRuntime.python(engine), arguments: [helper, "catalogue", "--runtime", StrataRuntime.source(engine).path], title: "读取 Strata 模型目录"), log: { _ in })
                 guard let data = value.components(separatedBy: .newlines).last(where: { $0.hasPrefix("{") })?.data(using: .utf8) else { throw LaunchError.message("Strata 模型目录无法识别") }
                 variants = try JSONDecoder().decode(StrataVariants.self, from: data).variants; enginePath = engine.path
-            } catch { message = error.localizedDescription }
+            } catch { fail(error) }
         }
     }
     func download(store: AppStore) {
@@ -187,7 +190,7 @@ final class StrataPreparationProcess: @unchecked Sendable {
                 if !folder.isEmpty { store.downloads.destination = folder }
                 store.tab = .downloads
                 store.downloads.notice = "已选择 Strata 主权重和 n-gram 文件；完成后回到 Strata 准备配套组件。"
-            } catch { message = error.localizedDescription }
+            } catch { fail(error) }
         }
     }
     func chooseLocal(store: AppStore) {
@@ -240,7 +243,7 @@ final class StrataPreparationProcess: @unchecked Sendable {
                 pendingDirectory = nil
                 if let stateURL { try? FileManager.default.removeItem(at: stateURL) }
                 store.scan()
-            } catch { message = error.localizedDescription }
+            } catch { fail(error) }
         }
     }
 }

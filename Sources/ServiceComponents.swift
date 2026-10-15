@@ -97,19 +97,18 @@ enum ServiceComponentEvidence {
     var spec: ServiceSpec
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(verbatim: L10n.text(spec.pid == nil ? "上次启动的配套组件" : "本次配套组件")).font(.system(size: TypeScale.body, weight: .semibold))
+            HStack(spacing: 6) { Text(verbatim: L10n.text(spec.pid == nil ? "上次启动的配套组件" : "本次配套组件")).font(.system(size: TypeScale.body, weight: .semibold)); InfoTip(text: "按本次启动命令和运行日志显示；修改模型关联只影响后续启动。") }
             if let snapshot = store.serviceComponents(spec) {
                 ForEach(snapshot.entries) { item in
                     HStack(spacing: 12) {
                         Image(systemName: item.id == "draft" ? "bolt.fill" : item.id == "vision" ? "photo" : "textformat").foregroundStyle(Theme.linkColor).frame(width: 22)
                         VStack(alignment: .leading, spacing: 4) { Text(verbatim: L10n.text(item.title)).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(item.name)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).textSelection(.enabled).lineLimit(2) }
                         Spacer(minLength: 8)
-                        Text(verbatim: L10n.text(item.state)).font(.system(size: TypeScale.callout, weight: .medium)).foregroundStyle(item.state == "已启用" ? Theme.linkColor : Theme.muted)
+                        Text(verbatim: L10n.text(item.state)).font(.system(size: TypeScale.callout, weight: .medium)).foregroundStyle(item.state == "已启用" ? Theme.successText : Theme.muted)
                         if let path = item.path { Button { store.reveal(path) } label: { Image(systemName: "folder") }.buttonStyle(.bordered).help(L10n.text("查看 " + item.title + "：" + path)).accessibilityLabel(L10n.text("查看" + item.title + "文件")) }
                     }
                 }
             } else { Text(verbatim: L10n.text("本次启动尚未提供组件信息，正在等待引擎日志。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
-            Text(verbatim: L10n.text("按本次启动命令和运行日志显示；修改模型关联只影响后续启动。")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
         }.padding(16).background(Theme.selection.opacity(0.45), in: RoundedRectangle(cornerRadius: 12)).accessibilityIdentifier("service-components")
     }
 }
@@ -119,7 +118,7 @@ enum ServiceComponentEvidence {
     var spec: ServiceSpec
     var body: some View {
         if let draft = store.serviceComponents(spec)?.entries.first(where: { $0.id == "draft" && $0.state != "未启用" }) {
-            Label(L10n.text((spec.pid == nil ? "上次草稿：" : "草稿：") + draft.name + " · " + draft.state), systemImage: "bolt.fill").font(.system(size: TypeScale.callout)).foregroundStyle(Theme.linkColor).lineLimit(2)
+            Label(L10n.text((spec.pid == nil ? "上次草稿：" : "草稿：") + draft.name + " · " + draft.state), systemImage: "bolt.fill").font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(2)
         }
     }
 }

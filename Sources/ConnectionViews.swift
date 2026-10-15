@@ -108,7 +108,7 @@ struct ClientConnectionsView: View {
                     }.disabled(controller.busy)
                     ForEach(CodingClient.allCases) { client in clientRow(client) }
                     if let error = controller.error { Label(L10n.text(error), systemImage: "exclamationmark.circle").font(.system(size: TypeScale.body)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
-                    if let message = controller.message { Label(L10n.text(message), systemImage: "checkmark.circle").font(.system(size: TypeScale.body)).foregroundStyle(Theme.linkColor) }
+                    if let message = controller.message { Label(L10n.text(message), systemImage: "checkmark.circle").font(.system(size: TypeScale.body)).foregroundStyle(Theme.successText) }
                     if invalidContext { Text(verbatim: L10n.text("上下文长度需要在 2,048 到 1,048,576 之间，且不能超过服务的实际设置。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.errorText) }
                     if let connection = controller.lastConnection {
                         HStack { Text(verbatim: L10n.text("连接配置已保存")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted); Spacer()

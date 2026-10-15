@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         store = AppStore(stateDirectory: directory)
         store.onLanguageChange = { [weak self] in self?.refreshLanguage() }
         store.onAppearanceChange = { [weak self] in self?.applyAppearance() }
+        store.onMenuBarStyleChange = { [weak self] in self?.updateStatusBar() }
         applyAppearance()
         if passiveTesting { NSApplication.shared.setActivationPolicy(.accessory) }
         applyDockIcon()
@@ -76,6 +77,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             if CommandLine.arguments.contains("--start-hidden") { hideMainWindow() }
         }
         if !CommandLine.arguments.contains("--documentation-ui") { store.services.beginMonitoring(); store.scan(); store.beginResourceMonitoring() }
+        // Notifications only in normal runs: tests and captures must never trigger the permission prompt.
+        if !passiveTesting, argumentValue("--capture-dir") == nil, !CommandLine.arguments.contains("--documentation-ui") { store.beginNotifications() }
         if let task = argumentValue("--resume-download-job"), UUID(uuidString: task) != nil, store.downloads.jobs.contains(where: { $0.id == task }) {
             store.downloads.showTask(task); store.tab = .downloads; store.downloads.resume(task)
         }
@@ -134,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc func showSettings() {
         statusPopover.performClose(nil)
         if settingsWindow == nil {
-            let preferences = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 780), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let preferences = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 560), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             preferences.title = L10n.text("设置"); preferences.isReleasedWhenClosed = false; preferences.delegate = self
             preferences.contentView = NSHostingView(rootView: PreferencesView(store: store, close: { [weak self] in self?.settingsWindow?.performClose(nil) }))
             preferences.backgroundColor = .windowBackgroundColor
@@ -172,7 +175,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         guard let button = statusItem?.button else { return }
         let cpu = store.resources.system?.cpu.map { String(format: "%.0f%%", $0) } ?? "—"
         let memory = store.resources.system.map { String(format: "%.0fG", Double($0.memoryUsed) / 1_073_741_824) } ?? "—"
-        button.title = " CPU \(cpu) · \(memory)"
+        button.title = store.menuBarIconOnly ? "" : " CPU \(cpu) · \(memory)"
+        button.imagePosition = store.menuBarIconOnly ? .imageOnly : .imageLeading
         button.toolTip = L10n.text("模型管理 · CPU \(cpu) · 内存 \(memory) · 点击查看磁盘与模型服务")
     }
     @objc func toggleStatusPopover() {
@@ -609,6 +613,7 @@ enum Entry {
         }
         if args.contains("--self-test") { selfTest(); return }
         if args.contains("--strata-checks") { Task { do { try await StrataChecks.run(); exit(0) } catch { fputs("STRATA CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--notification-checks") { do { try NotificationChecks.run() } catch { fputs("NOTIFICATION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--localization-checks") { do { try LocalizationChecks.run() } catch { fputs("LOCALIZATION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--live-context-checks") || argumentValue("--repair-connection-context") != nil {
             Task { do { try await ConnectionLive.run(repairPort: argumentValue("--repair-connection-context").flatMap(Int.init)); exit(0) }

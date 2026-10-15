@@ -20,6 +20,9 @@ enum Theme {
     static let selection = adaptive(NSColor(red: 0.895, green: 0.9, blue: 0.987, alpha: 1), NSColor(red: 0.24, green: 0.23, blue: 0.39, alpha: 1))
     static let line = Color.primary.opacity(0.10)
     static let surface = Color(nsColor: .controlBackgroundColor)
+    /// Color rule: linkColor marks interactive text only; icons and charts may use it as brand tint.
+    /// Non-interactive text uses muted (info/progress), successText (completed) or tag chips.
+    static let successText = adaptive(NSColor(red: 0.12, green: 0.50, blue: 0.22, alpha: 1), NSColor(red: 0.45, green: 0.85, blue: 0.52, alpha: 1))
     static let linkColor = adaptive(NSColor(red: 0.32, green: 0.30, blue: 0.94, alpha: 1), NSColor(red: 0.70, green: 0.67, blue: 1, alpha: 1))
     static let muted = adaptive(NSColor(red: 0.38, green: 0.38, blue: 0.42, alpha: 1), NSColor(red: 0.68, green: 0.68, blue: 0.73, alpha: 1))
     static let warningText = adaptive(NSColor(red: 0.57, green: 0.29, blue: 0.04, alpha: 1), NSColor(red: 0.96, green: 0.70, blue: 0.37, alpha: 1))
@@ -99,6 +102,60 @@ struct LanguageMenu: View {
     }
 }
 
+/// Shared sidebar building blocks: every tab uses the same header, icon actions, section titles,
+/// row chrome and spacing (title + trailing actions → optional filters → list → footer).
+enum SidebarMetrics { static let padding: CGFloat = 20; static let spacing: CGFloat = 12 }
+
+struct SidebarHeader<Actions: View>: View {
+    var title: String
+    @ViewBuilder var actions: Actions
+    var body: some View {
+        HStack(spacing: 2) { Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.title, weight: .bold)).lineLimit(1); Spacer(minLength: 8); actions }
+    }
+}
+
+struct SidebarIconButton: View {
+    var symbol: String
+    var help: String
+    var action: () -> Void
+    var body: some View {
+        Button(action: action) { Image(systemName: symbol).font(.system(size: 15)).frame(width: 30, height: 28).contentShape(Rectangle()) }
+            .buttonStyle(.borderless).foregroundStyle(Theme.muted).help(L10n.text(help)).accessibilityLabel(L10n.text(help))
+    }
+}
+
+struct SidebarSectionTitle: View {
+    var title: String
+    var body: some View { Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.caption, weight: .semibold)).foregroundStyle(Theme.muted) }
+}
+
+/// Square symbol tile used when a row has no engine icon.
+struct SidebarSymbol: View {
+    var symbol: String
+    var body: some View {
+        Image(systemName: symbol).font(.system(size: 14)).foregroundStyle(Theme.linkColor)
+            .frame(width: 32, height: 32).background(Theme.linkColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+/// Selection for the services sidebar, which mixes the gateway, managed services and discovered endpoints.
+enum ServiceListSelection: Hashable { case gateway, managed(String), external(Int) }
+
+extension View {
+    /// Native sidebar list: arrow-key navigation, context menus and system selection, tinted with the app accent.
+    /// The negative inset lines rows up with the sidebar header.
+    func sidebarList() -> some View {
+        // .inset draws a solid rounded selection (no sidebar vibrancy), which also renders in offscreen
+        // documentation captures; rows hide separators so the list reads like a source list.
+        listStyle(.inset).scrollContentBackground(.hidden).tint(Theme.accent).padding(.horizontal, -10)
+    }
+    /// Row chrome shared by all sidebar lists.
+    func sidebarRow(selected: Bool) -> some View {
+        padding(10).frame(maxWidth: .infinity, alignment: .leading)
+            .background(selected ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
+    }
+}
+
 /// Collapse/expand control placed at the trailing edge of each sidebar header (and on the collapsed rail).
 @MainActor
 struct SidebarToggleButton: View {
@@ -112,6 +169,29 @@ struct SidebarToggleButton: View {
     }
 }
 
+/// Divider between sidebar and detail that can be dragged to resize the sidebar, like Finder or Xcode.
+/// The hit area is wider than the 1 pt line; double-click restores the automatic width.
+@MainActor
+struct SidebarResizeHandle: View {
+    @ObservedObject var store: AppStore
+    var width: CGFloat
+    var body: some View {
+        Rectangle().fill(Theme.line).frame(width: 1)
+            .overlay {
+                Color.clear.frame(width: 9).contentShape(Rectangle())
+                    .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+                    .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                        .onChanged { value in
+                            if store.sidebarDragStart == nil { store.sidebarDragStart = width }
+                            store.sidebarWidth = (store.sidebarDragStart ?? width) + value.translation.width
+                        }
+                        .onEnded { _ in store.sidebarDragStart = nil; store.saveSidebarWidth() })
+                    .onTapGesture(count: 2) { store.sidebarWidth = nil; store.saveSidebarWidth() }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
 /// Collapsed sidebar: a slim rail that keeps the expand control where the collapse control was.
 @MainActor
 struct SidebarRail: View {
@@ -120,6 +200,37 @@ struct SidebarRail: View {
         HStack(spacing: 0) {
             VStack { SidebarToggleButton(store: store).padding(.top, 24); Spacer() }.frame(width: 44).frame(maxHeight: .infinity).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
+        }
+    }
+}
+
+/// Secondary explanation behind an ⓘ: shown on hover and read by VoiceOver, instead of a permanent paragraph.
+struct InfoTip: View {
+    var text: String
+    var body: some View {
+        Image(systemName: "info.circle").font(.system(size: 12)).foregroundStyle(.secondary)
+            .help(L10n.text(text)).accessibilityLabel(L10n.text(text))
+    }
+}
+
+/// Run log in its own fixed-height scroll area, like a console. While following, new output scrolls
+/// to the end; turning it off keeps the position so older lines can be read while the log updates.
+struct LogView: View {
+    var text: String
+    var follow: Bool
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    Text(verbatim: text).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .topLeading).padding(16)
+                    Color.clear.frame(height: 1).id("log-end")
+                }
+            }
+            .frame(height: 380).background(Theme.line.opacity(0.35), in: RoundedRectangle(cornerRadius: 11))
+            .onAppear { proxy.scrollTo("log-end", anchor: .bottom) }
+            .onChange(of: text) { _, _ in if follow { proxy.scrollTo("log-end", anchor: .bottom) } }
+            .onChange(of: follow) { _, on in if on { proxy.scrollTo("log-end", anchor: .bottom) } }
         }
     }
 }
@@ -162,7 +273,8 @@ struct MainView: View {
                     HStack(spacing: 6) { Spacer(); LanguageMenu(store: store, compact: geometry.size.width < 1200) }.padding(.trailing, 20)
                 }.frame(height: 64)
                 Rectangle().fill(Theme.line).frame(height: 1)
-                let sidebarWidth = max(310, min(420, geometry.size.width * 0.292))
+                // User-dragged width wins (clamped to 260 pt … half the window); otherwise scale with the window.
+                let sidebarWidth = store.sidebarWidth.map { min(max($0, 260), max(260, geometry.size.width * 0.5)) } ?? max(310, min(420, geometry.size.width * 0.292))
                 switch store.tab {
                 case .engines: EngineWorkspace(store: store, services: services, sidebarWidth: sidebarWidth)
                 case .models: ModelWorkspace(store: store, sidebarWidth: sidebarWidth)
@@ -174,8 +286,13 @@ struct MainView: View {
         // Child views translate inside their own body; an unchanged input (e.g. StateLabel("未启动")) would keep
         // the previous language, so rebuild the tree when the language changes.
         }.frame(minWidth: 980, minHeight: 700).ignoresSafeArea().environment(\.locale, L10n.locale).id(store.language)
+            .alert(L10n.text("删除端口 \(store.serviceRemoval?.port ?? 0) 的服务配置"), isPresented: Binding(get: { store.serviceRemoval != nil }, set: { if !$0 { store.serviceRemoval = nil } })) {
+                Button(L10n.text("删除"), role: .destructive) { if let spec = store.serviceRemoval { store.removeServiceConfiguration(spec) }; store.serviceRemoval = nil }
+                Button(L10n.text("取消"), role: .cancel) { store.serviceRemoval = nil }
+            } message: { Text(verbatim: L10n.text("保留模型文件和运行日志")) }
             .alert(L10n.text("模型管理"), isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) { Button(L10n.text("好")) { store.message = nil } } message: { Text(verbatim: L10n.text(store.message ?? "")) }
             .sheet(item: $store.maintenancePlan) { plan in MaintenanceView(store: store, plan: plan) }
+            .sheet(isPresented: $store.showLaunch) { LaunchSheet(store: store, services: services) }
             .sheet(item: Binding(get: { store.installation.plan }, set: { store.installation.plan = $0 })) { plan in EngineInstallView(store: store, installer: store.installation, plan: plan) }
             .sheet(item: $store.multiModel) { draft in MultiModelView(store: store, draft: draft) }
             .sheet(item: $store.commandDraft) { draft in CommandLaunchView(store: store, draft: draft) }
@@ -196,23 +313,25 @@ struct EngineWorkspace: View {
     var body: some View {
         HStack(spacing: 0) {
             if !store.sidebarHidden {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack { Text(verbatim: L10n.text("运行引擎")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); SidebarToggleButton(store: store) }.padding(.bottom, 6)
-                Text(verbatim: L10n.text("本地引擎、安装与更新")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.bottom, 16)
-                Button { store.showGlobalEngines = true } label: { Label(L10n.text("全局引擎设置"), systemImage: "slider.horizontal.3") }.buttonStyle(.bordered).padding(.bottom, 14).accessibilityIdentifier("global-engine-settings")
-                ScrollView {
-                    VStack(spacing: 6) {
-                        ForEach(store.enabledEngines) { engine in
-                            Button { store.chooseEngine(engine.id) } label: {
-                                engineRow(engine).padding(.horizontal, 12).padding(.vertical, 11).frame(maxWidth: .infinity, alignment: .leading).background(store.engineID == engine.id ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: 13)).contentShape(Rectangle())
-                            }.buttonStyle(.plain).help(L10n.text(engine.path)).accessibilityAddTraits(store.engineID == engine.id ? .isSelected : []).accessibilityIdentifier("engine-\(engine.id)")
-                        }
+            VStack(alignment: .leading, spacing: SidebarMetrics.spacing) {
+                SidebarHeader(title: "运行引擎") {
+                    SidebarIconButton(symbol: "slider.horizontal.3", help: "全局引擎设置") { store.showGlobalEngines = true }.accessibilityIdentifier("global-engine-settings")
+                    SidebarToggleButton(store: store)
+                }.padding(.bottom, 4)
+                List(selection: Binding(get: { store.engineID as String? }, set: { if let id = $0, id != store.engineID { store.chooseEngine(id) } })) {
+                    ForEach(store.enabledEngines) { engine in
+                        engineRow(engine).padding(.vertical, 4).tag(engine.id).listRowSeparator(.hidden)
+                            .help(L10n.text(engine.path)).accessibilityIdentifier("engine-\(engine.id)")
+                            .contextMenu {
+                                Button(L10n.text("在 Finder 中打开")) { store.reveal(engine.path) }
+                                Button(L10n.text("全局引擎设置")) { store.showGlobalEngines = true }
+                            }
                     }
-                }
-                Spacer(minLength: 8)
-                ScanStatus(store: store).padding(.top, 18)
-            }.padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 20).frame(width: sidebarWidth).background(Theme.sidebar)
-            Rectangle().fill(Theme.line).frame(width: 1)
+                }.sidebarList()
+                Spacer(minLength: 0)
+                ScanStatus(store: store)
+            }.padding(SidebarMetrics.padding).frame(width: sidebarWidth, alignment: .leading).clipped().background(Theme.sidebar)
+            SidebarResizeHandle(store: store, width: sidebarWidth)
             } else { SidebarRail(store: store) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -221,17 +340,32 @@ struct EngineWorkspace: View {
                         Button(L10n.text("全局引擎设置")) { store.showGlobalEngines = true }.buttonStyle(.bordered)
                     } else {
                     HStack(spacing: 18) { EngineIcon(engine: store.engine, size: 64); VStack(alignment: .leading, spacing: 6) { Text(verbatim: L10n.text(store.engine.name)).font(.system(size: TypeScale.display, weight: .bold)); Text(verbatim: L10n.text(store.engine.description)).font(.system(size: TypeScale.section)).foregroundStyle(Theme.muted) }; Spacer() }.padding(.vertical, 8)
-                    EngineInstallPanel(store: store, installer: store.installation).padding(.top, 20)
-                    EngineServicesView(store: store, services: services).padding(.top, 28)
+                    Picker(L10n.text("运行引擎"), selection: $store.engineSection) { ForEach(EngineSection.allCases, id: \.self) { Text(verbatim: L10n.text($0.rawValue)).tag($0) } }
+                        .pickerStyle(.segmented).labelsHidden().fixedSize().padding(.top, 16).padding(.bottom, 20).accessibilityIdentifier("engine-sections")
+                    switch store.engineSection {
+                    case .overview:
+                    EngineInstallPanel(store: store, installer: store.installation)
+                    Text(verbatim: L10n.text("引擎信息")).font(.system(size: TypeScale.section, weight: .semibold)).padding(.top, 28).padding(.bottom, 20)
+                    HStack(spacing: 16) {
+                        InfoCell(symbol: "gearshape", title: L10n.text("版本"), value: store.engine.version)
+                        Divider().frame(height: 48)
+                        InfoCell(symbol: "laptopcomputer", title: L10n.text("运行设备"), value: store.inventory?.chip ?? "本机 Mac")
+                        Divider().frame(height: 48)
+                        InfoCell(symbol: "memorychip", title: L10n.text("系统内存"), value: "\((store.inventory?.memoryBytes ?? 0) / 1_073_741_824) GB")
+                    }.padding(.bottom, 24)
+                    HStack(spacing: 18) { Image(systemName: "internaldrive").font(.system(size: 30)).foregroundStyle(Theme.muted); VStack(alignment: .leading, spacing: 7) { Text(verbatim: L10n.text("模型与缓存")).foregroundStyle(Theme.muted).font(.system(size: TypeScale.body)); Text(verbatim: L10n.text(sizeLabel(store.inventory?.storageBytes ?? 0))).font(.system(size: TypeScale.body)) }; Spacer(); if let app = store.engine.appPath { Button(L10n.text("打开应用")) { NSWorkspace.shared.open(URL(fileURLWithPath: app)) }.buttonStyle(PlainAction()) } }.padding(.top, 20).overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
+                    Button { store.reveal(store.engine.path) } label: { Label(L10n.text("查看引擎安装位置"), systemImage: "folder") }.buttonStyle(PlainAction()).font(.system(size: TypeScale.body)).padding(.top, 16)
+                    case .services:
+                    EngineServicesView(store: store, services: services)
                     HStack {
+                        Button { store.showLaunch = true } label: { Label(L10n.text("启动服务…"), systemImage: "play.fill") }.buttonStyle(AccentButton()).disabled(!store.engine.canServe).accessibilityIdentifier("open-launch")
                         Button { store.prepareCommand() } label: { Label(L10n.text("按命令行启动…"), systemImage: "terminal") }.buttonStyle(.bordered).disabled(!store.engine.canServe || store.installation.running || store.maintaining).accessibilityIdentifier("command-launch-entry")
                         Spacer()
                         if let model = store.selectedModel { Button(L10n.text("检查模型更新…")) { store.modelUpdate = ModelUpdateDraft(model: model) }.buttonStyle(.bordered) }
                     }.padding(.top, 16)
-                    Divider().padding(.vertical, 20)
+                    case .configuration:
                     HStack { Text(verbatim: L10n.text("兼容的本地模型")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer(); Button { store.showEngineModels(store.engineID) } label: { Label(L10n.text("管理模型文件"), systemImage: "folder") }.buttonStyle(PlainAction()).font(.system(size: TypeScale.body)) }.padding(.bottom, 22)
-                    Text(verbatim: L10n.text(store.engine.modelRule)).font(.system(size: TypeScale.body, weight: .medium)).padding(.bottom, 8)
-                    Text(verbatim: L10n.text(store.engine.modalityGuide.summary)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.bottom, 14)
+                    HStack(spacing: 6) { Text(verbatim: L10n.text(store.engine.modelRule)).font(.system(size: TypeScale.body, weight: .medium)); InfoTip(text: store.engine.modalityGuide.summary) }.padding(.bottom, 14)
                     HStack { Button(L10n.text("引擎配置…")) { store.prepareEngineConfiguration() }.buttonStyle(.bordered).accessibilityIdentifier("engine-configuration"); if !store.engineEnabled(store.engineID) { Text(verbatim: L10n.text("此基座已停用")).foregroundStyle(Theme.warningText) } }.padding(.bottom, 14)
                     if store.engine.kind == .strata { StrataIntegrationView(store: store).padding(.bottom, 18) }
                     if let model = store.selectedModel { UsageBadge(model: model).padding(.bottom, 12) }
@@ -244,39 +378,26 @@ struct EngineWorkspace: View {
                                 }.buttonStyle(.plain).help(L10n.text(model.path))
                         } }
                     }
-                    Text(verbatim: L10n.text("启动配置")).font(.system(size: TypeScale.section, weight: .semibold)).padding(.top, 24)
-                    LaunchPanel(store: store, services: services).padding(.top, 16)
-                    Divider().padding(.vertical, 20)
-                    Text(verbatim: L10n.text("引擎信息")).font(.system(size: TypeScale.section, weight: .semibold)).padding(.bottom, 24)
-                    HStack(spacing: 16) {
-                        InfoCell(symbol: "gearshape", title: L10n.text("版本"), value: store.engine.version)
-                        Divider().frame(height: 48)
-                        InfoCell(symbol: "laptopcomputer", title: L10n.text("运行设备"), value: store.inventory?.chip ?? "本机 Mac")
-                        Divider().frame(height: 48)
-                        InfoCell(symbol: "memorychip", title: L10n.text("系统内存"), value: "\((store.inventory?.memoryBytes ?? 0) / 1_073_741_824) GB")
-                    }.padding(.bottom, 24)
-                    HStack(spacing: 18) { Image(systemName: "internaldrive").font(.system(size: 30)).foregroundStyle(Theme.muted); VStack(alignment: .leading, spacing: 7) { Text(verbatim: L10n.text("模型与缓存")).foregroundStyle(Theme.muted).font(.system(size: TypeScale.body)); Text(verbatim: L10n.text(sizeLabel(store.inventory?.storageBytes ?? 0))).font(.system(size: TypeScale.body)) }; Spacer(); if let app = store.engine.appPath { Button(L10n.text("打开应用")) { NSWorkspace.shared.open(URL(fileURLWithPath: app)) }.buttonStyle(PlainAction()) } }.padding(.top, 20).overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
-                    Button { store.reveal(store.engine.path) } label: { Label(L10n.text("查看引擎安装位置"), systemImage: "folder") }.buttonStyle(PlainAction()).font(.system(size: TypeScale.body)).padding(.top, 16)
-                    Divider().padding(.vertical, 18)
+                    case .maintenance:
                     HStack(spacing: 18) {
                         Button { store.prepareMaintenance(.uninstall) } label: { Label(L10n.text("卸载引擎…"), systemImage: "trash") }.buttonStyle(.bordered).tint(.red)
                         Button { store.prepareMaintenance(.residues) } label: { Label(L10n.text("清理残留…"), systemImage: "sparkles") }.buttonStyle(.bordered)
+                        InfoTip(text: "先预览安装包、残留和关联模型。专属权重可单独勾选，共享目录保留。")
                         if store.preparingMaintenance { ProgressView().controlSize(.small) }
                     }.disabled(store.preparingMaintenance || store.maintaining || store.scanning || store.installation.running)
-                    Text(verbatim: L10n.text("先预览安装包、残留和关联模型。专属权重可单独勾选，共享目录保留。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).padding(.top, 12)
                     if let warnings = store.inventory?.warnings, !warnings.isEmpty { Text(verbatim: L10n.text(warnings.joined(separator: "\n"))).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.warningText).padding(.top, 12) }
+                    }
                     }
                 }.padding(30)
             }.frame(maxWidth: .infinity)
         }
     }
     @ViewBuilder func engineRow(_ engine: Engine) -> some View {
-        let compact = sidebarWidth < 360
         let status = engine.installed ? "已安装" : engine.installation == "仅残留组件" ? "仅残留组件" : "未安装"
         let services = store.engineServiceCount(engine.id)
         // Single column: a fixed-width status column used to wrap names and truncate the model rule.
-        HStack(spacing: 12) {
-            EngineIcon(engine: engine, size: compact ? 36 : 40)
+        HStack(alignment: .top, spacing: 10) {
+            EngineIcon(engine: engine, size: 32)
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: L10n.text(engine.name)).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1)
                 HStack(spacing: 6) {
@@ -284,10 +405,10 @@ struct EngineWorkspace: View {
                     Text(verbatim: L10n.text(status))
                     // Uninstalled engines report a "—" placeholder version; hide it instead of showing noise.
                     if engine.version != "—", !engine.version.isEmpty { Text(verbatim: "· " + L10n.text(EngineVersionPolicy.displayVersion(engine))) }
-                }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(1)
+                }.font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).lineLimit(1)
                 let detail = services > 0 ? "\(services) 个服务实例" : engine.installation
-                if detail != status { Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1) }
-                Text(verbatim: L10n.text(engine.modelRule)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.linkColor).lineLimit(1)
+                if detail != status { Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.caption)).foregroundStyle(.secondary).lineLimit(1) }
+                Text(verbatim: L10n.text(engine.modelRule)).font(.system(size: TypeScale.caption)).foregroundStyle(.secondary).lineLimit(1)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -365,16 +486,27 @@ struct EmptyMessage: View {
 struct ModelWorkspace: View {
     @ObservedObject var store: AppStore
     var sidebarWidth: CGFloat
+    var categoryPicker: some View {
+        Picker(L10n.text("模型分类"), selection: $store.modelFilter) { ForEach(["全部", "主模型", "附属模型"], id: \.self) { Text(verbatim: L10n.text($0)) } }.labelsHidden()
+    }
     var body: some View {
         HStack(spacing: 0) {
             if !store.sidebarHidden {
             VStack(alignment: .leading, spacing: 12) {
-                HStack { Text(verbatim: L10n.text("模型文件")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); Button { store.importLocalModels() } label: { Image(systemName: "plus").font(.system(size: 15)).frame(width: 30, height: 28).contentShape(Rectangle()) }.buttonStyle(.borderless).help(L10n.text("导入本地模型文件或目录")).accessibilityLabel(L10n.text("导入本地模型")); SidebarToggleButton(store: store) }.padding(.bottom, 4)
+                SidebarHeader(title: "模型文件") {
+                    SidebarIconButton(symbol: "plus", help: "导入本地模型文件或目录") { store.importLocalModels() }
+                    SidebarToggleButton(store: store)
+                }.padding(.bottom, 4)
                 TextField(L10n.text("搜索名称、格式或路径"), text: $store.search).textFieldStyle(.roundedBorder).font(.system(size: TypeScale.body)).accessibilityIdentifier("model-search").onChange(of: store.search) { _, _ in selectVisibleModel() }
                 Picker(L10n.text("模型基座"), selection: $store.modelEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.enabledEngines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelEngineFilter) { _, _ in selectVisibleModel() }
-                Picker(L10n.text("模型分类"), selection: $store.modelFilter) { ForEach(["全部", "主模型", "附属模型"], id: \.self) { Text(verbatim: L10n.text($0)) } }.pickerStyle(.segmented).labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelFilter) { _, _ in selectVisibleModel() }.padding(.bottom, 4)
-                ScrollView { VStack(spacing: 6) { ForEach(store.filteredModels) { model in
-                    Button { store.selectedFileID = model.id } label: {
+                // Segmented when it fits; long translations in a narrow sidebar fall back to a menu instead of
+                // forcing the column wider than the sidebar (which clipped the whole sidebar).
+                ViewThatFits(in: .horizontal) {
+                    categoryPicker.pickerStyle(.segmented).fixedSize()
+                    categoryPicker.pickerStyle(.menu).fixedSize()
+                }.frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelFilter) { _, _ in selectVisibleModel() }.padding(.bottom, 4)
+                List(selection: $store.selectedFileID) {
+                    ForEach(store.filteredModels) { model in
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: model.kind == .speech ? "waveform" : model.kind == .adapter ? "slider.horizontal.3" : model.kind == .embedding ? "text.magnifyingglass" : "cube").font(.system(size: 14)).foregroundStyle(Theme.linkColor)
                                 .frame(width: 28, height: 28).background(Theme.linkColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
@@ -385,7 +517,7 @@ struct ModelWorkspace: View {
                                     Circle().fill(model.complete ? Color.green : Color.orange).frame(width: 6, height: 6)
                                     Text(verbatim: L10n.text("\(model.format) · \(sizeLabel(model.bytes))")).lineLimit(1)
                                     if !model.complete { Text(verbatim: L10n.text("文件不完整")).foregroundStyle(Theme.warningText) }
-                                }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                                }.font(.system(size: TypeScale.callout)).foregroundStyle(.secondary)
                                     .accessibilityElement(children: .combine).accessibilityLabel(L10n.text("\(model.format) · \(sizeLabel(model.bytes)) · " + (model.complete ? "文件检查通过" : "文件不完整")))
                                 ViewThatFits(in: .horizontal) {
                                     HStack(spacing: 6) { UsageBadge(model: model); ModelCapabilityBadge(capabilities: store.modelCapabilities(model), compact: true) }
@@ -393,13 +525,19 @@ struct ModelWorkspace: View {
                                 }
                             }
                             Spacer(minLength: 0)
-                        }.padding(10).frame(maxWidth: .infinity, alignment: .leading).background(store.selectedFileID == model.id ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
-                    }.buttonStyle(.plain).help(L10n.text(model.path))
-                } } }
+                        }.padding(.vertical, 4).tag(Optional(model.id)).listRowSeparator(.hidden).help(L10n.text(model.path))
+                        .contextMenu {
+                            Button(L10n.text("在 Finder 中打开")) { store.reveal(model.path) }
+                            Button(L10n.text("删除模型…"), role: .destructive) { store.deleteModel(model) }
+                        }
+                    }
+                }.sidebarList()
+                // ⌫ goes through deleteModel, which always asks first (Cancel is the default button).
+                .onDeleteCommand { if let model = store.selectedFile { store.deleteModel(model) } }
                 HStack { Text(verbatim: L10n.text("\(store.filteredModels.count) 个模型条目")); Spacer(); Text(verbatim: L10n.text("目录总占用 " + sizeLabel(store.inventory?.storageBytes ?? 0))) }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 ScanStatus(store: store)
-            }.padding(20).frame(width: sidebarWidth).background(Theme.sidebar)
-            Rectangle().fill(Theme.line).frame(width: 1)
+            }.padding(20).frame(width: sidebarWidth, alignment: .leading).clipped().background(Theme.sidebar)
+            SidebarResizeHandle(store: store, width: sidebarWidth)
             } else { SidebarRail(store: store) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -453,34 +591,38 @@ struct ServiceWorkspace: View {
     var body: some View {
         HStack(spacing: 0) {
             if !store.sidebarHidden {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack { Text(verbatim: L10n.text("模型服务")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); SidebarToggleButton(store: store) }
-                Text(verbatim: L10n.text("本工具服务与现有本地接口")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
-                Picker(L10n.text("模型基座"), selection: $store.serviceEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.engines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.onChange(of: store.serviceEngineFilter) { _, _ in store.selectVisibleService() }
-                Button { store.gatewaySelected = true; store.synchronizeGateway(); Task { await store.gateway.poll() } } label: {
-                    HStack(spacing: 12) { Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(Theme.linkColor); VStack(alignment: .leading, spacing: 5) { Text(verbatim: L10n.text("统一网关")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(store.gateway.ready ? "运行中 · \(store.gateway.routes.filter(\.enabled).count) 个模型" : "本机与外部接口统一接入")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }; Spacer() }.padding(14).background(store.gatewaySelected ? Theme.selection : Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
-                }.buttonStyle(.plain).accessibilityIdentifier("show-gateway")
-                ScrollView { VStack(alignment: .leading, spacing: 8) {
-                    Text(verbatim: L10n.text("本工具管理")).font(.system(size: TypeScale.callout, weight: .semibold)).foregroundStyle(Theme.muted).padding(.top, 12)
-                    if store.visibleServices.isEmpty { Text(verbatim: L10n.text("此范围还没有配置服务")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.vertical, 15) }
-                    ForEach(store.visibleServices) { spec in
-                        HStack(spacing: 0) {
-                            Button { store.showService(spec) } label: { serviceRow(title: store.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, detail: "\(spec.modelName) · \(spec.port)", status: services.statusTitle(spec), color: services.status(spec).color, selected: store.selectedServiceID == spec.id && store.selectedExternal == nil) }.buttonStyle(.plain)
-                            if services.canRemoveConfiguration(spec) {
-                                Button(role: .destructive) { store.removeServiceConfiguration(spec) } label: { Image(systemName: "trash").frame(width: 36, height: 44) }.buttonStyle(.plain).foregroundStyle(Theme.muted).help(L10n.text("删除服务配置，保留模型文件和日志")).accessibilityLabel(L10n.text("删除端口 \(spec.port) 的服务配置")).accessibilityIdentifier("delete-service-\(spec.id)")
-                            }
-                        }.contextMenu {
-                            Button(L10n.text("复制接口地址")) { store.copy("http://127.0.0.1:\(spec.port)/v1") }
-                            Button(L10n.text("删除服务配置"), role: .destructive) { store.removeServiceConfiguration(spec) }.disabled(!services.canRemoveConfiguration(spec))
+            VStack(alignment: .leading, spacing: SidebarMetrics.spacing) {
+                SidebarHeader(title: "模型服务") {
+                    SidebarIconButton(symbol: "plus", help: "启动服务…") { store.showLaunch = true }.accessibilityIdentifier("new-service")
+                    SidebarToggleButton(store: store)
+                }.padding(.bottom, 4)
+                Picker(L10n.text("模型基座"), selection: $store.serviceEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.engines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.serviceEngineFilter) { _, _ in store.selectVisibleService() }
+                List(selection: Binding(get: { serviceSelection }, set: { selectService($0) })) {
+                    HStack(spacing: 10) { SidebarSymbol(symbol: "point.3.connected.trianglepath.dotted"); VStack(alignment: .leading, spacing: 3) { Text(verbatim: L10n.text("统一网关")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(store.gateway.ready ? "运行中 · \(store.gateway.routes.filter(\.enabled).count) 个模型" : "本机与外部接口统一接入")).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary) }; Spacer(minLength: 0) }.padding(.vertical, 4).tag(ServiceListSelection.gateway).listRowSeparator(.hidden).accessibilityIdentifier("show-gateway")
+                    Section { 
+                        if store.visibleServices.isEmpty { Text(verbatim: L10n.text("此范围还没有配置服务")).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).listRowSeparator(.hidden) }
+                        ForEach(store.visibleServices) { spec in
+                            serviceRow(title: store.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, detail: "\(spec.modelName) · \(spec.port)", status: services.statusTitle(spec), color: services.status(spec).color, engine: store.engines.first { $0.id == spec.engineID })
+                                .tag(ServiceListSelection.managed(spec.id)).listRowSeparator(.hidden)
+                                .contextMenu {
+                                    Button(L10n.text("复制接口地址")) { store.copy("http://127.0.0.1:\(spec.port)/v1") }
+                                    Button(L10n.text("删除服务配置…"), role: .destructive) { store.serviceRemoval = spec }.disabled(!services.canRemoveConfiguration(spec))
+                                }
                         }
-                    }
-                    Text(verbatim: L10n.text("外部启动")).font(.system(size: TypeScale.callout, weight: .semibold)).foregroundStyle(Theme.muted).padding(.top, 22)
-                    if store.visibleExternalServices.isEmpty { Text(verbatim: L10n.text("未发现此范围的本地接口")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.vertical, 15) }
-                    ForEach(store.visibleExternalServices) { item in Button { store.gatewaySelected = false; store.selectedExternal = item.port } label: { serviceRow(title: item.engineName, detail: "127.0.0.1:\(item.port)", status: item.ready ? "接口可用" : "端口已占用", color: item.ready ? .green : .orange, selected: store.selectedExternal == item.port && !store.gatewaySelected) }.buttonStyle(.plain) }
-                } }
+                    } header: { SidebarSectionTitle(title: "由 ModelDock 管理") }
+                    Section {
+                        if store.visibleExternalServices.isEmpty { Text(verbatim: L10n.text("未发现此范围的本地接口")).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).listRowSeparator(.hidden) }
+                        ForEach(store.visibleExternalServices) { item in
+                            serviceRow(title: item.engineName, detail: "127.0.0.1:\(item.port)", status: item.ready ? "接口可用" : "端口已占用", color: item.ready ? .green : .orange)
+                                .tag(ServiceListSelection.external(item.port)).listRowSeparator(.hidden)
+                        }
+                    } header: { SidebarSectionTitle(title: "本机已发现") }
+                }.sidebarList()
+                // ⌫ only asks to delete a managed configuration; the confirmation alert does the rest.
+                .onDeleteCommand { if case .managed(let id) = serviceSelection, let spec = services.records.first(where: { $0.id == id }), services.canRemoveConfiguration(spec) { store.serviceRemoval = spec } }
                 Text(verbatim: L10n.text("每 3 秒检查本机常用模型端口")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
-            }.padding(24).frame(width: sidebarWidth).background(Theme.sidebar)
-            Rectangle().fill(Theme.line).frame(width: 1)
+            }.padding(SidebarMetrics.padding).frame(width: sidebarWidth, alignment: .leading).clipped().background(Theme.sidebar)
+            SidebarResizeHandle(store: store, width: sidebarWidth)
             } else { SidebarRail(store: store) }
             ScrollView {
                 if store.gatewaySelected { GatewayWorkspace(store: store, gateway: store.gateway) }
@@ -513,20 +655,24 @@ struct ServiceWorkspace: View {
                             if spec.pid != nil { Button { store.stop(spec) } label: { Label(L10n.text("停止服务"), systemImage: "stop.fill") }.buttonStyle(AccentButton(destructive: true)).disabled(status == .stopping) }
                             else { Button { store.configureService(spec) } label: { Label(L10n.text("配置并启动"), systemImage: "play.fill") }.buttonStyle(AccentButton()) }
                             Button(L10n.text("复制地址")) { store.copy("http://127.0.0.1:\(spec.port)/v1") }.buttonStyle(.bordered)
-                            Button(L10n.text("打开服务页面")) { store.openEndpoint(spec.port) }.buttonStyle(.bordered).disabled(status != .running)
-                            if services.canRemoveConfiguration(spec) { Button(role: .destructive) { store.removeServiceConfiguration(spec) } label: { Image(systemName: "trash") }.buttonStyle(.bordered).help(L10n.text("删除服务配置，保留模型文件和日志")).accessibilityLabel(L10n.text("删除服务配置")) }
+                            // Only shown when usable; deletion lives at the bottom of the page, away from the primary action.
+                            if status == .running { Button(L10n.text("打开服务页面")) { store.openEndpoint(spec.port) }.buttonStyle(.bordered) }
                         }
                         if let error = services.errors[spec.id] { Text(verbatim: L10n.text(error)).foregroundStyle(Theme.errorText).font(.system(size: TypeScale.body)) }
                         if let command = spec.commandText ?? spec.launchArguments.map({ ([spec.engineExecutable ?? ""] + $0).map(ServiceCommand.quote).joined(separator: " ") }) { DisclosureGroup("启动命令") { Text(verbatim: L10n.text(command)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled).padding(.top, 8) } }
                         ConnectionEntry(store: store, port: spec.port)
                         if spec.engineID == "ollama" && status == .running { OllamaLoadedView(store: store, services: services, port: spec.port) }
                         Divider()
-                        HStack { Text(verbatim: L10n.text("运行日志")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer(); Button(L10n.text("在 Finder 中打开")) { store.reveal(services.logURL(spec.id).path) }.buttonStyle(PlainAction()) }
-                        Text(verbatim: services.log(spec.id)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, minHeight: 250, alignment: .topLeading).padding(20).background(Theme.line.opacity(0.35), in: RoundedRectangle(cornerRadius: 11))
-                        Button(role: .destructive) { store.removeServiceConfiguration(spec) } label: { Label(L10n.text("删除服务配置"), systemImage: "trash") }.buttonStyle(.bordered).disabled(!services.canRemoveConfiguration(spec)).help(L10n.text("保留模型文件和运行日志"))
+                        HStack(spacing: 16) {
+                            Text(verbatim: L10n.text("运行日志")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer()
+                            Toggle(L10n.text("跟随最新输出"), isOn: $store.followLog).toggleStyle(.checkbox).font(.system(size: TypeScale.callout))
+                            Button(L10n.text("在 Finder 中打开")) { store.reveal(services.logURL(spec.id).path) }.buttonStyle(PlainAction())
+                        }
+                        LogView(text: services.log(spec.id), follow: store.followLog)
+                        Button(role: .destructive) { store.serviceRemoval = spec } label: { Label(L10n.text("删除服务配置…"), systemImage: "trash") }.buttonStyle(.bordered).disabled(!services.canRemoveConfiguration(spec)).help(L10n.text("保留模型文件和运行日志"))
                     } else {
                         EmptyMessage(symbol: "server.rack", title: L10n.text("服务尚未配置"), detail: "在“运行引擎”选择兼容模型，即可启动本地服务。")
-                        Button(L10n.text("选择引擎与模型")) { store.tab = .engines }.buttonStyle(AccentButton())
+                        Button(L10n.text("启动服务…")) { store.showLaunch = true }.buttonStyle(AccentButton())
                         if !services.external.isEmpty { Text(verbatim: L10n.text("左侧已列出检测到的外部服务。")).foregroundStyle(Theme.muted) }
                     }
                 }.padding(34)
@@ -534,7 +680,28 @@ struct ServiceWorkspace: View {
             }.frame(maxWidth: .infinity)
         }
     }
-    func serviceRow(title: String, detail: String, status: String, color: Color, selected: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 10) { Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).lineLimit(1); StateLabel(title: status, color: color) }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(selected ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: 12)).contentShape(Rectangle())
+    var serviceSelection: ServiceListSelection? {
+        if store.gatewaySelected { return .gateway }
+        if let port = store.selectedExternal { return .external(port) }
+        return store.selectedServiceID.map { .managed($0) }
+    }
+    func selectService(_ selection: ServiceListSelection?) {
+        switch selection {
+        case .gateway: store.gatewaySelected = true; store.synchronizeGateway(); Task { await store.gateway.poll() }
+        case .managed(let id): if let spec = services.records.first(where: { $0.id == id }) { store.showService(spec) }
+        case .external(let port): store.gatewaySelected = false; store.selectedExternal = port
+        case nil: break
+        }
+    }
+    func serviceRow(title: String, detail: String, status: String, color: Color, engine: Engine? = nil) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            if let engine { EngineIcon(engine: engine, size: 32) } else { SidebarSymbol(symbol: "network") }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1)
+                Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                HStack(spacing: 6) { Circle().fill(color).frame(width: 6, height: 6); Text(verbatim: L10n.text(status)) }.font(.system(size: TypeScale.callout)).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }.padding(.vertical, 4)
     }
 }

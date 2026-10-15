@@ -3,13 +3,39 @@ import AppKit
 import SwiftUI
 import Combine
 
-enum AppTab: String, CaseIterable { case engines = "运行引擎", models = "模型文件", services = "模型服务", downloads = "下载导入", monitor = "资源与性能" }
+/// Engine detail is split into segments instead of one long page.
+enum EngineSection: String, CaseIterable { case overview = "概览", services = "服务实例", configuration = "配置", maintenance = "维护" }
+
+/// Ordered by everyday use: running services first, one-time engine setup later. Order drives the tab bar and ⌘1–⌘5.
+enum AppTab: String, CaseIterable { case services = "模型服务", models = "模型文件", downloads = "下载导入", engines = "运行引擎", monitor = "资源与性能" }
 
 @MainActor
 final class AppStore: ObservableObject {
     @Published var inventory: Inventory?
     @Published var scanning = false
-    @Published var tab: AppTab = .engines
+    @Published var tab: AppTab = .services
+    @Published var engineSection: EngineSection = .overview
+    /// One launch sheet for every entry point (engine, model, service); the store already holds its selections.
+    @Published var showLaunch = false
+    /// Run log follows new output by default; off keeps the reading position.
+    @Published var followLog = true
+    @Published var settingsTab = 0
+    @Published var systemNotifications = true { didSet { savePreferences() } }
+    @Published var menuBarIconOnly = false { didSet { savePreferences(); onMenuBarStyleChange?() } }
+    var onMenuBarStyleChange: (() -> Void)?
+    let notifier = AppNotifier()
+    /// Starts notification observers; skipped in test and capture modes so they never prompt for permission.
+    func beginNotifications() {
+        notifier.enabled = { [weak self] in self?.systemNotifications ?? false }
+        downloads.$jobs.sink { [weak self] jobs in self?.notifier.observe(downloads: jobs) }.store(in: &subscriptions)
+        services.$statuses.sink { [weak self] statuses in
+            guard let self else { return }
+            self.notifier.observe(services: statuses, controller: self.services) { id in
+                guard let spec = self.services.records.first(where: { $0.id == id }) else { return id }
+                return (self.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID) + " · " + spec.modelName
+            }
+        }.store(in: &subscriptions)
+    }
     @Published var engineID = "splash"
     @Published var engineConfigurations: [String: EngineConfiguration] = [:]
     @Published var engineConfigurationDraft: EngineConfigurationDraft?
@@ -62,6 +88,10 @@ final class AppStore: ObservableObject {
     @Published var windowCloseBehavior: WindowCloseBehavior = .keepRunning { didSet { savePreferences() } }
     @Published var appearance: AppAppearance = .system { didSet { savePreferences(); onAppearanceChange?() } }
     @Published var sidebarHidden = false { didSet { savePreferences() } }
+    /// User-dragged sidebar width; nil follows the window. Saved when a drag ends, not on every frame.
+    @Published var sidebarWidth: CGFloat?
+    var sidebarDragStart: CGFloat?
+    func saveSidebarWidth() { savePreferences() }
     /// 200 ms like system sidebars; instant when Reduce Motion is on.
     func toggleSidebar() {
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { sidebarHidden.toggle() }
@@ -95,6 +125,9 @@ final class AppStore: ObservableObject {
         windowCloseBehavior = preferences.windowCloseBehavior
         appearance = preferences.appearance
         sidebarHidden = preferences.sidebarHidden
+        sidebarWidth = preferences.sidebarWidth.map { CGFloat($0) }
+        systemNotifications = preferences.systemNotifications
+        menuBarIconOnly = preferences.menuBarIconOnly
         language = argumentValue("--language").flatMap(AppLanguage.init(rawValue:)) ?? preferences.language
         extraRoots = (try? Data(contentsOf: settingsURL)).flatMap { try? JSONDecoder().decode([String].self, from: $0) } ?? []
         L10n.select(language)
@@ -132,7 +165,7 @@ final class AppStore: ObservableObject {
     private func savePreferences() {
         do {
             try FileManager.default.createDirectory(at: preferencesURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONEncoder().encode(AppPreferences(windowCloseBehavior: windowCloseBehavior, language: language, appearance: appearance, sidebarHidden: sidebarHidden)).write(to: preferencesURL, options: .atomic)
+            try JSONEncoder().encode(AppPreferences(windowCloseBehavior: windowCloseBehavior, language: language, appearance: appearance, sidebarHidden: sidebarHidden, systemNotifications: systemNotifications, menuBarIconOnly: menuBarIconOnly, sidebarWidth: sidebarWidth.map(Double.init))).write(to: preferencesURL, options: .atomic)
             preferencesError = nil
         } catch { preferencesError = "设置未能保存，请重试。" }
     }
@@ -256,9 +289,11 @@ final class AppStore: ObservableObject {
         port = String(spec.port); context = spec.context
         inputMode = spec.inputMode ?? .automatic; projectorPath = spec.projectorPath ?? ""
         maximumLoadedModels = spec.maximumLoadedModels ?? maximumLoadedModels
-        tab = .engines
         normalizeStartupMode()
+        showLaunch = true
     }
+    /// Pending destructive action awaiting confirmation in the main view.
+    @Published var serviceRemoval: ServiceSpec?
     func removeServiceConfiguration(_ spec: ServiceSpec) {
         let index = services.records.firstIndex { $0.id == spec.id } ?? 0
         do {
@@ -287,7 +322,7 @@ final class AppStore: ObservableObject {
             try JSONEncoder().encode(next).write(to: settingsURL, options: .atomic); extraRoots = next
         }
     }
-    func launch(model: LocalModel, engine: Engine) { selectedModels[engine.id] = model.id; chooseEngine(engine.id); tab = .engines }
+    func launch(model: LocalModel, engine: Engine) { selectedModels[engine.id] = model.id; chooseEngine(engine.id); showLaunch = true }
 
     func maintenanceBlockers(_ plan: MaintenancePlan, selectedIDs: Set<String>? = nil, includeDownloads: Bool = true) -> [String] {
         var blockers = plan.blockers

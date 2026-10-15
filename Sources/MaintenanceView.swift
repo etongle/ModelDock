@@ -46,7 +46,7 @@ struct MaintenanceView: View {
 
 struct UsageBadge: View {
     var model: LocalModel
-    var body: some View { Text(verbatim: L10n.text(model.usageTitle)).font(.system(size: TypeScale.caption, weight: .medium)).foregroundStyle(model.exclusiveEngine == nil ? Theme.linkColor : Theme.warningText).padding(.horizontal, 8).padding(.vertical, 4).background((model.exclusiveEngine == nil ? Theme.accent : Color.orange).opacity(0.08), in: Capsule()).help(L10n.text(model.usageExplanation)) }
+    var body: some View { Text(verbatim: L10n.text(model.usageTitle)).font(.system(size: TypeScale.caption, weight: .medium)).foregroundStyle(model.exclusiveEngine == nil ? Theme.muted : Theme.warningText).padding(.horizontal, 8).padding(.vertical, 4).background(model.exclusiveEngine == nil ? Theme.line : Color.orange.opacity(0.08), in: Capsule()).help(L10n.text(model.usageExplanation)) }
 }
 
 @MainActor
@@ -66,7 +66,7 @@ struct CompatibilityRows: View {
                 let match = model.compatibility(with: engine)
                 HStack(alignment: .top, spacing: 14) {
                     EngineIcon(engine: engine, size: 40)
-                    VStack(alignment: .leading, spacing: 6) { HStack { Text(verbatim: L10n.text(engine.name)).fontWeight(.semibold); Text(verbatim: L10n.text(match.title)).font(.system(size: TypeScale.caption, weight: .medium)).foregroundStyle(match.selectable ? Theme.linkColor : match.level == .importRequired ? Theme.warningText : Theme.muted); if !engine.installed { Text(verbatim: L10n.text("未安装")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) } }; Text(verbatim: L10n.text(match.reason)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
+                    VStack(alignment: .leading, spacing: 6) { HStack { Text(verbatim: L10n.text(engine.name)).fontWeight(.semibold); Text(verbatim: L10n.text(match.title)).font(.system(size: TypeScale.caption, weight: .medium)).foregroundStyle(match.selectable ? Theme.muted : match.level == .importRequired ? Theme.warningText : Theme.muted); if !engine.installed { Text(verbatim: L10n.text("未安装")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) } }; Text(verbatim: L10n.text(match.reason)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
                     Spacer(minLength: 6)
                     if match.selectable { Button(L10n.text("配置服务")) { store.launch(model: model, engine: engine) }.buttonStyle(.bordered).disabled(!engine.canServe || store.maintaining) }
                     else if match.level == .importRequired && engine.kind == .splash { Button(L10n.text("准备并启动…")) { store.prepareSplashSource(model, engine: engine) }.buttonStyle(.bordered).disabled(!engine.canServe || store.maintaining) }
