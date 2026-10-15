@@ -178,7 +178,7 @@
   "模型分类": "Catégorie du modèle",
   "模型基座": "Moteur",
   "模型库 ": "Bibliothèque de modèles ",
-  "模型库：": "Bibliothèque de modèles :",
+  "模型库：": "Bibliothèque de modèles : ",
   "模型性能": "Performance du modèle",
   "模型版本": "Version du modèle",
   "模型配置": "Configuration du modèle",
@@ -1410,5 +1410,10 @@
   "Strata Metal 使用匹配的 Flash-Next 主权重、n-gram、词表和模型包；MTP 加速与图片组件按准备及启动设置启用。": "Strata Metal utilise des poids Flash-Next, des tables n-gram, un vocabulaire et des paquets de modèles compatibles. L’accélération MTP et les composants d’image suivent les réglages de préparation et de lancement.",
   "Strata Metal 为实验性支持，需要 macOS 15+ 和 Command Line Tools。从官方源码编译，可准备 Flash-Next 模型、MTP 草稿及匹配的图片组件。": "Strata Metal est expérimental et nécessite macOS 15+ et les Command Line Tools. Compilez les sources officielles, puis préparez les modèles Flash-Next, les brouillons MTP et les composants d’image compatibles.",
   "Flash-Next 分层本地推理服务": "Service d’inférence local Flash-Next à plusieurs niveaux",
-  "官方 Metal 源码编译": "Compilation des sources Metal officielles"
+  "官方 Metal 源码编译": "Compilation des sources Metal officielles",
+  "外观": "Apparence",
+  "浅色": "Clair",
+  "深色": "Sombre",
+  "隐藏边栏": "Masquer la barre latérale",
+  "显示边栏": "Afficher la barre latérale"
 }

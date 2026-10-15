@@ -1410,5 +1410,10 @@
   "Splash packed 是旧版专用封装，需要支持此格式的 Splash 组件。新版 Splash 从上游 MLX / GGUF 加载；这类 packed 文件仍不能直接交给其他引擎。": "Splash packed 是旧版专用封装，需要支持此格式的 Splash 组件。新版 Splash 从上游 MLX / GGUF 加载；这类 packed 文件仍不能直接交给其他引擎。",
   "Strata Metal 为实验性支持，需要 macOS 15+ 和 Command Line Tools。从官方源码编译，可准备 Flash-Next 模型、MTP 草稿及匹配的图片组件。": "Strata Metal 为实验性支持，需要 macOS 15+ 和 Command Line Tools。从官方源码编译，可准备 Flash-Next 模型、MTP 草稿及匹配的图片组件。",
   "主权重与 n-gram 使用下载任务管理，可暂停、续传和查看每个文件。MTP、词表与视觉组件在准备阶段校验并关联；普通 Qwen 27B 或 Splash 草稿不能替代。型号支持以官方 Mac 列表为准。": "主权重与 n-gram 使用下载任务管理，可暂停、续传和查看每个文件。MTP、词表与视觉组件在准备阶段校验并关联；普通 Qwen 27B 或 Splash 草稿不能替代。型号支持以官方 Mac 列表为准。",
-  "DFlash2 可交给新版 Splash 或支持 DFlash 的 MLX-VLM 多模态组件。MLX-LM 不支持此格式；新版 Splash 必须使用草稿。尺寸检查通过后，仍由引擎验证主模型家族是否匹配。": "DFlash2 可交给新版 Splash 或支持 DFlash 的 MLX-VLM 多模态组件。MLX-LM 不支持此格式；新版 Splash 必须使用草稿。尺寸检查通过后，仍由引擎验证主模型家族是否匹配。"
+  "DFlash2 可交给新版 Splash 或支持 DFlash 的 MLX-VLM 多模态组件。MLX-LM 不支持此格式；新版 Splash 必须使用草稿。尺寸检查通过后，仍由引擎验证主模型家族是否匹配。": "DFlash2 可交给新版 Splash 或支持 DFlash 的 MLX-VLM 多模态组件。MLX-LM 不支持此格式；新版 Splash 必须使用草稿。尺寸检查通过后，仍由引擎验证主模型家族是否匹配。",
+  "外观": "外观",
+  "浅色": "浅色",
+  "深色": "深色",
+  "隐藏边栏": "隐藏边栏",
+  "显示边栏": "显示边栏"
 }

@@ -4,37 +4,34 @@ import SwiftUI
 struct StatusDownloads: View {
     @ObservedObject var store: AppStore
     @ObservedObject var downloads: DownloadController
+    /// The menu bar only surfaces work that still needs attention; finished jobs stay in Downloads.
     var current: ModelDownload? {
-        downloads.jobs.first { $0.id == downloads.activeID } ??
-        downloads.jobs.first { $0.state != .complete } ?? downloads.jobs.first
+        downloads.jobs.first { $0.id == downloads.activeID } ?? downloads.jobs.first { $0.state != .complete }
     }
     var body: some View {
-        if !downloads.jobs.isEmpty {
+        if let job = current {
             Divider()
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Label(L10n.text("下载任务 · \(downloads.jobs.count)"), systemImage: "arrow.down.circle").font(.system(size: TypeScale.callout, weight: .semibold))
+                    Text(verbatim: L10n.text("下载任务 · \(downloads.jobs.filter { $0.state != .complete }.count)")).font(.system(size: TypeScale.caption, weight: .semibold)).foregroundStyle(Theme.muted)
                     Spacer()
-                    Button(L10n.text("管理下载")) { manage() }.font(.system(size: TypeScale.callout)).buttonStyle(.bordered).accessibilityIdentifier("status-manage-downloads")
+                    Button(L10n.text("管理下载")) { manage() }.buttonStyle(.plain).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.linkColor).accessibilityIdentifier("status-manage-downloads")
                 }
-                if let job = current {
-                    HStack { Text(job.repository).font(.system(size: TypeScale.callout, weight: .medium)).lineLimit(1).help(L10n.text(job.repository)); Spacer(); Text(verbatim: L10n.text(job.state.rawValue)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.linkColor) }
-                    if job.totalKnown && job.total > 0 { ProgressView(value: min(Double(job.received), Double(job.total)), total: Double(job.total)).tint(Theme.accent) }
-                    HStack {
-                        Text(verbatim: L10n.text(job.percentageLabel))
-                        Spacer()
-                        Text(verbatim: L10n.text(job.totalKnown ? "\(sizeLabel(job.received)) / \(sizeLabel(job.total))" : sizeLabel(job.received)))
-                    }.font(.system(size: TypeScale.caption)).monospacedDigit().foregroundStyle(Theme.muted).accessibilityIdentifier("status-download-progress")
-                    HStack {
-                        Text(verbatim: L10n.text("下载速度 " + downloads.speedLabel(job.id))).font(.system(size: TypeScale.callout)).monospacedDigit().foregroundStyle(Theme.linkColor)
-                        Spacer()
-                        if downloads.activeID == job.id { Button(L10n.text("暂停")) { downloads.pause() }.buttonStyle(.bordered).controlSize(.small) }
-                        else if job.state != .complete { Button(L10n.text(job.resumeBlockedReason != nil ? "重新下载" : (job.pausedFiles ?? []).isEmpty ? "继续" : "继续全部")) { downloads.resume(job.id, includingPausedFiles: true) }.buttonStyle(.bordered).controlSize(.small).disabled(downloads.activeID != nil || downloads.deletingIDs.contains(job.id)) }
-                    }.accessibilityIdentifier("status-download-speed")
-                    Text(verbatim: L10n.text(URL(fileURLWithPath: job.root).appendingPathComponent(job.folder).path)).font(.system(size: TypeScale.caption, design: .monospaced)).foregroundStyle(Theme.muted).lineLimit(1).help(L10n.text(URL(fileURLWithPath: job.root).appendingPathComponent(job.folder).path))
-                    if let error = job.error { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.errorText).lineLimit(2) }
+                HStack(alignment: .firstTextBaseline) {
+                    Text(job.repository).font(.system(size: TypeScale.body, weight: .medium)).lineLimit(1).truncationMode(.middle).help(L10n.text(job.repository))
+                    Spacer()
+                    Text(verbatim: L10n.text(downloads.activeID == job.id ? job.percentageLabel : job.state.rawValue)).font(.system(size: TypeScale.callout)).monospacedDigit().foregroundStyle(Theme.linkColor)
                 }
-            }.accessibilityIdentifier("status-download-management")
+                if job.totalKnown && job.total > 0 { UsageBar(fraction: Double(job.received) / Double(job.total)) }
+                HStack {
+                    Text(verbatim: L10n.text(job.totalKnown ? "\(sizeLabel(job.received)) / \(sizeLabel(job.total))" : sizeLabel(job.received)) + (downloads.activeID == job.id ? " · " + downloads.speedLabel(job.id) : ""))
+                        .font(.system(size: TypeScale.caption)).monospacedDigit().foregroundStyle(Theme.muted).accessibilityIdentifier("status-download-progress")
+                    Spacer()
+                    if downloads.activeID == job.id { Button(L10n.text("暂停")) { downloads.pause() }.controlSize(.small) }
+                    else { Button(L10n.text(job.resumeBlockedReason != nil ? "重新下载" : (job.pausedFiles ?? []).isEmpty ? "继续" : "继续全部")) { downloads.resume(job.id, includingPausedFiles: true) }.controlSize(.small).disabled(downloads.activeID != nil || downloads.deletingIDs.contains(job.id)) }
+                }.accessibilityIdentifier("status-download-speed")
+                if let error = job.error { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.errorText).lineLimit(2) }
+            }.padding(16).accessibilityIdentifier("status-download-management")
         }
     }
     func manage() {

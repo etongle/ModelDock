@@ -37,6 +37,7 @@
 <p>Use an Apple Silicon Mac running macOS 14 or later. Download a DMG or ZIP from the project's Releases page, move <strong>ModelDock.app</strong> to <strong>Applications</strong>, and open it. Models and third-party engines are installed separately; the app bundles the Python runtime needed by its gateway.</p>
 <p>Current packages use an ad-hoc signature and have not been Apple-notarized. If a trusted downloaded copy is blocked, attempt to open it, then follow the <strong>Open Anyway</strong> flow in <strong>System Settings → Privacy &amp; Security</strong> described by <a href="https://support.apple.com/102445">Apple</a>. Only open distributions you trust.</p>
 <p>English is the default on first launch, including on non-English systems. Click the <strong>globe/language button at the top right of the main window</strong>, then choose <strong>English</strong>, <strong>简体中文</strong>, <strong>Français</strong>, <strong>Português</strong>, or <strong>Follow system</strong>. In a narrow window, the button shows the globe and a language abbreviation such as <strong>EN</strong>. You can also open <strong>ModelDock → Settings…</strong> (⌘,) to change <strong>Interface language</strong>. The interface changes immediately and the choice is saved.</p>
+<p>Under <strong>Settings → Appearance</strong>, choose <strong>Follow system</strong>, <strong>Light</strong>, or <strong>Dark</strong>; the main window and menu-bar panel switch immediately. To give the details more room, click the sidebar button at the right of a sidebar's title (or press ⌃⌘S); a slim rail keeps the button to bring it back, and the choice is remembered.</p>
 <p><img alt="Interface language and close behavior" src="assets/en-settings.png" /></p>
 <p>The main window closes to the background by default. A second option quits the app when closing its window, with a confirmation each time.</p>
 <h3 id="update-modeldock-itself">Update ModelDock itself</h3>
@@ -130,8 +131,8 @@ https://huggingface.co/mlx-community/Qwen3.8-27B-4bit
 <p>Web search is a client/tool capability. Enable the offered search-tool integration where supported and configure any required tool credentials. It is not enabled by adding a parameter to ordinary text generation alone.</p>
 <h2 id="9-monitor-from-the-menu-bar">9. Monitor from the menu bar</h2>
 <p><img alt="System and service resources" src="assets/en-resources.png" /></p>
-<p>The menu-bar panel shows system CPU, memory, disk and library usage, service resources, downloads, and recent measurements when available. Click a download's management action to open the relevant task.</p>
-<p>Clicking inside the panel keeps it usable; clicking another window or desktop area closes it. Clicking its status icon toggles the panel. <strong>Open manager</strong> reopens the main window. Closing the main window keeps background work running by default; <strong>Quit</strong> pauses downloads and stops monitoring while independently running model services remain available.</p>
+<p>The menu-bar panel shows system CPU, memory, disk and library usage, service resources, downloads that are still in progress or need attention, and recent measurements when available. Click a download's management action to open the relevant task.</p>
+<p>Clicking inside the panel keeps it usable; clicking another window or desktop area closes it. Clicking its status icon toggles the panel. <strong>Open Management Interface</strong> reopens the main window. Closing the main window keeps background work running by default; <strong>Quit ModelDock</strong> pauses downloads and stops monitoring while independently running model services remain available.</p>
 <p>Performance values labeled as measurements come from an actual benchmark or supported service logs. Unknown measurements remain unavailable; do not compare startup estimates with generation throughput.</p>
 <h2 id="10-troubleshooting">10. Troubleshooting</h2>
 <table>
@@ -192,7 +193,11 @@ https://huggingface.co/mlx-community/Qwen3.8-27B-4bit
 </tr>
 <tr>
 <td>⌘R</td>
-<td>Rescan engines/models</td>
+<td>Rescan engines/models (also ↻ under the engine and model lists)</td>
+</tr>
+<tr>
+<td>⌃⌘S</td>
+<td>Hide or show the sidebar</td>
 </tr>
 <tr>
 <td>⌘O</td>
