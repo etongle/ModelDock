@@ -490,7 +490,7 @@
   "测试服务未能就绪": "Test service failed to become ready",
   "测试服务未能退出": "Test service failed to exit",
   "添加外部模型接口": "Add external model interface",
-  "清理未完成文件…": "Cleaning up incomplete files…",
+  "清理未完成文件…": "Clean Up Incomplete Files…",
   "粘贴模型地址开始": "Paste model address to start",
   "继续所有暂停文件": "Resume all paused files",
   "编辑外部模型接口": "Edit external model interface",
@@ -1421,5 +1421,7 @@
   "引擎维护进行中，完成后可开始下载": "Engine maintenance is running; downloads can start when it finishes",
   "删除服务配置…": "Delete service configuration…",
   "由 ModelDock 管理": "Managed by ModelDock",
-  "本机已发现": "Found on this Mac"
+  "本机已发现": "Found on this Mac",
+  "新建下载": "New Download",
+  "访问令牌（可选）": "Access token (optional)"
 }
