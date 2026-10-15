@@ -17,6 +17,8 @@ final class AppStore: ObservableObject {
     @Published var engineSection: EngineSection = .overview
     /// One launch sheet for every entry point (engine, model, service); the store already holds its selections.
     @Published var showLaunch = false
+    /// Run log follows new output by default; off keeps the reading position.
+    @Published var followLog = true
     @Published var engineID = "splash"
     @Published var engineConfigurations: [String: EngineConfiguration] = [:]
     @Published var engineConfigurationDraft: EngineConfigurationDraft?

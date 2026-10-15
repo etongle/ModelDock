@@ -190,6 +190,28 @@ struct InfoTip: View {
     }
 }
 
+/// Run log in its own fixed-height scroll area, like a console. While following, new output scrolls
+/// to the end; turning it off keeps the position so older lines can be read while the log updates.
+struct LogView: View {
+    var text: String
+    var follow: Bool
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    Text(verbatim: text).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .topLeading).padding(16)
+                    Color.clear.frame(height: 1).id("log-end")
+                }
+            }
+            .frame(height: 380).background(Theme.line.opacity(0.35), in: RoundedRectangle(cornerRadius: 11))
+            .onAppear { proxy.scrollTo("log-end", anchor: .bottom) }
+            .onChange(of: text) { _, _ in if follow { proxy.scrollTo("log-end", anchor: .bottom) } }
+            .onChange(of: follow) { _, on in if on { proxy.scrollTo("log-end", anchor: .bottom) } }
+        }
+    }
+}
+
 /// Last scan time with an inline rescan control, shown under the engine and model lists that a scan refreshes.
 @MainActor
 struct ScanStatus: View {
@@ -609,8 +631,12 @@ struct ServiceWorkspace: View {
                         ConnectionEntry(store: store, port: spec.port)
                         if spec.engineID == "ollama" && status == .running { OllamaLoadedView(store: store, services: services, port: spec.port) }
                         Divider()
-                        HStack { Text(verbatim: L10n.text("运行日志")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer(); Button(L10n.text("在 Finder 中打开")) { store.reveal(services.logURL(spec.id).path) }.buttonStyle(PlainAction()) }
-                        Text(verbatim: services.log(spec.id)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, minHeight: 250, alignment: .topLeading).padding(20).background(Theme.line.opacity(0.35), in: RoundedRectangle(cornerRadius: 11))
+                        HStack(spacing: 16) {
+                            Text(verbatim: L10n.text("运行日志")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer()
+                            Toggle(L10n.text("跟随最新输出"), isOn: $store.followLog).toggleStyle(.checkbox).font(.system(size: TypeScale.callout))
+                            Button(L10n.text("在 Finder 中打开")) { store.reveal(services.logURL(spec.id).path) }.buttonStyle(PlainAction())
+                        }
+                        LogView(text: services.log(spec.id), follow: store.followLog)
                         Button(role: .destructive) { store.serviceRemoval = spec } label: { Label(L10n.text("删除服务配置…"), systemImage: "trash") }.buttonStyle(.bordered).disabled(!services.canRemoveConfiguration(spec)).help(L10n.text("保留模型文件和运行日志"))
                     } else {
                         EmptyMessage(symbol: "server.rack", title: L10n.text("服务尚未配置"), detail: "在“运行引擎”选择兼容模型，即可启动本地服务。")
