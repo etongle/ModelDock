@@ -462,6 +462,9 @@ struct EmptyMessage: View {
 struct ModelWorkspace: View {
     @ObservedObject var store: AppStore
     var sidebarWidth: CGFloat
+    var categoryPicker: some View {
+        Picker(L10n.text("模型分类"), selection: $store.modelFilter) { ForEach(["全部", "主模型", "附属模型"], id: \.self) { Text(verbatim: L10n.text($0)) } }.labelsHidden()
+    }
     var body: some View {
         HStack(spacing: 0) {
             if !store.sidebarHidden {
@@ -472,7 +475,12 @@ struct ModelWorkspace: View {
                 }.padding(.bottom, 4)
                 TextField(L10n.text("搜索名称、格式或路径"), text: $store.search).textFieldStyle(.roundedBorder).font(.system(size: TypeScale.body)).accessibilityIdentifier("model-search").onChange(of: store.search) { _, _ in selectVisibleModel() }
                 Picker(L10n.text("模型基座"), selection: $store.modelEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.enabledEngines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelEngineFilter) { _, _ in selectVisibleModel() }
-                Picker(L10n.text("模型分类"), selection: $store.modelFilter) { ForEach(["全部", "主模型", "附属模型"], id: \.self) { Text(verbatim: L10n.text($0)) } }.pickerStyle(.segmented).labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelFilter) { _, _ in selectVisibleModel() }.padding(.bottom, 4)
+                // Segmented when it fits; long translations in a narrow sidebar fall back to a menu instead of
+                // forcing the column wider than the sidebar (which clipped the whole sidebar).
+                ViewThatFits(in: .horizontal) {
+                    categoryPicker.pickerStyle(.segmented).fixedSize()
+                    categoryPicker.pickerStyle(.menu).fixedSize()
+                }.frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelFilter) { _, _ in selectVisibleModel() }.padding(.bottom, 4)
                 List(selection: $store.selectedFileID) {
                     ForEach(store.filteredModels) { model in
                         HStack(alignment: .top, spacing: 10) {
