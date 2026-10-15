@@ -94,6 +94,8 @@ enum NetworkProbe {
 final class ServiceController: ObservableObject {
     @Published var records: [ServiceSpec] = []
     @Published var statuses: [String: ServiceStatus] = [:]
+    /// Services whose stop was requested here, so a later exit is not reported as unexpected.
+    var stopRequested = Set<String>()
     @Published var external: [ObservedService] = []
     @Published var errors: [String: String] = [:]
     @Published var polling = false
@@ -262,7 +264,7 @@ final class ServiceController: ObservableObject {
 
     func stop(_ spec: ServiceSpec) throws {
         guard let current = records.first(where: { $0.id == spec.id }), let pid = current.pid, ownsProcess(current, pid: pid) else { throw LaunchError.message("无法确认此服务由本工具启动，不会停止其他进程") }
-        statuses[spec.id] = .stopping
+        statuses[spec.id] = .stopping; stopRequested.insert(spec.id)
         guard kill(-pid, SIGTERM) == 0 else { throw LaunchError.message("无法停止服务：\(String(cString: strerror(errno)))") }
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 4_000_000_000)

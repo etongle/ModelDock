@@ -19,6 +19,20 @@ final class AppStore: ObservableObject {
     @Published var showLaunch = false
     /// Run log follows new output by default; off keeps the reading position.
     @Published var followLog = true
+    @Published var systemNotifications = true { didSet { savePreferences() } }
+    let notifier = AppNotifier()
+    /// Starts notification observers; skipped in test and capture modes so they never prompt for permission.
+    func beginNotifications() {
+        notifier.enabled = { [weak self] in self?.systemNotifications ?? false }
+        downloads.$jobs.sink { [weak self] jobs in self?.notifier.observe(downloads: jobs) }.store(in: &subscriptions)
+        services.$statuses.sink { [weak self] statuses in
+            guard let self else { return }
+            self.notifier.observe(services: statuses, controller: self.services) { id in
+                guard let spec = self.services.records.first(where: { $0.id == id }) else { return id }
+                return (self.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID) + " · " + spec.modelName
+            }
+        }.store(in: &subscriptions)
+    }
     @Published var engineID = "splash"
     @Published var engineConfigurations: [String: EngineConfiguration] = [:]
     @Published var engineConfigurationDraft: EngineConfigurationDraft?
@@ -104,6 +118,7 @@ final class AppStore: ObservableObject {
         windowCloseBehavior = preferences.windowCloseBehavior
         appearance = preferences.appearance
         sidebarHidden = preferences.sidebarHidden
+        systemNotifications = preferences.systemNotifications
         language = argumentValue("--language").flatMap(AppLanguage.init(rawValue:)) ?? preferences.language
         extraRoots = (try? Data(contentsOf: settingsURL)).flatMap { try? JSONDecoder().decode([String].self, from: $0) } ?? []
         L10n.select(language)
@@ -141,7 +156,7 @@ final class AppStore: ObservableObject {
     private func savePreferences() {
         do {
             try FileManager.default.createDirectory(at: preferencesURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONEncoder().encode(AppPreferences(windowCloseBehavior: windowCloseBehavior, language: language, appearance: appearance, sidebarHidden: sidebarHidden)).write(to: preferencesURL, options: .atomic)
+            try JSONEncoder().encode(AppPreferences(windowCloseBehavior: windowCloseBehavior, language: language, appearance: appearance, sidebarHidden: sidebarHidden, systemNotifications: systemNotifications)).write(to: preferencesURL, options: .atomic)
             preferencesError = nil
         } catch { preferencesError = "设置未能保存，请重试。" }
     }

@@ -17,9 +17,10 @@ struct AppPreferences: Codable {
     var language: AppLanguage = .english
     var appearance: AppAppearance = .system
     var sidebarHidden = false
-    enum CodingKeys: String, CodingKey { case windowCloseBehavior, language, appearance, sidebarHidden }
-    init(windowCloseBehavior: WindowCloseBehavior = .keepRunning, language: AppLanguage = .english, appearance: AppAppearance = .system, sidebarHidden: Bool = false) {
-        self.windowCloseBehavior = windowCloseBehavior; self.language = language; self.appearance = appearance; self.sidebarHidden = sidebarHidden
+    var systemNotifications = true
+    enum CodingKeys: String, CodingKey { case windowCloseBehavior, language, appearance, sidebarHidden, systemNotifications }
+    init(windowCloseBehavior: WindowCloseBehavior = .keepRunning, language: AppLanguage = .english, appearance: AppAppearance = .system, sidebarHidden: Bool = false, systemNotifications: Bool = true) {
+        self.windowCloseBehavior = windowCloseBehavior; self.language = language; self.appearance = appearance; self.sidebarHidden = sidebarHidden; self.systemNotifications = systemNotifications
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -27,6 +28,7 @@ struct AppPreferences: Codable {
         language = AppLanguage(rawValue: try values.decodeIfPresent(String.self, forKey: .language) ?? "en") ?? .english
         appearance = AppAppearance(rawValue: try values.decodeIfPresent(String.self, forKey: .appearance) ?? "system") ?? .system
         sidebarHidden = try values.decodeIfPresent(Bool.self, forKey: .sidebarHidden) ?? false
+        systemNotifications = try values.decodeIfPresent(Bool.self, forKey: .systemNotifications) ?? true
     }
 }
 
@@ -51,6 +53,9 @@ struct PreferencesView: View {
                     Picker(L10n.text("外观"), selection: $store.appearance) {
                         ForEach(AppAppearance.allCases, id: \.self) { option in Text(verbatim: L10n.text(option.title)).tag(option) }
                     }.pickerStyle(.segmented).accessibilityIdentifier("app-appearance")
+                }
+                Section(L10n.text("通知")) {
+                    Toggle(L10n.text("下载完成、服务就绪或意外退出时发送系统通知"), isOn: $store.systemNotifications).accessibilityIdentifier("system-notifications")
                 }
                 Section(L10n.text("关闭主界面时")) {
                     Picker(L10n.text("关闭行为"), selection: $store.windowCloseBehavior) {

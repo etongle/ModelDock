@@ -76,6 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             if CommandLine.arguments.contains("--start-hidden") { hideMainWindow() }
         }
         if !CommandLine.arguments.contains("--documentation-ui") { store.services.beginMonitoring(); store.scan(); store.beginResourceMonitoring() }
+        // Notifications only in normal runs: tests and captures must never trigger the permission prompt.
+        if !passiveTesting, argumentValue("--capture-dir") == nil, !CommandLine.arguments.contains("--documentation-ui") { store.beginNotifications() }
         if let task = argumentValue("--resume-download-job"), UUID(uuidString: task) != nil, store.downloads.jobs.contains(where: { $0.id == task }) {
             store.downloads.showTask(task); store.tab = .downloads; store.downloads.resume(task)
         }
@@ -609,6 +611,7 @@ enum Entry {
         }
         if args.contains("--self-test") { selfTest(); return }
         if args.contains("--strata-checks") { Task { do { try await StrataChecks.run(); exit(0) } catch { fputs("STRATA CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--notification-checks") { do { try NotificationChecks.run() } catch { fputs("NOTIFICATION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--localization-checks") { do { try LocalizationChecks.run() } catch { fputs("LOCALIZATION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--live-context-checks") || argumentValue("--repair-connection-context") != nil {
             Task { do { try await ConnectionLive.run(repairPort: argumentValue("--repair-connection-context").flatMap(Int.init)); exit(0) }

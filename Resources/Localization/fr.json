@@ -1428,5 +1428,12 @@
   "启动服务…": "Démarrer le service…",
   "概览": "Aperçu",
   "维护": "Maintenance",
-  "跟随最新输出": "Suivre la dernière sortie"
+  "跟随最新输出": "Suivre la dernière sortie",
+  "通知": "Notifications",
+  "下载完成、服务就绪或意外退出时发送系统通知": "Notifier à la fin des téléchargements, quand un service est prêt ou s'arrête de façon inattendue",
+  "下载完成": "Téléchargement terminé",
+  "下载失败": "Échec du téléchargement",
+  "服务已就绪": "Service prêt",
+  "服务启动失败": "Échec du démarrage du service",
+  "服务意外退出": "Le service s'est arrêté de façon inattendue"
 }

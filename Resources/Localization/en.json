@@ -1428,5 +1428,12 @@
   "启动服务…": "Start Service…",
   "概览": "Overview",
   "维护": "Maintenance",
-  "跟随最新输出": "Follow latest output"
+  "跟随最新输出": "Follow latest output",
+  "通知": "Notifications",
+  "下载完成、服务就绪或意外退出时发送系统通知": "Notify when downloads finish, services become ready or exit unexpectedly",
+  "下载完成": "Download complete",
+  "下载失败": "Download failed",
+  "服务已就绪": "Service ready",
+  "服务启动失败": "Service failed to start",
+  "服务意外退出": "Service stopped unexpectedly"
 }
