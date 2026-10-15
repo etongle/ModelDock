@@ -1435,5 +1435,9 @@
   "下载失败": "Falha no download",
   "服务已就绪": "Serviço pronto",
   "服务启动失败": "Falha ao iniciar o serviço",
-  "服务意外退出": "O serviço parou inesperadamente"
+  "服务意外退出": "O serviço parou inesperadamente",
+  "菜单栏显示": "Barra de menus",
+  "图标 + CPU · 内存": "Ícone + CPU · Memória",
+  "仅图标": "Somente ícone",
+  "通用": "Geral"
 }

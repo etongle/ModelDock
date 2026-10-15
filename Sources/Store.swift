@@ -19,7 +19,10 @@ final class AppStore: ObservableObject {
     @Published var showLaunch = false
     /// Run log follows new output by default; off keeps the reading position.
     @Published var followLog = true
+    @Published var settingsTab = 0
     @Published var systemNotifications = true { didSet { savePreferences() } }
+    @Published var menuBarIconOnly = false { didSet { savePreferences(); onMenuBarStyleChange?() } }
+    var onMenuBarStyleChange: (() -> Void)?
     let notifier = AppNotifier()
     /// Starts notification observers; skipped in test and capture modes so they never prompt for permission.
     func beginNotifications() {
@@ -119,6 +122,7 @@ final class AppStore: ObservableObject {
         appearance = preferences.appearance
         sidebarHidden = preferences.sidebarHidden
         systemNotifications = preferences.systemNotifications
+        menuBarIconOnly = preferences.menuBarIconOnly
         language = argumentValue("--language").flatMap(AppLanguage.init(rawValue:)) ?? preferences.language
         extraRoots = (try? Data(contentsOf: settingsURL)).flatMap { try? JSONDecoder().decode([String].self, from: $0) } ?? []
         L10n.select(language)
@@ -156,7 +160,7 @@ final class AppStore: ObservableObject {
     private func savePreferences() {
         do {
             try FileManager.default.createDirectory(at: preferencesURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONEncoder().encode(AppPreferences(windowCloseBehavior: windowCloseBehavior, language: language, appearance: appearance, sidebarHidden: sidebarHidden, systemNotifications: systemNotifications)).write(to: preferencesURL, options: .atomic)
+            try JSONEncoder().encode(AppPreferences(windowCloseBehavior: windowCloseBehavior, language: language, appearance: appearance, sidebarHidden: sidebarHidden, systemNotifications: systemNotifications, menuBarIconOnly: menuBarIconOnly)).write(to: preferencesURL, options: .atomic)
             preferencesError = nil
         } catch { preferencesError = "设置未能保存，请重试。" }
     }

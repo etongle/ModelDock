@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         store = AppStore(stateDirectory: directory)
         store.onLanguageChange = { [weak self] in self?.refreshLanguage() }
         store.onAppearanceChange = { [weak self] in self?.applyAppearance() }
+        store.onMenuBarStyleChange = { [weak self] in self?.updateStatusBar() }
         applyAppearance()
         if passiveTesting { NSApplication.shared.setActivationPolicy(.accessory) }
         applyDockIcon()
@@ -136,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc func showSettings() {
         statusPopover.performClose(nil)
         if settingsWindow == nil {
-            let preferences = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 780), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let preferences = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 560), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             preferences.title = L10n.text("设置"); preferences.isReleasedWhenClosed = false; preferences.delegate = self
             preferences.contentView = NSHostingView(rootView: PreferencesView(store: store, close: { [weak self] in self?.settingsWindow?.performClose(nil) }))
             preferences.backgroundColor = .windowBackgroundColor
@@ -174,7 +175,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         guard let button = statusItem?.button else { return }
         let cpu = store.resources.system?.cpu.map { String(format: "%.0f%%", $0) } ?? "—"
         let memory = store.resources.system.map { String(format: "%.0fG", Double($0.memoryUsed) / 1_073_741_824) } ?? "—"
-        button.title = " CPU \(cpu) · \(memory)"
+        button.title = store.menuBarIconOnly ? "" : " CPU \(cpu) · \(memory)"
+        button.imagePosition = store.menuBarIconOnly ? .imageOnly : .imageLeading
         button.toolTip = L10n.text("模型管理 · CPU \(cpu) · 内存 \(memory) · 点击查看磁盘与模型服务")
     }
     @objc func toggleStatusPopover() {

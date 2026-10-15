@@ -18,9 +18,11 @@ struct AppPreferences: Codable {
     var appearance: AppAppearance = .system
     var sidebarHidden = false
     var systemNotifications = true
-    enum CodingKeys: String, CodingKey { case windowCloseBehavior, language, appearance, sidebarHidden, systemNotifications }
-    init(windowCloseBehavior: WindowCloseBehavior = .keepRunning, language: AppLanguage = .english, appearance: AppAppearance = .system, sidebarHidden: Bool = false, systemNotifications: Bool = true) {
-        self.windowCloseBehavior = windowCloseBehavior; self.language = language; self.appearance = appearance; self.sidebarHidden = sidebarHidden; self.systemNotifications = systemNotifications
+    /// Icon only keeps the menu-bar item narrow so it is less likely to hide behind the notch.
+    var menuBarIconOnly = false
+    enum CodingKeys: String, CodingKey { case windowCloseBehavior, language, appearance, sidebarHidden, systemNotifications, menuBarIconOnly }
+    init(windowCloseBehavior: WindowCloseBehavior = .keepRunning, language: AppLanguage = .english, appearance: AppAppearance = .system, sidebarHidden: Bool = false, systemNotifications: Bool = true, menuBarIconOnly: Bool = false) {
+        self.windowCloseBehavior = windowCloseBehavior; self.language = language; self.appearance = appearance; self.sidebarHidden = sidebarHidden; self.systemNotifications = systemNotifications; self.menuBarIconOnly = menuBarIconOnly
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -29,6 +31,7 @@ struct AppPreferences: Codable {
         appearance = AppAppearance(rawValue: try values.decodeIfPresent(String.self, forKey: .appearance) ?? "system") ?? .system
         sidebarHidden = try values.decodeIfPresent(Bool.self, forKey: .sidebarHidden) ?? false
         systemNotifications = try values.decodeIfPresent(Bool.self, forKey: .systemNotifications) ?? true
+        menuBarIconOnly = try values.decodeIfPresent(Bool.self, forKey: .menuBarIconOnly) ?? false
     }
 }
 
@@ -38,45 +41,67 @@ struct PreferencesView: View {
     var close: () -> Void
     var body: some View {
         VStack(spacing: 0) {
-            Form {
-                Section(L10n.text("应用更新")) {
-                    AppUpdateSettings(updates: store.appUpdates).id(store.language.rawValue)
-                }
-                Section(L10n.text("界面语言")) {
-                    Picker(L10n.text("语言"), selection: $store.language) {
-                        ForEach(AppLanguage.allCases, id: \.self) { language in Text(verbatim: language.name).tag(language) }
-                    }.accessibilityIdentifier("app-language")
-                    Text(verbatim: L10n.text("默认使用英语。切换立即生效，设置会自动保存。"))
-                        .font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-                }
-                Section(L10n.text("外观")) {
-                    Picker(L10n.text("外观"), selection: $store.appearance) {
-                        ForEach(AppAppearance.allCases, id: \.self) { option in Text(verbatim: L10n.text(option.title)).tag(option) }
-                    }.pickerStyle(.segmented).accessibilityIdentifier("app-appearance")
-                }
-                Section(L10n.text("通知")) {
-                    Toggle(L10n.text("下载完成、服务就绪或意外退出时发送系统通知"), isOn: $store.systemNotifications).accessibilityIdentifier("system-notifications")
-                }
-                Section(L10n.text("关闭主界面时")) {
-                    Picker(L10n.text("关闭行为"), selection: $store.windowCloseBehavior) {
-                        Text(verbatim: L10n.text("保持程序后台运行（默认）")).tag(WindowCloseBehavior.keepRunning)
-                        Text(verbatim: L10n.text("退出程序，每次再次确认")).tag(WindowCloseBehavior.confirmQuit)
+            // Paged Settings keeps every page short as options grow (a single long form overflowed). A segmented
+            // control is used instead of TabView, whose tab strip does not render in offscreen captures.
+            Picker(L10n.text("设置"), selection: $store.settingsTab) {
+                Text(verbatim: L10n.text("通用")).tag(0); Text(verbatim: L10n.text("外观")).tag(1); Text(verbatim: L10n.text("应用更新")).tag(2)
+            }.pickerStyle(.segmented).labelsHidden().fixedSize().padding(.top, 16).accessibilityIdentifier("settings-pages")
+            Group {
+                switch store.settingsTab {
+                case 1:
+                Form {
+                    Section(L10n.text("外观")) {
+                        Picker(L10n.text("外观"), selection: $store.appearance) {
+                            ForEach(AppAppearance.allCases, id: \.self) { option in Text(verbatim: L10n.text(option.title)).tag(option) }
+                        }.pickerStyle(.segmented).accessibilityIdentifier("app-appearance")
                     }
-                    .pickerStyle(.radioGroup).labelsHidden().accessibilityLabel(L10n.text("关闭主界面时的行为"))
-                    .accessibilityIdentifier("window-close-behavior")
-                    Text(verbatim: L10n.text(store.windowCloseBehavior == .keepRunning
-                         ? "点击关闭按钮或按 ⌘W，只关闭主界面。模型服务、下载和资源监测继续运行，可从菜单栏图标重新打开。"
-                         : "点击关闭按钮或按 ⌘W，会先询问是否退出。退出时暂停下载并结束监测；已启动的模型服务继续运行。"))
-                        .font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    Section(L10n.text("菜单栏显示")) {
+                        Picker(L10n.text("菜单栏显示"), selection: $store.menuBarIconOnly) {
+                            Text(verbatim: L10n.text("图标 + CPU · 内存")).tag(false)
+                            Text(verbatim: L10n.text("仅图标")).tag(true)
+                        }.pickerStyle(.segmented).accessibilityIdentifier("menu-bar-style")
+                    }
+                }.formStyle(.grouped)
+                case 2:
+                Form {
+                    Section(L10n.text("应用更新")) {
+                        AppUpdateSettings(updates: store.appUpdates).id(store.language.rawValue)
+                    }
+                }.formStyle(.grouped)
+                default:
+                Form {
+                    Section(L10n.text("界面语言")) {
+                        Picker(L10n.text("语言"), selection: $store.language) {
+                            ForEach(AppLanguage.allCases, id: \.self) { language in Text(verbatim: language.name).tag(language) }
+                        }.accessibilityIdentifier("app-language")
+                        Text(verbatim: L10n.text("默认使用英语。切换立即生效，设置会自动保存。"))
+                            .font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Section(L10n.text("关闭主界面时")) {
+                        Picker(L10n.text("关闭行为"), selection: $store.windowCloseBehavior) {
+                            Text(verbatim: L10n.text("保持程序后台运行（默认）")).tag(WindowCloseBehavior.keepRunning)
+                            Text(verbatim: L10n.text("退出程序，每次再次确认")).tag(WindowCloseBehavior.confirmQuit)
+                        }
+                        .pickerStyle(.radioGroup).labelsHidden().accessibilityLabel(L10n.text("关闭主界面时的行为"))
+                        .accessibilityIdentifier("window-close-behavior")
+                        Text(verbatim: L10n.text(store.windowCloseBehavior == .keepRunning
+                             ? "点击关闭按钮或按 ⌘W，只关闭主界面。模型服务、下载和资源监测继续运行，可从菜单栏图标重新打开。"
+                             : "点击关闭按钮或按 ⌘W，会先询问是否退出。退出时暂停下载并结束监测；已启动的模型服务继续运行。"))
+                            .font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Section(L10n.text("通知")) {
+                        Toggle(L10n.text("下载完成、服务就绪或意外退出时发送系统通知"), isOn: $store.systemNotifications).accessibilityIdentifier("system-notifications")
+                    }
+                }.formStyle(.grouped)
                 }
             // Separate window: rebuild on language change so pickers and labels never keep the previous language.
-            }.formStyle(.grouped).id(store.language)
+            }.id(store.language)
             HStack {
                 Text(verbatim: L10n.text(store.preferencesError ?? "设置会自动保存。")).font(.system(size: TypeScale.callout)).foregroundStyle(store.preferencesError == nil ? Theme.muted : Theme.errorText)
                 Spacer()
                 Button(L10n.text("完成"), action: close).keyboardShortcut(.defaultAction)
             }.padding(.horizontal, 24).padding(.bottom, 20)
-        }.frame(width: 580, height: 780).background(Theme.background).environment(\.locale, L10n.locale)
+        }.frame(width: 580, height: 560).background(Theme.background).environment(\.locale, L10n.locale)
     }
 }
 

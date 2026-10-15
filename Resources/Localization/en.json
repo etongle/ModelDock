@@ -1435,5 +1435,9 @@
   "下载失败": "Download failed",
   "服务已就绪": "Service ready",
   "服务启动失败": "Service failed to start",
-  "服务意外退出": "Service stopped unexpectedly"
+  "服务意外退出": "Service stopped unexpectedly",
+  "菜单栏显示": "Menu bar",
+  "图标 + CPU · 内存": "Icon + CPU · Memory",
+  "仅图标": "Icon only",
+  "通用": "General"
 }

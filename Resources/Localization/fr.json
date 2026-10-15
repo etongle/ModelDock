@@ -1435,5 +1435,9 @@
   "下载失败": "Échec du téléchargement",
   "服务已就绪": "Service prêt",
   "服务启动失败": "Échec du démarrage du service",
-  "服务意外退出": "Le service s'est arrêté de façon inattendue"
+  "服务意外退出": "Le service s'est arrêté de façon inattendue",
+  "菜单栏显示": "Barre des menus",
+  "图标 + CPU · 内存": "Icône + CPU · Mémoire",
+  "仅图标": "Icône seule",
+  "通用": "Général"
 }
