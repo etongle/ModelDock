@@ -99,6 +99,25 @@ struct LanguageMenu: View {
     }
 }
 
+/// Last scan time with an inline rescan control, shown under the engine and model lists that a scan refreshes.
+@MainActor
+struct ScanStatus: View {
+    @ObservedObject var store: AppStore
+    var body: some View {
+        HStack(spacing: 6) {
+            if store.scanning {
+                ProgressView().controlSize(.mini)
+                Text(verbatim: L10n.text("正在扫描模型文件…"))
+            } else if let date = store.inventory?.scannedAt {
+                Text(verbatim: L10n.text("更新于 \(date.formatted(date: .omitted, time: .shortened))"))
+            }
+            Button { store.scan() } label: { Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold)).frame(width: 22, height: 22).contentShape(Rectangle()) }
+                .buttonStyle(.borderless).disabled(store.scanning)
+                .help(L10n.text("重新扫描模型与引擎 · ⌘R")).accessibilityLabel(L10n.text("重新扫描")).accessibilityIdentifier("rescan")
+        }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+    }
+}
+
 @MainActor
 struct MainView: View {
     @ObservedObject var store: AppStore
@@ -114,7 +133,8 @@ struct MainView: View {
                                 .buttonStyle(.plain).keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command).accessibilityIdentifier("tab-\(index)")
                         }
                     }.padding(3).background(Theme.line.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
-                    HStack(spacing: 6) { Spacer(); if store.scanning { ProgressView().controlSize(.small) }; LanguageMenu(store: store, compact: geometry.size.width < 1200); Button { store.scan() } label: { Image(systemName: "arrow.clockwise").font(.system(size: 17)).frame(width: 44, height: 44) }.buttonStyle(.plain).help(L10n.text("重新扫描模型与引擎 · ⌘R")).keyboardShortcut("r", modifiers: .command).disabled(store.scanning) }.padding(.trailing, 20)
+                    // Rescan lives beside the lists it refreshes (ScanStatus) and in File ▸ Rescan (⌘R).
+                    HStack(spacing: 6) { Spacer(); LanguageMenu(store: store, compact: geometry.size.width < 1200) }.padding(.trailing, 20)
                 }.frame(height: 64)
                 Rectangle().fill(Theme.line).frame(height: 1)
                 let sidebarWidth = max(310, min(420, geometry.size.width * 0.292))
@@ -162,7 +182,7 @@ struct EngineWorkspace: View {
                     }
                 }
                 Spacer(minLength: 8)
-                if let date = store.inventory?.scannedAt { Text(verbatim: L10n.text("更新于 \(date.formatted(date: .omitted, time: .shortened))")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).padding(.top, 18) }
+                ScanStatus(store: store).padding(.top, 18)
             }.padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 20).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
             ScrollView {
@@ -330,6 +350,7 @@ struct ModelWorkspace: View {
                     }.buttonStyle(.plain).help(L10n.text(model.path))
                 } } }
                 HStack { Text(verbatim: L10n.text("\(store.filteredModels.count) 个模型条目")); Spacer(); Text(verbatim: L10n.text("目录总占用 " + sizeLabel(store.inventory?.storageBytes ?? 0))) }.font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
+                ScanStatus(store: store)
             }.padding(24).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
             ScrollView {
