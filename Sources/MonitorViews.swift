@@ -245,7 +245,8 @@ struct MenuRow: View {
     @StateObject private var hover = HoverState()
     private var hovering: Bool { hover.active }
     var body: some View {
-        Button(action: action) {
+        // Most actions close the popover, which never delivers a hover exit; clear it so the row is not stuck highlighted.
+        Button { hover.active = false; action() } label: {
             HStack(spacing: 8) {
                 Image(systemName: symbol).font(.system(size: 13)).frame(width: 18)
                 Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.body))
@@ -256,6 +257,6 @@ struct MenuRow: View {
             .padding(.horizontal, 10).frame(height: 26)
             .background(hovering ? Theme.accent : Color.clear, in: RoundedRectangle(cornerRadius: 5))
             .contentShape(Rectangle())
-        }.buttonStyle(.plain).onHover { hover.active = $0 }
+        }.buttonStyle(.plain).onHover { hover.active = $0 }.onDisappear { hover.active = false }
     }
 }
