@@ -14,6 +14,8 @@ Current packages use an ad-hoc signature and have not been Apple-notarized. If a
 
 English is the default on first launch, including on non-English systems. Click the **globe/language button at the top right of the main window**, then choose **English**, **简体中文**, **Français**, **Português**, or **Follow system**. In a narrow window, the button shows the globe and a language abbreviation such as **EN**. You can also open **ModelDock → Settings…** (⌘,) to change **Interface language**. The interface changes immediately and the choice is saved.
 
+Under **Settings → Appearance**, choose **Follow system**, **Light**, or **Dark**; the main window and menu-bar panel switch immediately. To give the details more room, click the sidebar button at the right of a sidebar's title (or press ⌃⌘S); a slim rail keeps the button to bring it back, and the choice is remembered.
+
 ![Interface language and close behavior](assets/images/en-settings.png)
 
 The main window closes to the background by default. A second option quits the app when closing its window, with a confirmation each time.
@@ -162,9 +164,9 @@ Web search is a client/tool capability. Enable the offered search-tool integrati
 
 ![System and service resources](assets/images/en-resources.png)
 
-The menu-bar panel shows system CPU, memory, disk and library usage, service resources, downloads, and recent measurements when available. Click a download's management action to open the relevant task.
+The menu-bar panel shows system CPU, memory, disk and library usage, service resources, downloads that are still in progress or need attention, and recent measurements when available. Click a download's management action to open the relevant task.
 
-Clicking inside the panel keeps it usable; clicking another window or desktop area closes it. Clicking its status icon toggles the panel. **Open manager** reopens the main window. Closing the main window keeps background work running by default; **Quit** pauses downloads and stops monitoring while independently running model services remain available.
+Clicking inside the panel keeps it usable; clicking another window or desktop area closes it. Clicking its status icon toggles the panel. **Open Management Interface** reopens the main window. Closing the main window keeps background work running by default; **Quit ModelDock** pauses downloads and stops monitoring while independently running model services remain available.
 
 Performance values labeled as measurements come from an actual benchmark or supported service logs. Unknown measurements remain unavailable; do not compare startup estimates with generation throughput.
 
@@ -188,7 +190,8 @@ Engine logs and third-party client error text may remain in the language produce
 | Shortcut | Action |
 | --- | --- |
 | ⌘1–⌘5 | Switch main sections |
-| ⌘R | Rescan engines/models |
+| ⌘R | Rescan engines/models (also ↻ under the engine and model lists) |
+| ⌃⌘S | Hide or show the sidebar |
 | ⌘O | Add a model directory |
 | ⌘, | Settings |
 | ⌘W | Close the main window using the configured behavior |
