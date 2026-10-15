@@ -20,8 +20,10 @@ struct AppPreferences: Codable {
     var systemNotifications = true
     /// Icon only keeps the menu-bar item narrow so it is less likely to hide behind the notch.
     var menuBarIconOnly = false
-    enum CodingKeys: String, CodingKey { case windowCloseBehavior, language, appearance, sidebarHidden, systemNotifications, menuBarIconOnly }
-    init(windowCloseBehavior: WindowCloseBehavior = .keepRunning, language: AppLanguage = .english, appearance: AppAppearance = .system, sidebarHidden: Bool = false, systemNotifications: Bool = true, menuBarIconOnly: Bool = false) {
+    var sidebarWidth: Double?
+    enum CodingKeys: String, CodingKey { case windowCloseBehavior, language, appearance, sidebarHidden, systemNotifications, menuBarIconOnly, sidebarWidth }
+    init(windowCloseBehavior: WindowCloseBehavior = .keepRunning, language: AppLanguage = .english, appearance: AppAppearance = .system, sidebarHidden: Bool = false, systemNotifications: Bool = true, menuBarIconOnly: Bool = false, sidebarWidth: Double? = nil) {
+        self.sidebarWidth = sidebarWidth
         self.windowCloseBehavior = windowCloseBehavior; self.language = language; self.appearance = appearance; self.sidebarHidden = sidebarHidden; self.systemNotifications = systemNotifications; self.menuBarIconOnly = menuBarIconOnly
     }
     init(from decoder: Decoder) throws {
@@ -32,6 +34,7 @@ struct AppPreferences: Codable {
         sidebarHidden = try values.decodeIfPresent(Bool.self, forKey: .sidebarHidden) ?? false
         systemNotifications = try values.decodeIfPresent(Bool.self, forKey: .systemNotifications) ?? true
         menuBarIconOnly = try values.decodeIfPresent(Bool.self, forKey: .menuBarIconOnly) ?? false
+        sidebarWidth = try values.decodeIfPresent(Double.self, forKey: .sidebarWidth)
     }
 }
 

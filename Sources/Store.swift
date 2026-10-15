@@ -88,6 +88,10 @@ final class AppStore: ObservableObject {
     @Published var windowCloseBehavior: WindowCloseBehavior = .keepRunning { didSet { savePreferences() } }
     @Published var appearance: AppAppearance = .system { didSet { savePreferences(); onAppearanceChange?() } }
     @Published var sidebarHidden = false { didSet { savePreferences() } }
+    /// User-dragged sidebar width; nil follows the window. Saved when a drag ends, not on every frame.
+    @Published var sidebarWidth: CGFloat?
+    var sidebarDragStart: CGFloat?
+    func saveSidebarWidth() { savePreferences() }
     /// 200 ms like system sidebars; instant when Reduce Motion is on.
     func toggleSidebar() {
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { sidebarHidden.toggle() }
@@ -121,6 +125,7 @@ final class AppStore: ObservableObject {
         windowCloseBehavior = preferences.windowCloseBehavior
         appearance = preferences.appearance
         sidebarHidden = preferences.sidebarHidden
+        sidebarWidth = preferences.sidebarWidth.map { CGFloat($0) }
         systemNotifications = preferences.systemNotifications
         menuBarIconOnly = preferences.menuBarIconOnly
         language = argumentValue("--language").flatMap(AppLanguage.init(rawValue:)) ?? preferences.language
@@ -160,7 +165,7 @@ final class AppStore: ObservableObject {
     private func savePreferences() {
         do {
             try FileManager.default.createDirectory(at: preferencesURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONEncoder().encode(AppPreferences(windowCloseBehavior: windowCloseBehavior, language: language, appearance: appearance, sidebarHidden: sidebarHidden, systemNotifications: systemNotifications, menuBarIconOnly: menuBarIconOnly)).write(to: preferencesURL, options: .atomic)
+            try JSONEncoder().encode(AppPreferences(windowCloseBehavior: windowCloseBehavior, language: language, appearance: appearance, sidebarHidden: sidebarHidden, systemNotifications: systemNotifications, menuBarIconOnly: menuBarIconOnly, sidebarWidth: sidebarWidth.map(Double.init))).write(to: preferencesURL, options: .atomic)
             preferencesError = nil
         } catch { preferencesError = "设置未能保存，请重试。" }
     }

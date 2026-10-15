@@ -169,6 +169,29 @@ struct SidebarToggleButton: View {
     }
 }
 
+/// Divider between sidebar and detail that can be dragged to resize the sidebar, like Finder or Xcode.
+/// The hit area is wider than the 1 pt line; double-click restores the automatic width.
+@MainActor
+struct SidebarResizeHandle: View {
+    @ObservedObject var store: AppStore
+    var width: CGFloat
+    var body: some View {
+        Rectangle().fill(Theme.line).frame(width: 1)
+            .overlay {
+                Color.clear.frame(width: 9).contentShape(Rectangle())
+                    .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+                    .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                        .onChanged { value in
+                            if store.sidebarDragStart == nil { store.sidebarDragStart = width }
+                            store.sidebarWidth = (store.sidebarDragStart ?? width) + value.translation.width
+                        }
+                        .onEnded { _ in store.sidebarDragStart = nil; store.saveSidebarWidth() })
+                    .onTapGesture(count: 2) { store.sidebarWidth = nil; store.saveSidebarWidth() }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
 /// Collapsed sidebar: a slim rail that keeps the expand control where the collapse control was.
 @MainActor
 struct SidebarRail: View {
@@ -250,7 +273,8 @@ struct MainView: View {
                     HStack(spacing: 6) { Spacer(); LanguageMenu(store: store, compact: geometry.size.width < 1200) }.padding(.trailing, 20)
                 }.frame(height: 64)
                 Rectangle().fill(Theme.line).frame(height: 1)
-                let sidebarWidth = max(310, min(420, geometry.size.width * 0.292))
+                // User-dragged width wins (clamped to 260 pt … half the window); otherwise scale with the window.
+                let sidebarWidth = store.sidebarWidth.map { min(max($0, 260), max(260, geometry.size.width * 0.5)) } ?? max(310, min(420, geometry.size.width * 0.292))
                 switch store.tab {
                 case .engines: EngineWorkspace(store: store, services: services, sidebarWidth: sidebarWidth)
                 case .models: ModelWorkspace(store: store, sidebarWidth: sidebarWidth)
@@ -306,8 +330,8 @@ struct EngineWorkspace: View {
                 }.sidebarList()
                 Spacer(minLength: 0)
                 ScanStatus(store: store)
-            }.padding(SidebarMetrics.padding).frame(width: sidebarWidth).background(Theme.sidebar)
-            Rectangle().fill(Theme.line).frame(width: 1)
+            }.padding(SidebarMetrics.padding).frame(width: sidebarWidth, alignment: .leading).clipped().background(Theme.sidebar)
+            SidebarResizeHandle(store: store, width: sidebarWidth)
             } else { SidebarRail(store: store) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -512,8 +536,8 @@ struct ModelWorkspace: View {
                 .onDeleteCommand { if let model = store.selectedFile { store.deleteModel(model) } }
                 HStack { Text(verbatim: L10n.text("\(store.filteredModels.count) 个模型条目")); Spacer(); Text(verbatim: L10n.text("目录总占用 " + sizeLabel(store.inventory?.storageBytes ?? 0))) }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 ScanStatus(store: store)
-            }.padding(20).frame(width: sidebarWidth).background(Theme.sidebar)
-            Rectangle().fill(Theme.line).frame(width: 1)
+            }.padding(20).frame(width: sidebarWidth, alignment: .leading).clipped().background(Theme.sidebar)
+            SidebarResizeHandle(store: store, width: sidebarWidth)
             } else { SidebarRail(store: store) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -597,8 +621,8 @@ struct ServiceWorkspace: View {
                 // ⌫ only asks to delete a managed configuration; the confirmation alert does the rest.
                 .onDeleteCommand { if case .managed(let id) = serviceSelection, let spec = services.records.first(where: { $0.id == id }), services.canRemoveConfiguration(spec) { store.serviceRemoval = spec } }
                 Text(verbatim: L10n.text("每 3 秒检查本机常用模型端口")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
-            }.padding(SidebarMetrics.padding).frame(width: sidebarWidth).background(Theme.sidebar)
-            Rectangle().fill(Theme.line).frame(width: 1)
+            }.padding(SidebarMetrics.padding).frame(width: sidebarWidth, alignment: .leading).clipped().background(Theme.sidebar)
+            SidebarResizeHandle(store: store, width: sidebarWidth)
             } else { SidebarRail(store: store) }
             ScrollView {
                 if store.gatewaySelected { GatewayWorkspace(store: store, gateway: store.gateway) }

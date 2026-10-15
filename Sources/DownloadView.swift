@@ -28,8 +28,8 @@ struct DownloadWorkspace: View {
                     // Removing a task keeps every downloaded and partial file, so it needs no extra confirmation.
                     .onDeleteCommand { if let job = downloads.detailJob { DownloadTaskActions.remove(job, downloads: downloads) } }
                 }
-            }.padding(SidebarMetrics.padding).frame(width: sidebarWidth).background(Theme.sidebar)
-            Rectangle().fill(Theme.line).frame(width: 1)
+            }.padding(SidebarMetrics.padding).frame(width: sidebarWidth, alignment: .leading).clipped().background(Theme.sidebar)
+            SidebarResizeHandle(store: store, width: sidebarWidth)
             } else { SidebarRail(store: store) }
             ScrollView {
                 if let job = downloads.detailJob {
