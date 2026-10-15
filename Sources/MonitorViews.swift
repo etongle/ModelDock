@@ -148,30 +148,114 @@ struct StatusBarPanel: View {
     @ObservedObject var services: ServiceController
     @ObservedObject var monitor: ResourceMonitor
     @ObservedObject var performance: PerformanceController
+    // Menu-bar utility layout: header, compact meters, live activity, then native-style menu rows.
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack { Image(systemName: "square.stack.3d.up.fill").font(.system(size: 24)).foregroundStyle(Theme.linkColor); VStack(alignment: .leading, spacing: 4) { Text(verbatim: L10n.text("模型管理")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text("\(services.records.filter { $0.pid != nil }.count) 个受管服务 · \(services.external.filter(\.ready).count) 个外部接口")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }; Spacer() }
-            bar("CPU", value: percentageLabel(monitor.system?.cpu), fraction: monitor.system?.cpu.map { $0 / 100 }, symbol: "cpu")
-            bar("内存", value: monitor.system.map { memoryLabel($0.memoryUsed) + " / " + memoryLabel($0.memoryTotal) } ?? "读取中", fraction: monitor.system.map { Double($0.memoryUsed) / Double(max(1, $0.memoryTotal)) }, symbol: "memorychip")
-            bar("磁盘", value: monitor.system.map { diskLabel($0.diskUsed) + " / " + diskLabel($0.diskTotal) } ?? "读取中", fraction: monitor.system.flatMap { $0.diskTotal > 0 ? Double($0.diskUsed) / Double($0.diskTotal) : nil }, symbol: "internaldrive")
-            Text(verbatim: L10n.text("模型库：" + (monitor.system?.modelBytes.map(sizeLabel) ?? "统计中"))).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "square.stack.3d.up.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: 30, height: 30).background(Theme.accent, in: RoundedRectangle(cornerRadius: 7))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: L10n.text("模型管理")).font(.system(size: TypeScale.body, weight: .semibold))
+                    Text(verbatim: L10n.text("\(services.records.filter { $0.pid != nil }.count) 个受管服务 · \(services.external.filter(\.ready).count) 个外部接口")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
+                }
+                Spacer()
+            }.padding(.horizontal, 16).padding(.vertical, 12)
+            Divider()
+            VStack(alignment: .leading, spacing: 12) {
+                meter("CPU", value: percentageLabel(monitor.system?.cpu), fraction: monitor.system?.cpu.map { $0 / 100 }, symbol: "cpu")
+                meter("内存", value: monitor.system.map { memoryLabel($0.memoryUsed) + " / " + memoryLabel($0.memoryTotal) } ?? "读取中", fraction: monitor.system.map { Double($0.memoryUsed) / Double(max(1, $0.memoryTotal)) }, symbol: "memorychip")
+                VStack(alignment: .leading, spacing: 5) {
+                    meter("磁盘", value: monitor.system.map { diskLabel($0.diskUsed) + " / " + diskLabel($0.diskTotal) } ?? "读取中", fraction: monitor.system.flatMap { $0.diskTotal > 0 ? Double($0.diskUsed) / Double($0.diskTotal) : nil }, symbol: "internaldrive")
+                    Text(verbatim: L10n.text("模型库：" + (monitor.system?.modelBytes.map(sizeLabel) ?? "统计中"))).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
+                }
+            }.padding(16)
             if !monitor.services.isEmpty {
                 Divider()
-                ForEach(Array(monitor.services.prefix(3))) { service in HStack { VStack(alignment: .leading, spacing: 4) { Text(verbatim: L10n.text(service.name)).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(service.model)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1) }; Spacer(); VStack(alignment: .trailing, spacing: 4) { Text(verbatim: L10n.text(service.memory.map(memoryLabel) ?? "—")).font(.system(size: TypeScale.body)); Text(verbatim: L10n.text("CPU " + percentageLabel(service.cpu))).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) } } }
+                VStack(alignment: .leading, spacing: 8) {
+                    sectionTitle("模型服务")
+                    ForEach(Array(monitor.services.prefix(3))) { service in
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 2) { Text(verbatim: L10n.text(service.name)).font(.system(size: TypeScale.body, weight: .medium)); Text(verbatim: L10n.text(service.model)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1) }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) { Text(verbatim: L10n.text(service.memory.map(memoryLabel) ?? "—")).font(.system(size: TypeScale.callout)).monospacedDigit(); Text(verbatim: L10n.text("CPU " + percentageLabel(service.cpu))).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).monospacedDigit() }
+                        }
+                    }
+                }.padding(16)
             }
-            if let latest = performance.records.first { Divider(); HStack { Text(verbatim: L10n.text("最近实测 · " + latest.speedTitle)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted); Spacer(); Text(verbatim: L10n.text(rateLabel(latest.measuredRate))).font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(Theme.linkColor) }; Text(latest.target.modelName).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1) }
+            if let latest = performance.records.first {
+                Divider()
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) { Text(verbatim: L10n.text("最近实测 · " + latest.speedTitle)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted); Text(latest.target.modelName).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1) }
+                    Spacer()
+                    Text(verbatim: L10n.text(rateLabel(latest.measuredRate))).font(.system(size: TypeScale.body, weight: .semibold)).monospacedDigit().foregroundStyle(Theme.linkColor)
+                }.padding(16)
+            }
             StatusDownloads(store: store, downloads: store.downloads)
-            if performance.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text(performance.phase)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.linkColor).lineLimit(2); Spacer(); Button(L10n.text("取消")) { performance.cancel() }.font(.system(size: TypeScale.callout)) } }
-            if store.installation.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text("引擎安装或更新进行中")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.linkColor) } }
-            Divider()
-            HStack { Button(L10n.text("打开管理界面")) { store.showMainWindow?() }.buttonStyle(.borderedProminent).tint(Theme.accent); Spacer(); Button(L10n.text("资源与性能")) { store.tab = .monitor; store.showMainWindow?() }.buttonStyle(.bordered) }
-            HStack {
-                Text(verbatim: L10n.text(store.windowCloseBehavior == .keepRunning ? "关闭主界面后继续后台运行" : "关闭主界面时会询问是否退出")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
-                Spacer()
-                Button(L10n.text("设置")) { store.showSettings?() }.font(.system(size: TypeScale.callout)).buttonStyle(.plain)
-                Button(L10n.text("退出")) { NSApplication.shared.terminate(nil) }.font(.system(size: TypeScale.callout)).buttonStyle(.plain)
+            if performance.running || store.installation.running {
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    if performance.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text(performance.phase)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.linkColor).lineLimit(2); Spacer(); Button(L10n.text("取消")) { performance.cancel() }.controlSize(.small) } }
+                    if store.installation.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text("引擎安装或更新进行中")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.linkColor) } }
+                }.padding(16)
             }
-        }.padding(22).frame(width: 390).background(Theme.background)
+            Divider()
+            VStack(spacing: 0) {
+                MenuRow(title: "打开管理界面", symbol: "macwindow") { store.showMainWindow?() }
+                MenuRow(title: "资源与性能", symbol: "gauge.with.dots.needle.33percent") { store.tab = .monitor; store.showMainWindow?() }
+            }.padding(5)
+            Divider()
+            VStack(spacing: 0) {
+                MenuRow(title: "设置…", symbol: "gearshape", shortcut: "⌘,") { store.showSettings?() }
+                MenuRow(title: "退出模型管理", symbol: "power", shortcut: "⌘Q") { NSApplication.shared.terminate(nil) }
+            }.padding(5)
+        }.frame(width: 340).background(Theme.background)
     }
-    func bar(_ title: String, value: String, fraction: Double?, symbol: String) -> some View { VStack(spacing: 8) { HStack { Label(L10n.text(title), systemImage: symbol).font(.system(size: TypeScale.body, weight: .medium)); Spacer(); Text(verbatim: L10n.text(value)).font(.system(size: TypeScale.body)).monospacedDigit() }; ProgressView(value: min(1, max(0, fraction ?? 0))).tint(Theme.accent) }.accessibilityElement(children: .combine) }
+    func sectionTitle(_ title: String) -> some View { Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.caption, weight: .semibold)).foregroundStyle(Theme.muted) }
+    func meter(_ title: String, value: String, fraction: Double?, symbol: String) -> some View {
+        VStack(spacing: 6) {
+            HStack { Label(L10n.text(title), systemImage: symbol).font(.system(size: TypeScale.body)); Spacer(); Text(verbatim: L10n.text(value)).font(.system(size: TypeScale.callout)).monospacedDigit().foregroundStyle(Theme.muted) }
+            UsageBar(fraction: fraction)
+        }.accessibilityElement(children: .combine)
+    }
+}
+
+/// Thin usage meter drawn with explicit colors, so it keeps its tint when the popover is not key.
+struct UsageBar: View {
+    var fraction: Double?
+    var body: some View {
+        let value = min(1, max(0, fraction ?? 0))
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.line)
+                Capsule().fill(value >= 0.9 ? Color.red : value >= 0.75 ? Color.orange : Theme.accent).frame(width: geometry.size.width * value)
+            }
+        }.frame(height: 5)
+    }
+}
+
+/// Hover flag for rows; the swiftc build has no SwiftUI macro plugin, so @State is unavailable.
+final class HoverState: ObservableObject { @Published var active = false }
+
+/// Native-menu-style row: full-width, highlighted on hover.
+struct MenuRow: View {
+    var title: String
+    var symbol: String
+    var shortcut: String?
+    var action: () -> Void
+    @StateObject private var hover = HoverState()
+    private var hovering: Bool { hover.active }
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: symbol).font(.system(size: 13)).frame(width: 18)
+                Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.body))
+                Spacer()
+                if let shortcut { Text(verbatim: shortcut).font(.system(size: TypeScale.body)).foregroundStyle(hovering ? Color.white.opacity(0.85) : Theme.muted) }
+            }
+            .foregroundStyle(hovering ? Color.white : Color.primary)
+            .padding(.horizontal, 10).frame(height: 26)
+            .background(hovering ? Theme.accent : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+            .contentShape(Rectangle())
+        }.buttonStyle(.plain).onHover { hover.active = $0 }
+    }
 }
