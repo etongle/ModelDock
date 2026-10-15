@@ -87,7 +87,7 @@ struct DownloadRow: View {
                     Spacer()
                     Text(verbatim: L10n.text(job.percentageLabel)).monospacedDigit()
                 }.font(.system(size: TypeScale.callout)).foregroundStyle(.secondary)
-                if job.state != .complete && job.totalKnown && job.total > 0 { UsageBar(fraction: Double(job.received) / Double(job.total)) }
+                if job.state != .complete && job.totalKnown && job.total > 0 { UsageBar(fraction: Double(job.received) / Double(job.total), progress: true) }
                 Text(verbatim: L10n.text(job.totalKnown ? "\(sizeLabel(job.received)) / \(sizeLabel(job.total))" : sizeLabel(job.received)) + (active ? " · " + downloads.speedLabel(job.id) : ""))
                     .font(.system(size: TypeScale.caption)).monospacedDigit().foregroundStyle(.secondary).accessibilityIdentifier("download-speed-\(job.id)")
             }

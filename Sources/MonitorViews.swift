@@ -219,15 +219,19 @@ struct StatusBarPanel: View {
     }
 }
 
-/// Thin usage meter drawn with explicit colors, so it keeps its tint when the popover is not key.
+/// Thin meter drawn with explicit colors, so it keeps its tint when the popover is not key.
+/// Usage (default) warns as it fills: orange from 75%, red from 90%. Progress is the opposite —
+/// filling up is good — so it stays accent while running and turns green when complete.
 struct UsageBar: View {
     var fraction: Double?
+    var progress = false
     var body: some View {
         let value = min(1, max(0, fraction ?? 0))
+        let tint = progress ? (value >= 1 ? Color.green : Theme.accent) : (value >= 0.9 ? Color.red : value >= 0.75 ? Color.orange : Theme.accent)
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 Capsule().fill(Theme.line)
-                Capsule().fill(value >= 0.9 ? Color.red : value >= 0.75 ? Color.orange : Theme.accent).frame(width: geometry.size.width * value)
+                Capsule().fill(tint).frame(width: geometry.size.width * value)
             }
         }.frame(height: 5)
     }

@@ -32,7 +32,7 @@ struct DownloadFileDetails: View {
                     Spacer()
                     Text(verbatim: L10n.text(job.percentageLabel)).monospacedDigit()
                 }
-                if job.totalKnown && job.total > 0 { UsageBar(fraction: Double(job.received) / Double(job.total)) }
+                if job.totalKnown && job.total > 0 { UsageBar(fraction: Double(job.received) / Double(job.total), progress: true) }
                 HStack {
                     Text(verbatim: L10n.text(job.totalKnown ? "\(sizeLabel(job.received)) / \(sizeLabel(job.total))" : "\(sizeLabel(job.received)) · 总量待确认"))
                     Spacer()
@@ -99,7 +99,7 @@ struct DownloadFileRow: View {
                 else if progress.state == .complete { Text(verbatim: L10n.text(progress.file.sha256 == nil ? "大小检查通过" : "SHA-256 已校验")) }
             }.font(.system(size: TypeScale.caption)).monospacedDigit().foregroundStyle(Theme.muted)
             if progress.state != .complete, progress.received > 0, progress.file.bytes > 0 {
-                UsageBar(fraction: progress.file.bytes > 0 ? Double(progress.received) / Double(progress.file.bytes) : 0)
+                UsageBar(fraction: progress.file.bytes > 0 ? Double(progress.received) / Double(progress.file.bytes) : 0, progress: true)
             }
             if let error = progress.error { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
             if progress.state != .complete {

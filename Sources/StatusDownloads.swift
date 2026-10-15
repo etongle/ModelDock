@@ -22,7 +22,7 @@ struct StatusDownloads: View {
                     Spacer()
                     Text(verbatim: L10n.text(downloads.activeID == job.id ? job.percentageLabel : job.state.rawValue)).font(.system(size: TypeScale.callout)).monospacedDigit().foregroundStyle(Theme.muted)
                 }
-                if job.totalKnown && job.total > 0 { UsageBar(fraction: Double(job.received) / Double(job.total)) }
+                if job.totalKnown && job.total > 0 { UsageBar(fraction: Double(job.received) / Double(job.total), progress: true) }
                 HStack {
                     Text(verbatim: L10n.text(job.totalKnown ? "\(sizeLabel(job.received)) / \(sizeLabel(job.total))" : sizeLabel(job.received)) + (downloads.activeID == job.id ? " · " + downloads.speedLabel(job.id) : ""))
                         .font(.system(size: TypeScale.caption)).monospacedDigit().foregroundStyle(Theme.muted).accessibilityIdentifier("status-download-progress")
