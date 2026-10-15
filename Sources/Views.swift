@@ -106,7 +106,7 @@ struct SidebarToggleButton: View {
     var body: some View {
         let title = store.sidebarHidden ? "显示边栏" : "隐藏边栏"
         Button { store.toggleSidebar() } label: {
-            Image(systemName: store.sidebarHidden ? "chevron.right" : "chevron.left").font(.system(size: 13, weight: .semibold)).frame(width: 28, height: 28).contentShape(Rectangle())
+            Image(systemName: "sidebar.left").font(.system(size: 15)).frame(width: 30, height: 28).contentShape(Rectangle())
         }.buttonStyle(.borderless).foregroundStyle(Theme.muted)
             .help(L10n.text(title + " · ⌃⌘S")).accessibilityLabel(L10n.text(title)).accessibilityIdentifier("toggle-sidebar")
     }
