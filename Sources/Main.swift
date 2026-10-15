@@ -245,7 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc func about() { NSApplication.shared.orderFrontStandardAboutPanel(options: [.applicationName: L10n.text("模型管理"), .applicationVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "", .credits: NSAttributedString(string: L10n.text("模型与下载任务管理、命令启动和统一网关"))]) }
     @objc func addFolder() { store.addLocation() }
     @objc func rescan() { store.scan() }
-    @objc func toggleSidebar() { store.sidebarHidden.toggle() }
+    @objc func toggleSidebar() { store.toggleSidebar() }
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         if item.action == #selector(toggleSidebar) { item.title = L10n.text(store.sidebarHidden ? "显示边栏" : "隐藏边栏") }
         return true

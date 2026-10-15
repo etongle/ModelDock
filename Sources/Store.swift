@@ -62,6 +62,11 @@ final class AppStore: ObservableObject {
     @Published var windowCloseBehavior: WindowCloseBehavior = .keepRunning { didSet { savePreferences() } }
     @Published var appearance: AppAppearance = .system { didSet { savePreferences(); onAppearanceChange?() } }
     @Published var sidebarHidden = false { didSet { savePreferences() } }
+    /// 200 ms like system sidebars; instant when Reduce Motion is on.
+    func toggleSidebar() {
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { sidebarHidden.toggle() }
+        else { withAnimation(.easeInOut(duration: 0.2)) { sidebarHidden.toggle() } }
+    }
     var onAppearanceChange: (() -> Void)?
     @Published var language: AppLanguage = .english { didSet { L10n.select(language); savePreferences(); onLanguageChange?() } }
     @Published var preferencesError: String?

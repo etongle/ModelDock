@@ -136,7 +136,7 @@ struct MainView: View {
                     // Rescan lives beside the lists it refreshes (ScanStatus) and in File ▸ Rescan (⌘R).
                     HStack(spacing: 6) {
                         // Standard sidebar toggle, right of the traffic lights; also View ▸ Hide Sidebar (⌃⌘S).
-                        Button { store.sidebarHidden.toggle() } label: { Image(systemName: "sidebar.left").font(.system(size: 15)).frame(width: 30, height: 28).contentShape(Rectangle()) }
+                        Button { store.toggleSidebar() } label: { Image(systemName: "sidebar.left").font(.system(size: 15)).frame(width: 30, height: 28).contentShape(Rectangle()) }
                             .buttonStyle(.borderless).help(L10n.text((store.sidebarHidden ? "显示边栏" : "隐藏边栏") + " · ⌃⌘S"))
                             .accessibilityLabel(L10n.text(store.sidebarHidden ? "显示边栏" : "隐藏边栏")).accessibilityIdentifier("toggle-sidebar")
                         Spacer(); LanguageMenu(store: store, compact: geometry.size.width < 1200)
