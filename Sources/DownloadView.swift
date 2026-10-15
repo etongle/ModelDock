@@ -9,9 +9,8 @@ struct DownloadWorkspace: View {
     var body: some View {
         HStack(spacing: 0) {
             if !store.sidebarHidden {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack { Text(verbatim: L10n.text("下载任务")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); SidebarToggleButton(store: store) }
-                Text(verbatim: L10n.text("下载、续传与模型导入")).foregroundStyle(Theme.muted)
+            VStack(alignment: .leading, spacing: SidebarMetrics.spacing) {
+                SidebarHeader(title: "下载任务") { SidebarToggleButton(store: store) }.padding(.bottom, 4)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         if downloads.jobs.isEmpty { EmptyMessage(symbol: "arrow.down.circle", title: L10n.text("还没有下载任务"), detail: "粘贴仓库或模型文件地址，选择要下载的文件。") }
@@ -36,7 +35,7 @@ struct DownloadWorkspace: View {
                     }
                 }
                 Text(verbatim: L10n.text("下载优先续传同位置的匹配任务。\n删除任务保留文件；清理会检查文件共用情况。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
-            }.padding(24).frame(width: sidebarWidth).background(Theme.sidebar)
+            }.padding(SidebarMetrics.padding).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
             } else { SidebarRail(store: store) }
             ScrollView {

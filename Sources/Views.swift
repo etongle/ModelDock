@@ -102,6 +102,50 @@ struct LanguageMenu: View {
     }
 }
 
+/// Shared sidebar building blocks: every tab uses the same header, icon actions, section titles,
+/// row chrome and spacing (title + trailing actions → optional filters → list → footer).
+enum SidebarMetrics { static let padding: CGFloat = 20; static let spacing: CGFloat = 12 }
+
+struct SidebarHeader<Actions: View>: View {
+    var title: String
+    @ViewBuilder var actions: Actions
+    var body: some View {
+        HStack(spacing: 2) { Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.title, weight: .bold)).lineLimit(1); Spacer(minLength: 8); actions }
+    }
+}
+
+struct SidebarIconButton: View {
+    var symbol: String
+    var help: String
+    var action: () -> Void
+    var body: some View {
+        Button(action: action) { Image(systemName: symbol).font(.system(size: 15)).frame(width: 30, height: 28).contentShape(Rectangle()) }
+            .buttonStyle(.borderless).foregroundStyle(Theme.muted).help(L10n.text(help)).accessibilityLabel(L10n.text(help))
+    }
+}
+
+struct SidebarSectionTitle: View {
+    var title: String
+    var body: some View { Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.caption, weight: .semibold)).foregroundStyle(Theme.muted) }
+}
+
+/// Square symbol tile used when a row has no engine icon.
+struct SidebarSymbol: View {
+    var symbol: String
+    var body: some View {
+        Image(systemName: symbol).font(.system(size: 14)).foregroundStyle(Theme.linkColor)
+            .frame(width: 32, height: 32).background(Theme.linkColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+extension View {
+    /// Row chrome shared by all sidebar lists.
+    func sidebarRow(selected: Bool) -> some View {
+        padding(10).frame(maxWidth: .infinity, alignment: .leading)
+            .background(selected ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
+    }
+}
+
 /// Collapse/expand control placed at the trailing edge of each sidebar header (and on the collapsed rail).
 @MainActor
 struct SidebarToggleButton: View {
@@ -203,22 +247,23 @@ struct EngineWorkspace: View {
     var body: some View {
         HStack(spacing: 0) {
             if !store.sidebarHidden {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack { Text(verbatim: L10n.text("运行引擎")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); SidebarToggleButton(store: store) }.padding(.bottom, 6)
-                Text(verbatim: L10n.text("本地引擎、安装与更新")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.bottom, 16)
-                Button { store.showGlobalEngines = true } label: { Label(L10n.text("全局引擎设置"), systemImage: "slider.horizontal.3") }.buttonStyle(.bordered).padding(.bottom, 14).accessibilityIdentifier("global-engine-settings")
+            VStack(alignment: .leading, spacing: SidebarMetrics.spacing) {
+                SidebarHeader(title: "运行引擎") {
+                    SidebarIconButton(symbol: "slider.horizontal.3", help: "全局引擎设置") { store.showGlobalEngines = true }.accessibilityIdentifier("global-engine-settings")
+                    SidebarToggleButton(store: store)
+                }.padding(.bottom, 4)
                 ScrollView {
-                    VStack(spacing: 6) {
+                    VStack(spacing: 4) {
                         ForEach(store.enabledEngines) { engine in
                             Button { store.chooseEngine(engine.id) } label: {
-                                engineRow(engine).padding(.horizontal, 12).padding(.vertical, 11).frame(maxWidth: .infinity, alignment: .leading).background(store.engineID == engine.id ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: 13)).contentShape(Rectangle())
+                                engineRow(engine).sidebarRow(selected: store.engineID == engine.id)
                             }.buttonStyle(.plain).help(L10n.text(engine.path)).accessibilityAddTraits(store.engineID == engine.id ? .isSelected : []).accessibilityIdentifier("engine-\(engine.id)")
                         }
                     }
                 }
-                Spacer(minLength: 8)
-                ScanStatus(store: store).padding(.top, 18)
-            }.padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 20).frame(width: sidebarWidth).background(Theme.sidebar)
+                Spacer(minLength: 0)
+                ScanStatus(store: store)
+            }.padding(SidebarMetrics.padding).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
             } else { SidebarRail(store: store) }
             ScrollView {
@@ -278,12 +323,11 @@ struct EngineWorkspace: View {
         }
     }
     @ViewBuilder func engineRow(_ engine: Engine) -> some View {
-        let compact = sidebarWidth < 360
         let status = engine.installed ? "已安装" : engine.installation == "仅残留组件" ? "仅残留组件" : "未安装"
         let services = store.engineServiceCount(engine.id)
         // Single column: a fixed-width status column used to wrap names and truncate the model rule.
-        HStack(spacing: 12) {
-            EngineIcon(engine: engine, size: compact ? 36 : 40)
+        HStack(alignment: .top, spacing: 10) {
+            EngineIcon(engine: engine, size: 32)
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: L10n.text(engine.name)).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1)
                 HStack(spacing: 6) {
@@ -376,7 +420,10 @@ struct ModelWorkspace: View {
         HStack(spacing: 0) {
             if !store.sidebarHidden {
             VStack(alignment: .leading, spacing: 12) {
-                HStack { Text(verbatim: L10n.text("模型文件")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); Button { store.importLocalModels() } label: { Image(systemName: "plus").font(.system(size: 15)).frame(width: 30, height: 28).contentShape(Rectangle()) }.buttonStyle(.borderless).help(L10n.text("导入本地模型文件或目录")).accessibilityLabel(L10n.text("导入本地模型")); SidebarToggleButton(store: store) }.padding(.bottom, 4)
+                SidebarHeader(title: "模型文件") {
+                    SidebarIconButton(symbol: "plus", help: "导入本地模型文件或目录") { store.importLocalModels() }
+                    SidebarToggleButton(store: store)
+                }.padding(.bottom, 4)
                 TextField(L10n.text("搜索名称、格式或路径"), text: $store.search).textFieldStyle(.roundedBorder).font(.system(size: TypeScale.body)).accessibilityIdentifier("model-search").onChange(of: store.search) { _, _ in selectVisibleModel() }
                 Picker(L10n.text("模型基座"), selection: $store.modelEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.enabledEngines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelEngineFilter) { _, _ in selectVisibleModel() }
                 Picker(L10n.text("模型分类"), selection: $store.modelFilter) { ForEach(["全部", "主模型", "附属模型"], id: \.self) { Text(verbatim: L10n.text($0)) } }.pickerStyle(.segmented).labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelFilter) { _, _ in selectVisibleModel() }.padding(.bottom, 4)
@@ -400,7 +447,7 @@ struct ModelWorkspace: View {
                                 }
                             }
                             Spacer(minLength: 0)
-                        }.padding(10).frame(maxWidth: .infinity, alignment: .leading).background(store.selectedFileID == model.id ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
+                        }.sidebarRow(selected: store.selectedFileID == model.id)
                     }.buttonStyle(.plain).help(L10n.text(model.path))
                 } } }
                 HStack { Text(verbatim: L10n.text("\(store.filteredModels.count) 个模型条目")); Spacer(); Text(verbatim: L10n.text("目录总占用 " + sizeLabel(store.inventory?.storageBytes ?? 0))) }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
@@ -460,30 +507,29 @@ struct ServiceWorkspace: View {
     var body: some View {
         HStack(spacing: 0) {
             if !store.sidebarHidden {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack { Text(verbatim: L10n.text("模型服务")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); SidebarToggleButton(store: store) }
-                Text(verbatim: L10n.text("本工具服务与现有本地接口")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
-                Picker(L10n.text("模型基座"), selection: $store.serviceEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.engines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.onChange(of: store.serviceEngineFilter) { _, _ in store.selectVisibleService() }
+            VStack(alignment: .leading, spacing: SidebarMetrics.spacing) {
+                SidebarHeader(title: "模型服务") { SidebarToggleButton(store: store) }.padding(.bottom, 4)
+                Picker(L10n.text("模型基座"), selection: $store.serviceEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.engines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.serviceEngineFilter) { _, _ in store.selectVisibleService() }
                 Button { store.gatewaySelected = true; store.synchronizeGateway(); Task { await store.gateway.poll() } } label: {
-                    HStack(spacing: 12) { Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(Theme.linkColor); VStack(alignment: .leading, spacing: 5) { Text(verbatim: L10n.text("统一网关")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(store.gateway.ready ? "运行中 · \(store.gateway.routes.filter(\.enabled).count) 个模型" : "本机与外部接口统一接入")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }; Spacer() }.padding(14).background(store.gatewaySelected ? Theme.selection : Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
+                    HStack(spacing: 10) { SidebarSymbol(symbol: "point.3.connected.trianglepath.dotted"); VStack(alignment: .leading, spacing: 3) { Text(verbatim: L10n.text("统一网关")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(store.gateway.ready ? "运行中 · \(store.gateway.routes.filter(\.enabled).count) 个模型" : "本机与外部接口统一接入")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }; Spacer(minLength: 0) }.sidebarRow(selected: store.gatewaySelected)
                 }.buttonStyle(.plain).accessibilityIdentifier("show-gateway")
-                ScrollView { VStack(alignment: .leading, spacing: 8) {
-                    Text(verbatim: L10n.text("本工具管理")).font(.system(size: TypeScale.callout, weight: .semibold)).foregroundStyle(Theme.muted).padding(.top, 12)
+                ScrollView { VStack(alignment: .leading, spacing: 4) {
+                    SidebarSectionTitle(title: "由 ModelDock 管理").padding(.top, 8).padding(.bottom, 2)
                     if store.visibleServices.isEmpty { Text(verbatim: L10n.text("此范围还没有配置服务")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.vertical, 15) }
                     ForEach(store.visibleServices) { spec in
                         HStack(spacing: 0) {
-                            Button { store.showService(spec) } label: { serviceRow(title: store.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, detail: "\(spec.modelName) · \(spec.port)", status: services.statusTitle(spec), color: services.status(spec).color, selected: store.selectedServiceID == spec.id && store.selectedExternal == nil) }.buttonStyle(.plain)
+                            Button { store.showService(spec) } label: { serviceRow(title: store.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, detail: "\(spec.modelName) · \(spec.port)", status: services.statusTitle(spec), color: services.status(spec).color, selected: store.selectedServiceID == spec.id && store.selectedExternal == nil && !store.gatewaySelected, engine: store.engines.first { $0.id == spec.engineID }) }.buttonStyle(.plain)
                         }.contextMenu {
                             Button(L10n.text("复制接口地址")) { store.copy("http://127.0.0.1:\(spec.port)/v1") }
                             Button(L10n.text("删除服务配置…"), role: .destructive) { store.serviceRemoval = spec }.disabled(!services.canRemoveConfiguration(spec))
                         }
                     }
-                    Text(verbatim: L10n.text("外部启动")).font(.system(size: TypeScale.callout, weight: .semibold)).foregroundStyle(Theme.muted).padding(.top, 22)
+                    SidebarSectionTitle(title: "本机已发现").padding(.top, 16).padding(.bottom, 2)
                     if store.visibleExternalServices.isEmpty { Text(verbatim: L10n.text("未发现此范围的本地接口")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.vertical, 15) }
                     ForEach(store.visibleExternalServices) { item in Button { store.gatewaySelected = false; store.selectedExternal = item.port } label: { serviceRow(title: item.engineName, detail: "127.0.0.1:\(item.port)", status: item.ready ? "接口可用" : "端口已占用", color: item.ready ? .green : .orange, selected: store.selectedExternal == item.port && !store.gatewaySelected) }.buttonStyle(.plain) }
                 } }
                 Text(verbatim: L10n.text("每 3 秒检查本机常用模型端口")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
-            }.padding(24).frame(width: sidebarWidth).background(Theme.sidebar)
+            }.padding(SidebarMetrics.padding).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
             } else { SidebarRail(store: store) }
             ScrollView {
@@ -538,7 +584,15 @@ struct ServiceWorkspace: View {
             }.frame(maxWidth: .infinity)
         }
     }
-    func serviceRow(title: String, detail: String, status: String, color: Color, selected: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 10) { Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).lineLimit(1); StateLabel(title: status, color: color) }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(selected ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: 12)).contentShape(Rectangle())
+    func serviceRow(title: String, detail: String, status: String, color: Color, selected: Bool, engine: Engine? = nil) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            if let engine { EngineIcon(engine: engine, size: 32) } else { SidebarSymbol(symbol: "network") }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1)
+                Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
+                HStack(spacing: 6) { Circle().fill(color).frame(width: 6, height: 6); Text(verbatim: L10n.text(status)) }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+            }
+            Spacer(minLength: 0)
+        }.sidebarRow(selected: selected)
     }
 }
