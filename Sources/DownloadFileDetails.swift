@@ -34,7 +34,7 @@ struct DownloadFileDetails: View {
                 HStack {
                     Text(verbatim: L10n.text(job.totalKnown ? "\(sizeLabel(job.received)) / \(sizeLabel(job.total))" : "\(sizeLabel(job.received)) · 总量待确认"))
                     Spacer()
-                    Text(verbatim: L10n.text("下载速度 " + downloads.speedLabel(job.id))).foregroundStyle(Theme.linkColor)
+                    Text(verbatim: L10n.text("下载速度 " + downloads.speedLabel(job.id))).foregroundStyle(Theme.muted)
                 }.font(.system(size: TypeScale.body)).monospacedDigit()
                 HStack(spacing: 18) {
                     Text(verbatim: L10n.text("已完成 \(rows.filter { $0.state == .complete }.count) / \(rows.count)"))
@@ -95,7 +95,7 @@ struct DownloadFileRow: View {
                 Text(verbatim: L10n.text(progress.percentageLabel))
                 Text(verbatim: L10n.text(progress.file.bytes > 0 ? "\(sizeLabel(progress.received)) / \(sizeLabel(progress.file.bytes))" : sizeLabel(progress.received)))
                 Spacer(minLength: 8)
-                if let speed = progress.speed { Text(verbatim: L10n.text(sizeLabel(Int64(max(0, min(Double(Int64.max / 2), speed.isFinite ? speed : 0)))) + "/s")).foregroundStyle(Theme.linkColor) }
+                if let speed = progress.speed { Text(verbatim: L10n.text(sizeLabel(Int64(max(0, min(Double(Int64.max / 2), speed.isFinite ? speed : 0)))) + "/s")).foregroundStyle(Theme.muted) }
                 else if progress.state == .complete { Text(verbatim: L10n.text(progress.file.sha256 == nil ? "大小检查通过" : "SHA-256 已校验")) }
             }.font(.system(size: TypeScale.caption)).monospacedDigit().foregroundStyle(Theme.muted)
             if progress.state != .complete, progress.received > 0, progress.file.bytes > 0 {

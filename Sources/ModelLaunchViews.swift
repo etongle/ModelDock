@@ -27,7 +27,7 @@ struct ModelLocalVersions: View {
                             Text(verbatim: L10n.text(version.name)).font(.system(size: TypeScale.body, weight: .medium)).lineLimit(2)
                             Text(verbatim: L10n.text(version.format + " · " + sizeLabel(version.bytes) + (ModelOrigin.read(version).map { " · " + String($0.revision.prefix(12)) } ?? ""))).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
                         }.frame(maxWidth: .infinity, alignment: .leading)
-                        if version.id == model.id { Text(verbatim: L10n.text("当前查看")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.linkColor) }
+                        if version.id == model.id { Text(verbatim: L10n.text("当前查看")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }
                         else { Button(L10n.text("选择版本")) { store.showModelFile(version) }.buttonStyle(.bordered) }
                         Button(role: .destructive) { store.deleteModel(version) } label: { Image(systemName: "trash") }.buttonStyle(.bordered).help(L10n.text("移至废纸篓；使用中的模型会被拦截")).disabled(store.modelFiles.deletingID != nil)
                     }.padding(12).background(Theme.line.opacity(0.3), in: RoundedRectangle(cornerRadius: 9))

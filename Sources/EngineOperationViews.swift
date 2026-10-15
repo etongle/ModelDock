@@ -35,7 +35,7 @@ struct EngineInstallPanel: View {
                 if installer.checking == store.engineID { ProgressView().controlSize(.small); Text(verbatim: L10n.text("检查中…")).font(.system(size: TypeScale.body)) }
                 else { Button { store.checkInstall() } label: { Label(L10n.text(store.engine.kind == .mlx && !store.engine.canServe ? "安装 MLX-LM…" : store.engine.installed ? "检查更新…" : "安装引擎…"), systemImage: "arrow.triangle.2.circlepath") }.buttonStyle(.bordered).controlSize(.large).disabled(installer.checking != nil || installer.running || (store.maintaining && store.maintenanceEngineID == store.engineID)) }
             }
-            if installer.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text("正在安装或更新；完成后自动扫描引擎。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.linkColor) } }
+            if installer.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text("正在安装或更新；完成后自动扫描引擎。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) } }
             else if let message = installer.message, installer.plan == nil { Text(verbatim: L10n.text(message)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(3).textSelection(.enabled) }
         }.padding(17).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
     }
@@ -51,10 +51,10 @@ struct EngineInstallView: View {
     var blockers: [String] { needsAction ? Array(Set(plan.blockers + store.installBlockers(currentEngine))).sorted() : [] }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack { EngineIcon(engine: currentEngine, size: 52); VStack(alignment: .leading, spacing: 6) { Text(verbatim: L10n.text(needsAction || installer.running ? plan.title : L10n.text("版本检查 · " + currentEngine.name))).font(.system(size: TypeScale.section, weight: .bold)); Text(verbatim: L10n.text(store.scanning && !installer.running ? "正在核对安装结果…" : EngineVersionPolicy.summary(rows))).foregroundStyle(needsAction ? Theme.warningText : Theme.linkColor) }; Spacer() }
+            HStack { EngineIcon(engine: currentEngine, size: 52); VStack(alignment: .leading, spacing: 6) { Text(verbatim: L10n.text(needsAction || installer.running ? plan.title : L10n.text("版本检查 · " + currentEngine.name))).font(.system(size: TypeScale.section, weight: .bold)); Text(verbatim: L10n.text(store.scanning && !installer.running ? "正在核对安装结果…" : EngineVersionPolicy.summary(rows))).foregroundStyle(needsAction ? Theme.warningText : Theme.muted) }; Spacer() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 17) {
-                    Label(L10n.text(plan.release.source), systemImage: "checkmark.shield").font(.system(size: TypeScale.body)).foregroundStyle(Theme.linkColor)
+                    Label(L10n.text(plan.release.source), systemImage: "checkmark.shield").font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                     EngineVersionTable(rows: rows)
                     if needsAction { ForEach(plan.notes, id: \.self) { Text(verbatim: L10n.text($0)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) } }
                     else { Text(verbatim: L10n.text("当前无需更新。各组件的版本号独立，不能相互比较。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
@@ -67,7 +67,7 @@ struct EngineInstallView: View {
                         HStack { Text(verbatim: L10n.text("执行进度")).fontWeight(.semibold); Spacer(); if installer.running { ProgressView().controlSize(.small) } }
                         Text(verbatim: L10n.text(String(installer.log.suffix(24_000)))).font(.system(size: TypeScale.caption, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(14).background(Theme.line.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
                     }
-                    if let message = installer.message { Text(verbatim: L10n.text(installer.succeeded && !installer.running && !store.scanning ? "操作已完成。" + EngineVersionPolicy.summary(rows) + "。" : message)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.linkColor).textSelection(.enabled) }
+                    if let message = installer.message { Text(verbatim: L10n.text(installer.succeeded && !installer.running && !store.scanning ? "操作已完成。" + EngineVersionPolicy.summary(rows) + "。" : message)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).textSelection(.enabled) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
             Divider()
@@ -110,7 +110,7 @@ struct MultiModelView: View {
                                 Image(systemName: draft.selected.contains(choice.id) ? "checkmark.circle.fill" : "circle").font(.system(size: 22)).foregroundStyle(draft.selected.contains(choice.id) ? Theme.linkColor : Theme.muted)
                                 VStack(alignment: .leading, spacing: 6) { Text(verbatim: L10n.text(choice.name)).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(2); Text(verbatim: L10n.text((choice.model.map { $0.format + " · " } ?? "") + (choice.bytes > 0 ? sizeLabel(choice.bytes) : "大小由引擎管理"))).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
                                 Spacer()
-                                if draft.mode == .independent, let index = draft.selectedChoices.firstIndex(where: { $0.id == choice.id }), let ports = draft.ports, index < ports.count { Text(verbatim: L10n.text("端口 \(ports[index])")).font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.linkColor) }
+                                if draft.mode == .independent, let index = draft.selectedChoices.firstIndex(where: { $0.id == choice.id }), let ports = draft.ports, index < ports.count { Text(verbatim: L10n.text("端口 \(ports[index])")).font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted) }
                             }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(draft.selected.contains(choice.id) ? Theme.selection : Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
                         }.buttonStyle(.plain).disabled(draft.running || draft.done).help(L10n.text(choice.model?.path ?? choice.name))
                     }
@@ -126,7 +126,7 @@ struct MultiModelView: View {
             if draft.weightBytes > 0 { Text(verbatim: L10n.text("所选权重 \(sizeLabel(draft.weightBytes)) · 内存已用 \(store.resources.system.map { memoryLabel($0.memoryUsed) } ?? "—") / \(memoryLabel(store.inventory?.memoryBytes ?? 0))；运行另需缓存与工作内存。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
             ForEach(Array(modalityBlockers.prefix(3)), id: \.self) { Text(verbatim: L10n.text($0)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.warningText) }
             if draft.mode == .ollama { Text(verbatim: L10n.text("常驻模型数量可在启动 Ollama 服务的“更多设置”中调整。已有外部服务采用它自己的设置。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
-            if !draft.progress.isEmpty { HStack { if draft.running { ProgressView().controlSize(.small) }; Text(verbatim: L10n.text(draft.progress)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.linkColor) } }
+            if !draft.progress.isEmpty { HStack { if draft.running { ProgressView().controlSize(.small) }; Text(verbatim: L10n.text(draft.progress)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) } }
             if !draft.errors.isEmpty { Text(verbatim: L10n.text(draft.errors.joined(separator: "\n"))).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.errorText).lineLimit(4).textSelection(.enabled) }
             Divider()
             HStack { Button(L10n.text("关闭")) { store.multiModel = nil }.buttonStyle(.bordered).disabled(draft.running); Spacer(); if draft.done { Button(L10n.text("查看模型服务")) { store.multiModel = nil; store.tab = .services }.buttonStyle(AccentButton()) } else { Button(L10n.text(draft.mode == .independent ? "启动所选模型" : "加载所选模型")) { store.runMultiModel(draft) }.buttonStyle(AccentButton()).disabled(draft.selected.isEmpty || draft.selected.count > 16 || draft.running || !modalityBlockers.isEmpty || store.installation.activeEngineID == draft.engine.id) } }

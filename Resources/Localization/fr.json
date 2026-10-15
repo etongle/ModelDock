@@ -1415,5 +1415,9 @@
   "浅色": "Clair",
   "深色": "Sombre",
   "隐藏边栏": "Masquer la barre latérale",
-  "显示边栏": "Afficher la barre latérale"
+  "显示边栏": "Afficher la barre latérale",
+  "请至少选择一个文件": "Sélectionnez au moins un fichier",
+  "已有下载进行中，完成或暂停后可开始": "Un autre téléchargement est en cours ; démarrez quand il est terminé ou en pause",
+  "引擎维护进行中，完成后可开始下载": "Maintenance du moteur en cours ; le téléchargement pourra démarrer ensuite",
+  "删除服务配置…": "Supprimer la configuration du service…"
 }

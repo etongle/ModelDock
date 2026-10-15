@@ -135,7 +135,7 @@ struct InputModeView: View {
                 HStack(spacing: 10) { Text(verbatim: L10n.text("启动后输入")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted); ModelCapabilityBadge(capabilities: ModalityPolicy.planned(engine: store.engine, model: store.selectedModel, projector: store.projectorPath, mode: store.inputMode)) }
             }
             if store.engine.kind == .mlx {
-                Text(verbatim: L10n.text("本次使用：" + ((store.inputMode == .multimodal || (store.inputMode == .automatic && store.selectedModelCapabilities.supportsMedia && store.engine.visionPath != nil)) ? "MLX-VLM · 多模态服务" : "MLX-LM · 文本服务"))).font(.system(size: TypeScale.body, weight: .medium)).foregroundStyle(Theme.linkColor)
+                Text(verbatim: L10n.text("本次使用：" + ((store.inputMode == .multimodal || (store.inputMode == .automatic && store.selectedModelCapabilities.supportsMedia && store.engine.visionPath != nil)) ? "MLX-VLM · 多模态服务" : "MLX-LM · 文本服务"))).font(.system(size: TypeScale.body, weight: .medium)).foregroundStyle(Theme.muted)
             }
             Text(verbatim: L10n.text(store.engine.modalityGuide.activation)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             Button(L10n.text("查看此基座的官方多模态说明")) { if let url = URL(string: store.engine.modalityGuide.url) { NSWorkspace.shared.open(url) } }.buttonStyle(PlainAction()).font(.system(size: TypeScale.callout))

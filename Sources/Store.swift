@@ -259,6 +259,8 @@ final class AppStore: ObservableObject {
         tab = .engines
         normalizeStartupMode()
     }
+    /// Pending destructive action awaiting confirmation in the main view.
+    @Published var serviceRemoval: ServiceSpec?
     func removeServiceConfiguration(_ spec: ServiceSpec) {
         let index = services.records.firstIndex { $0.id == spec.id } ?? 0
         do {

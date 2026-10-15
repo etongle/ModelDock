@@ -1415,5 +1415,9 @@
   "浅色": "Claro",
   "深色": "Escuro",
   "隐藏边栏": "Ocultar barra lateral",
-  "显示边栏": "Mostrar barra lateral"
+  "显示边栏": "Mostrar barra lateral",
+  "请至少选择一个文件": "Selecione pelo menos um arquivo",
+  "已有下载进行中，完成或暂停后可开始": "Outro download está em andamento; comece quando ele terminar ou for pausado",
+  "引擎维护进行中，完成后可开始下载": "Manutenção do motor em andamento; o download poderá começar depois",
+  "删除服务配置…": "Excluir configuração do serviço…"
 }

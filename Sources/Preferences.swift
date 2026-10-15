@@ -88,7 +88,7 @@ struct AppUpdateSettings: View {
             Toggle(L10n.text("自动下载并覆盖安装，完成后重新打开"), isOn: $updates.automaticInstall).accessibilityIdentifier("automatic-app-update-install")
             Text(verbatim: L10n.text("模型文件和设置保留，运行中的模型服务继续运行。安装引擎、下载或准备模型时会延后更新。"))
                 .font(.system(size: 12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-            Text(verbatim: L10n.text(updates.status)).font(.system(size: 12)).foregroundStyle(Theme.linkColor).fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: L10n.text(updates.status)).font(.system(size: 12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             if updates.busy {
                 if updates.received > 0, let release = updates.release {
                     ProgressView(value: updates.progress)

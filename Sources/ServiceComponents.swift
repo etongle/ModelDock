@@ -104,7 +104,7 @@ enum ServiceComponentEvidence {
                         Image(systemName: item.id == "draft" ? "bolt.fill" : item.id == "vision" ? "photo" : "textformat").foregroundStyle(Theme.linkColor).frame(width: 22)
                         VStack(alignment: .leading, spacing: 4) { Text(verbatim: L10n.text(item.title)).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(item.name)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).textSelection(.enabled).lineLimit(2) }
                         Spacer(minLength: 8)
-                        Text(verbatim: L10n.text(item.state)).font(.system(size: TypeScale.callout, weight: .medium)).foregroundStyle(item.state == "已启用" ? Theme.linkColor : Theme.muted)
+                        Text(verbatim: L10n.text(item.state)).font(.system(size: TypeScale.callout, weight: .medium)).foregroundStyle(item.state == "已启用" ? Theme.successText : Theme.muted)
                         if let path = item.path { Button { store.reveal(path) } label: { Image(systemName: "folder") }.buttonStyle(.bordered).help(L10n.text("查看 " + item.title + "：" + path)).accessibilityLabel(L10n.text("查看" + item.title + "文件")) }
                     }
                 }
@@ -119,7 +119,7 @@ enum ServiceComponentEvidence {
     var spec: ServiceSpec
     var body: some View {
         if let draft = store.serviceComponents(spec)?.entries.first(where: { $0.id == "draft" && $0.state != "未启用" }) {
-            Label(L10n.text((spec.pid == nil ? "上次草稿：" : "草稿：") + draft.name + " · " + draft.state), systemImage: "bolt.fill").font(.system(size: TypeScale.callout)).foregroundStyle(Theme.linkColor).lineLimit(2)
+            Label(L10n.text((spec.pid == nil ? "上次草稿：" : "草稿：") + draft.name + " · " + draft.state), systemImage: "bolt.fill").font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(2)
         }
     }
 }

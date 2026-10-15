@@ -1415,5 +1415,9 @@
   "浅色": "Light",
   "深色": "Dark",
   "隐藏边栏": "Hide Sidebar",
-  "显示边栏": "Show Sidebar"
+  "显示边栏": "Show Sidebar",
+  "请至少选择一个文件": "Select at least one file",
+  "已有下载进行中，完成或暂停后可开始": "Another download is running; start after it finishes or pauses",
+  "引擎维护进行中，完成后可开始下载": "Engine maintenance is running; downloads can start when it finishes",
+  "删除服务配置…": "Delete service configuration…"
 }

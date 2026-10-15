@@ -20,7 +20,7 @@ struct StatusDownloads: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(job.repository).font(.system(size: TypeScale.body, weight: .medium)).lineLimit(1).truncationMode(.middle).help(L10n.text(job.repository))
                     Spacer()
-                    Text(verbatim: L10n.text(downloads.activeID == job.id ? job.percentageLabel : job.state.rawValue)).font(.system(size: TypeScale.callout)).monospacedDigit().foregroundStyle(Theme.linkColor)
+                    Text(verbatim: L10n.text(downloads.activeID == job.id ? job.percentageLabel : job.state.rawValue)).font(.system(size: TypeScale.callout)).monospacedDigit().foregroundStyle(Theme.muted)
                 }
                 if job.totalKnown && job.total > 0 { UsageBar(fraction: Double(job.received) / Double(job.total)) }
                 HStack {

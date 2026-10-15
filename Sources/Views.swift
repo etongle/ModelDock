@@ -20,6 +20,9 @@ enum Theme {
     static let selection = adaptive(NSColor(red: 0.895, green: 0.9, blue: 0.987, alpha: 1), NSColor(red: 0.24, green: 0.23, blue: 0.39, alpha: 1))
     static let line = Color.primary.opacity(0.10)
     static let surface = Color(nsColor: .controlBackgroundColor)
+    /// Color rule: linkColor marks interactive text only; icons and charts may use it as brand tint.
+    /// Non-interactive text uses muted (info/progress), successText (completed) or tag chips.
+    static let successText = adaptive(NSColor(red: 0.12, green: 0.50, blue: 0.22, alpha: 1), NSColor(red: 0.45, green: 0.85, blue: 0.52, alpha: 1))
     static let linkColor = adaptive(NSColor(red: 0.32, green: 0.30, blue: 0.94, alpha: 1), NSColor(red: 0.70, green: 0.67, blue: 1, alpha: 1))
     static let muted = adaptive(NSColor(red: 0.38, green: 0.38, blue: 0.42, alpha: 1), NSColor(red: 0.68, green: 0.68, blue: 0.73, alpha: 1))
     static let warningText = adaptive(NSColor(red: 0.57, green: 0.29, blue: 0.04, alpha: 1), NSColor(red: 0.96, green: 0.70, blue: 0.37, alpha: 1))
@@ -174,6 +177,10 @@ struct MainView: View {
         // Child views translate inside their own body; an unchanged input (e.g. StateLabel("未启动")) would keep
         // the previous language, so rebuild the tree when the language changes.
         }.frame(minWidth: 980, minHeight: 700).ignoresSafeArea().environment(\.locale, L10n.locale).id(store.language)
+            .alert(L10n.text("删除端口 \(store.serviceRemoval?.port ?? 0) 的服务配置"), isPresented: Binding(get: { store.serviceRemoval != nil }, set: { if !$0 { store.serviceRemoval = nil } })) {
+                Button(L10n.text("删除"), role: .destructive) { if let spec = store.serviceRemoval { store.removeServiceConfiguration(spec) }; store.serviceRemoval = nil }
+                Button(L10n.text("取消"), role: .cancel) { store.serviceRemoval = nil }
+            } message: { Text(verbatim: L10n.text("保留模型文件和运行日志")) }
             .alert(L10n.text("模型管理"), isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) { Button(L10n.text("好")) { store.message = nil } } message: { Text(verbatim: L10n.text(store.message ?? "")) }
             .sheet(item: $store.maintenancePlan) { plan in MaintenanceView(store: store, plan: plan) }
             .sheet(item: Binding(get: { store.installation.plan }, set: { store.installation.plan = $0 })) { plan in EngineInstallView(store: store, installer: store.installation, plan: plan) }
@@ -287,7 +294,7 @@ struct EngineWorkspace: View {
                 }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(1)
                 let detail = services > 0 ? "\(services) 个服务实例" : engine.installation
                 if detail != status { Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1) }
-                Text(verbatim: L10n.text(engine.modelRule)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.linkColor).lineLimit(1)
+                Text(verbatim: L10n.text(engine.modelRule)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -466,12 +473,9 @@ struct ServiceWorkspace: View {
                     ForEach(store.visibleServices) { spec in
                         HStack(spacing: 0) {
                             Button { store.showService(spec) } label: { serviceRow(title: store.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, detail: "\(spec.modelName) · \(spec.port)", status: services.statusTitle(spec), color: services.status(spec).color, selected: store.selectedServiceID == spec.id && store.selectedExternal == nil) }.buttonStyle(.plain)
-                            if services.canRemoveConfiguration(spec) {
-                                Button(role: .destructive) { store.removeServiceConfiguration(spec) } label: { Image(systemName: "trash").frame(width: 36, height: 44) }.buttonStyle(.plain).foregroundStyle(Theme.muted).help(L10n.text("删除服务配置，保留模型文件和日志")).accessibilityLabel(L10n.text("删除端口 \(spec.port) 的服务配置")).accessibilityIdentifier("delete-service-\(spec.id)")
-                            }
                         }.contextMenu {
                             Button(L10n.text("复制接口地址")) { store.copy("http://127.0.0.1:\(spec.port)/v1") }
-                            Button(L10n.text("删除服务配置"), role: .destructive) { store.removeServiceConfiguration(spec) }.disabled(!services.canRemoveConfiguration(spec))
+                            Button(L10n.text("删除服务配置…"), role: .destructive) { store.serviceRemoval = spec }.disabled(!services.canRemoveConfiguration(spec))
                         }
                     }
                     Text(verbatim: L10n.text("外部启动")).font(.system(size: TypeScale.callout, weight: .semibold)).foregroundStyle(Theme.muted).padding(.top, 22)
@@ -513,8 +517,8 @@ struct ServiceWorkspace: View {
                             if spec.pid != nil { Button { store.stop(spec) } label: { Label(L10n.text("停止服务"), systemImage: "stop.fill") }.buttonStyle(AccentButton(destructive: true)).disabled(status == .stopping) }
                             else { Button { store.configureService(spec) } label: { Label(L10n.text("配置并启动"), systemImage: "play.fill") }.buttonStyle(AccentButton()) }
                             Button(L10n.text("复制地址")) { store.copy("http://127.0.0.1:\(spec.port)/v1") }.buttonStyle(.bordered)
-                            Button(L10n.text("打开服务页面")) { store.openEndpoint(spec.port) }.buttonStyle(.bordered).disabled(status != .running)
-                            if services.canRemoveConfiguration(spec) { Button(role: .destructive) { store.removeServiceConfiguration(spec) } label: { Image(systemName: "trash") }.buttonStyle(.bordered).help(L10n.text("删除服务配置，保留模型文件和日志")).accessibilityLabel(L10n.text("删除服务配置")) }
+                            // Only shown when usable; deletion lives at the bottom of the page, away from the primary action.
+                            if status == .running { Button(L10n.text("打开服务页面")) { store.openEndpoint(spec.port) }.buttonStyle(.bordered) }
                         }
                         if let error = services.errors[spec.id] { Text(verbatim: L10n.text(error)).foregroundStyle(Theme.errorText).font(.system(size: TypeScale.body)) }
                         if let command = spec.commandText ?? spec.launchArguments.map({ ([spec.engineExecutable ?? ""] + $0).map(ServiceCommand.quote).joined(separator: " ") }) { DisclosureGroup("启动命令") { Text(verbatim: L10n.text(command)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled).padding(.top, 8) } }
@@ -523,7 +527,7 @@ struct ServiceWorkspace: View {
                         Divider()
                         HStack { Text(verbatim: L10n.text("运行日志")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer(); Button(L10n.text("在 Finder 中打开")) { store.reveal(services.logURL(spec.id).path) }.buttonStyle(PlainAction()) }
                         Text(verbatim: services.log(spec.id)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, minHeight: 250, alignment: .topLeading).padding(20).background(Theme.line.opacity(0.35), in: RoundedRectangle(cornerRadius: 11))
-                        Button(role: .destructive) { store.removeServiceConfiguration(spec) } label: { Label(L10n.text("删除服务配置"), systemImage: "trash") }.buttonStyle(.bordered).disabled(!services.canRemoveConfiguration(spec)).help(L10n.text("保留模型文件和运行日志"))
+                        Button(role: .destructive) { store.serviceRemoval = spec } label: { Label(L10n.text("删除服务配置…"), systemImage: "trash") }.buttonStyle(.bordered).disabled(!services.canRemoveConfiguration(spec)).help(L10n.text("保留模型文件和运行日志"))
                     } else {
                         EmptyMessage(symbol: "server.rack", title: L10n.text("服务尚未配置"), detail: "在“运行引擎”选择兼容模型，即可启动本地服务。")
                         Button(L10n.text("选择引擎与模型")) { store.tab = .engines }.buttonStyle(AccentButton())

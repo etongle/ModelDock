@@ -164,7 +164,7 @@ struct StartupProgressView: View {
                 Text(verbatim: L10n.text(failed ? "启动中断 · " + progress.stage.title : progress.stage.title)).font(.system(size: TypeScale.body, weight: .semibold))
                 Spacer()
                 if let percentage = progress.percentageLabel {
-                    Text(verbatim: L10n.text((compact ? "" : progress.measurement + " · ") + percentage)).font(.system(size: TypeScale.body, weight: .semibold)).monospacedDigit().foregroundStyle(failed ? Color.red : Theme.linkColor)
+                    Text(verbatim: L10n.text((compact ? "" : progress.measurement + " · ") + percentage)).font(.system(size: TypeScale.body, weight: .semibold)).monospacedDigit().foregroundStyle(failed ? Color.red : Color.primary)
                 } else if !failed { ProgressView().controlSize(.small) }
             }
             if let percentage = progress.percentage { ProgressView(value: percentage, total: 100).tint(failed ? .red : Theme.accent) }

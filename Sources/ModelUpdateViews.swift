@@ -21,7 +21,7 @@ struct CommandLaunchView: View {
                     switch parsed {
                     case .success(let command):
                         VStack(alignment: .leading, spacing: 12) {
-                            Label(L10n.text("启动预览"), systemImage: "checkmark.circle").foregroundStyle(Theme.linkColor)
+                            Label(L10n.text("启动预览"), systemImage: "checkmark.circle").foregroundStyle(Theme.muted)
                             Text(command.modelName).font(.system(size: TypeScale.body, weight: .medium)).textSelection(.enabled)
                             Text(verbatim: L10n.text("端口 \(command.port) · 上下文 \(command.context) · \(command.mode.title)")).font(.system(size: TypeScale.body))
                             if command.downloadsModel { Text(verbatim: L10n.text("Splash 会验证模型，必要时下载目标权重、草稿和视觉组件。第一次启动可能较久，可在模型服务中查看准备日志。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
@@ -82,7 +82,7 @@ struct ModelUpdateView: View {
                     if draft.model.format == "Ollama" {
                         Text(verbatim: L10n.text("更新所选模型的同名标签。请先从内存卸载此模型，其他模型和服务可以继续运行。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                         if draft.updating { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text("Ollama 正在下载并校验模型，请保持应用运行…")) }.font(.system(size: TypeScale.body)) }
-                        if let result = draft.result { Label(L10n.text(result), systemImage: "checkmark.circle").foregroundStyle(Theme.linkColor) }
+                        if let result = draft.result { Label(L10n.text(result), systemImage: "checkmark.circle").foregroundStyle(Theme.successText) }
                     } else {
                         if draft.replacement != nil { Text(verbatim: L10n.text("新版 Splash 使用上游 MLX 权重。下载完成后，用下方启动入口让 Splash 准备匹配组件。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
                         Text(verbatim: L10n.text("模型仓库地址")).font(.system(size: TypeScale.body, weight: .semibold))
