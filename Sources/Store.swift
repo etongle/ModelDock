@@ -60,6 +60,9 @@ final class AppStore: ObservableObject {
     private var subscriptions = Set<AnyCancellable>()
     @Published var hiddenToStatusBar = false
     @Published var windowCloseBehavior: WindowCloseBehavior = .keepRunning { didSet { savePreferences() } }
+    @Published var appearance: AppAppearance = .system { didSet { savePreferences(); onAppearanceChange?() } }
+    @Published var sidebarHidden = false { didSet { savePreferences() } }
+    var onAppearanceChange: (() -> Void)?
     @Published var language: AppLanguage = .english { didSet { L10n.select(language); savePreferences(); onLanguageChange?() } }
     @Published var preferencesError: String?
     var showMainWindow: (() -> Void)?
@@ -85,6 +88,8 @@ final class AppStore: ObservableObject {
         preferencesURL = stateDirectory.appendingPathComponent("preferences.json")
         let preferences = (try? Data(contentsOf: preferencesURL)).flatMap { try? JSONDecoder().decode(AppPreferences.self, from: $0) } ?? AppPreferences()
         windowCloseBehavior = preferences.windowCloseBehavior
+        appearance = preferences.appearance
+        sidebarHidden = preferences.sidebarHidden
         language = argumentValue("--language").flatMap(AppLanguage.init(rawValue:)) ?? preferences.language
         extraRoots = (try? Data(contentsOf: settingsURL)).flatMap { try? JSONDecoder().decode([String].self, from: $0) } ?? []
         L10n.select(language)
@@ -122,7 +127,7 @@ final class AppStore: ObservableObject {
     private func savePreferences() {
         do {
             try FileManager.default.createDirectory(at: preferencesURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONEncoder().encode(AppPreferences(windowCloseBehavior: windowCloseBehavior, language: language)).write(to: preferencesURL, options: .atomic)
+            try JSONEncoder().encode(AppPreferences(windowCloseBehavior: windowCloseBehavior, language: language, appearance: appearance, sidebarHidden: sidebarHidden)).write(to: preferencesURL, options: .atomic)
             preferencesError = nil
         } catch { preferencesError = "设置未能保存，请重试。" }
     }

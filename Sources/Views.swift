@@ -134,7 +134,13 @@ struct MainView: View {
                         }
                     }.padding(3).background(Theme.line.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
                     // Rescan lives beside the lists it refreshes (ScanStatus) and in File ▸ Rescan (⌘R).
-                    HStack(spacing: 6) { Spacer(); LanguageMenu(store: store, compact: geometry.size.width < 1200) }.padding(.trailing, 20)
+                    HStack(spacing: 6) {
+                        // Standard sidebar toggle, right of the traffic lights; also View ▸ Hide Sidebar (⌃⌘S).
+                        Button { store.sidebarHidden.toggle() } label: { Image(systemName: "sidebar.left").font(.system(size: 15)).frame(width: 30, height: 28).contentShape(Rectangle()) }
+                            .buttonStyle(.borderless).help(L10n.text((store.sidebarHidden ? "显示边栏" : "隐藏边栏") + " · ⌃⌘S"))
+                            .accessibilityLabel(L10n.text(store.sidebarHidden ? "显示边栏" : "隐藏边栏")).accessibilityIdentifier("toggle-sidebar")
+                        Spacer(); LanguageMenu(store: store, compact: geometry.size.width < 1200)
+                    }.padding(.leading, 84).padding(.trailing, 20)
                 }.frame(height: 64)
                 Rectangle().fill(Theme.line).frame(height: 1)
                 let sidebarWidth = max(310, min(420, geometry.size.width * 0.292))
@@ -170,6 +176,7 @@ struct EngineWorkspace: View {
     var sidebarWidth: CGFloat
     var body: some View {
         HStack(spacing: 0) {
+            if !store.sidebarHidden {
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: L10n.text("运行引擎")).font(.system(size: TypeScale.title, weight: .bold)).padding(.bottom, 6)
                 Text(verbatim: L10n.text("本地引擎、安装与更新")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.bottom, 16)
@@ -187,6 +194,7 @@ struct EngineWorkspace: View {
                 ScanStatus(store: store).padding(.top, 18)
             }.padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 20).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if store.enabledEngines.isEmpty {
@@ -341,20 +349,40 @@ struct ModelWorkspace: View {
     var sidebarWidth: CGFloat
     var body: some View {
         HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack { Text(verbatim: L10n.text("模型文件")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); Button { store.importLocalModels() } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.buttonStyle(.plain).help(L10n.text("导入本地模型文件或目录")).accessibilityLabel(L10n.text("导入本地模型")) }
-                HStack { Text(verbatim: L10n.text("模型基座")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted); Picker(L10n.text("模型基座"), selection: $store.modelEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.enabledEngines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.labelsHidden().frame(maxWidth: .infinity) }.onChange(of: store.modelEngineFilter) { _, _ in selectVisibleModel() }
+            if !store.sidebarHidden {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack { Text(verbatim: L10n.text("模型文件")).font(.system(size: TypeScale.title, weight: .bold)); Spacer(); Button { store.importLocalModels() } label: { Image(systemName: "plus").font(.system(size: 15)).frame(width: 30, height: 28).contentShape(Rectangle()) }.buttonStyle(.borderless).help(L10n.text("导入本地模型文件或目录")).accessibilityLabel(L10n.text("导入本地模型")) }.padding(.bottom, 4)
                 TextField(L10n.text("搜索名称、格式或路径"), text: $store.search).textFieldStyle(.roundedBorder).font(.system(size: TypeScale.body)).accessibilityIdentifier("model-search").onChange(of: store.search) { _, _ in selectVisibleModel() }
-                Picker(L10n.text("模型分类"), selection: $store.modelFilter) { ForEach(["全部", "主模型", "附属模型"], id: \.self) { Text(verbatim: L10n.text($0)) } }.pickerStyle(.segmented).onChange(of: store.modelFilter) { _, _ in selectVisibleModel() }
+                Picker(L10n.text("模型基座"), selection: $store.modelEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.enabledEngines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelEngineFilter) { _, _ in selectVisibleModel() }
+                Picker(L10n.text("模型分类"), selection: $store.modelFilter) { ForEach(["全部", "主模型", "附属模型"], id: \.self) { Text(verbatim: L10n.text($0)) } }.pickerStyle(.segmented).labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.modelFilter) { _, _ in selectVisibleModel() }.padding(.bottom, 4)
                 ScrollView { VStack(spacing: 6) { ForEach(store.filteredModels) { model in
                     Button { store.selectedFileID = model.id } label: {
-                        HStack(spacing: 14) { Image(systemName: model.kind == .speech ? "waveform" : model.kind == .adapter ? "slider.horizontal.3" : model.kind == .embedding ? "text.magnifyingglass" : "cube").font(.system(size: 23)).foregroundStyle(Theme.linkColor).frame(width: 46, height: 48); VStack(alignment: .leading, spacing: 8) { Text(model.name).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1); Text(verbatim: L10n.text("\(model.format) · \(sizeLabel(model.bytes))")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted); UsageBadge(model: model); ModelCapabilityBadge(capabilities: store.modelCapabilities(model)); StateLabel(title: model.complete ? "文件检查通过" : "文件不完整", color: model.complete ? .green : .orange).font(.system(size: TypeScale.callout)) }; Spacer(minLength: 0) }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(store.selectedFileID == model.id ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: 12)).contentShape(Rectangle())
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: model.kind == .speech ? "waveform" : model.kind == .adapter ? "slider.horizontal.3" : model.kind == .embedding ? "text.magnifyingglass" : "cube").font(.system(size: 14)).foregroundStyle(Theme.linkColor)
+                                .frame(width: 28, height: 28).background(Theme.linkColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(model.name).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+                                // Completeness: dot plus text when incomplete, so color is not the only signal.
+                                HStack(spacing: 6) {
+                                    Circle().fill(model.complete ? Color.green : Color.orange).frame(width: 6, height: 6)
+                                    Text(verbatim: L10n.text("\(model.format) · \(sizeLabel(model.bytes))")).lineLimit(1)
+                                    if !model.complete { Text(verbatim: L10n.text("文件不完整")).foregroundStyle(Theme.warningText) }
+                                }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                                    .accessibilityElement(children: .combine).accessibilityLabel(L10n.text("\(model.format) · \(sizeLabel(model.bytes)) · " + (model.complete ? "文件检查通过" : "文件不完整")))
+                                ViewThatFits(in: .horizontal) {
+                                    HStack(spacing: 6) { UsageBadge(model: model); ModelCapabilityBadge(capabilities: store.modelCapabilities(model), compact: true) }
+                                    VStack(alignment: .leading, spacing: 4) { UsageBadge(model: model); ModelCapabilityBadge(capabilities: store.modelCapabilities(model), compact: true) }
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }.padding(10).frame(maxWidth: .infinity, alignment: .leading).background(store.selectedFileID == model.id ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
                     }.buttonStyle(.plain).help(L10n.text(model.path))
                 } } }
-                HStack { Text(verbatim: L10n.text("\(store.filteredModels.count) 个模型条目")); Spacer(); Text(verbatim: L10n.text("目录总占用 " + sizeLabel(store.inventory?.storageBytes ?? 0))) }.font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
+                HStack { Text(verbatim: L10n.text("\(store.filteredModels.count) 个模型条目")); Spacer(); Text(verbatim: L10n.text("目录总占用 " + sizeLabel(store.inventory?.storageBytes ?? 0))) }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 ScanStatus(store: store)
-            }.padding(24).frame(width: sidebarWidth).background(Theme.sidebar)
+            }.padding(20).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     if let model = store.selectedFile {
@@ -406,6 +434,7 @@ struct ServiceWorkspace: View {
     var sidebarWidth: CGFloat
     var body: some View {
         HStack(spacing: 0) {
+            if !store.sidebarHidden {
             VStack(alignment: .leading, spacing: 18) {
                 Text(verbatim: L10n.text("模型服务")).font(.system(size: TypeScale.title, weight: .bold))
                 Text(verbatim: L10n.text("本工具服务与现有本地接口")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
@@ -434,6 +463,7 @@ struct ServiceWorkspace: View {
                 Text(verbatim: L10n.text("每 3 秒检查本机常用模型端口")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
             }.padding(24).frame(width: sidebarWidth).background(Theme.sidebar)
             Rectangle().fill(Theme.line).frame(width: 1)
+            }
             ScrollView {
                 if store.gatewaySelected { GatewayWorkspace(store: store, gateway: store.gateway) }
                 else {

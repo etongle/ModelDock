@@ -1410,5 +1410,10 @@
   "Strata Metal 使用匹配的 Flash-Next 主权重、n-gram、词表和模型包；MTP 加速与图片组件按准备及启动设置启用。": "O Strata Metal usa pesos Flash-Next, tabelas n-gram, vocabulário e pacotes de modelo compatíveis. A aceleração MTP e os componentes de imagem seguem as configurações de preparação e inicialização.",
   "Strata Metal 为实验性支持，需要 macOS 15+ 和 Command Line Tools。从官方源码编译，可准备 Flash-Next 模型、MTP 草稿及匹配的图片组件。": "O suporte ao Strata Metal é experimental e requer macOS 15+ e Command Line Tools. Compile o código oficial e prepare modelos Flash-Next, rascunhos MTP e componentes de imagem compatíveis.",
   "Flash-Next 分层本地推理服务": "Serviço local de inferência Flash-Next em camadas",
-  "官方 Metal 源码编译": "Compilação do código-fonte Metal oficial"
+  "官方 Metal 源码编译": "Compilação do código-fonte Metal oficial",
+  "外观": "Aparência",
+  "浅色": "Claro",
+  "深色": "Escuro",
+  "隐藏边栏": "Ocultar barra lateral",
+  "显示边栏": "Mostrar barra lateral"
 }

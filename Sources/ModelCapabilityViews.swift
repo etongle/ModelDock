@@ -18,10 +18,12 @@ extension Engine {
 struct ModelCapabilityBadge: View {
     var capabilities: ModelCapabilities
     var prefix = ""
+    /// List rows use the same size as UsageBadge.
+    var compact = false
     var body: some View {
         Label(L10n.text(prefix + capabilities.badgeTitle), systemImage: capabilities.known && capabilities.supportsMedia ? "photo.on.rectangle" : "text.alignleft")
-            .font(.system(size: TypeScale.callout, weight: .medium)).foregroundStyle(capabilities.known ? Theme.linkColor : Theme.muted)
-            .padding(.horizontal, 8).padding(.vertical, 5).background(Theme.selection.opacity(0.65), in: RoundedRectangle(cornerRadius: 7))
+            .font(.system(size: compact ? TypeScale.caption : TypeScale.callout, weight: .medium)).foregroundStyle(capabilities.known ? Theme.linkColor : Theme.muted)
+            .padding(.horizontal, compact ? 6 : 8).padding(.vertical, compact ? 3 : 5).background(Theme.selection.opacity(0.65), in: RoundedRectangle(cornerRadius: compact ? 5 : 7))
             .help(L10n.text(capabilities.source)).accessibilityLabel(L10n.text(prefix + capabilities.badgeTitle + "。" + capabilities.source))
     }
 }

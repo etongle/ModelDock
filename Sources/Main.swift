@@ -15,7 +15,7 @@ final class ManagerWindow: NSWindow {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverDelegate, NSMenuItemValidation {
     var window: NSWindow!
     var store: AppStore!
     var statusItem: NSStatusItem!
@@ -29,11 +29,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     let statusPopover = NSPopover()
     let outsideClicks = PopoverOutsideClickMonitor()
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if argumentValue("--appearance") == "dark" { NSApplication.shared.appearance = NSAppearance(named: .darkAqua) }
-        else if argumentValue("--appearance") == "light" { NSApplication.shared.appearance = NSAppearance(named: .aqua) }
+        // --appearance (captures/checks) overrides the saved preference; applied after the store loads below.
         let directory = argumentValue("--state-dir").map { URL(fileURLWithPath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/ModelManager")
         store = AppStore(stateDirectory: directory)
         store.onLanguageChange = { [weak self] in self?.refreshLanguage() }
+        store.onAppearanceChange = { [weak self] in self?.applyAppearance() }
+        applyAppearance()
         if passiveTesting { NSApplication.shared.setActivationPolicy(.accessory) }
         applyDockIcon()
         DispatchQueue.main.async { [weak self] in self?.applyDockIcon() }
@@ -133,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc func showSettings() {
         statusPopover.performClose(nil)
         if settingsWindow == nil {
-            let preferences = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 660), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let preferences = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 780), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             preferences.title = L10n.text("设置"); preferences.isReleasedWhenClosed = false; preferences.delegate = self
             preferences.contentView = NSHostingView(rootView: PreferencesView(store: store, close: { [weak self] in self?.settingsWindow?.performClose(nil) }))
             preferences.backgroundColor = .windowBackgroundColor
@@ -164,7 +165,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let controller = NSHostingController(rootView: StatusBarPanel(store: store, services: store.services, monitor: store.resources, performance: store.performance))
         controller.sizingOptions = [.preferredContentSize]
         statusPopover.contentViewController = controller; statusPopover.behavior = .transient; statusPopover.delegate = self; statusPopover.animates = false
-        statusPopover.appearance = NSApplication.shared.appearance
         statusPopover.contentSize = NSSize(width: 390, height: 600)
         store.resources.onChange = { [weak self] in self?.updateStatusBar() }; updateStatusBar()
     }
@@ -233,6 +233,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         edit.addItem(withTitle: L10n.text("剪切"), action: #selector(NSText.cut(_:)), keyEquivalent: "x"); edit.addItem(withTitle: L10n.text("复制"), action: #selector(NSText.copy(_:)), keyEquivalent: "c"); edit.addItem(withTitle: L10n.text("粘贴"), action: #selector(NSText.paste(_:)), keyEquivalent: "v"); edit.addItem(withTitle: L10n.text("全选"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"); main.addItem(editItem)
         let view = NSMenu(title: L10n.text("视图")); let viewItem = NSMenuItem(title: L10n.text("视图"), action: nil, keyEquivalent: ""); viewItem.submenu = view
         for (index, tab) in AppTab.allCases.enumerated() { let item = NSMenuItem(title: L10n.text(tab.rawValue), action: #selector(selectTab(_:)), keyEquivalent: String(index + 1)); item.tag = index; item.target = self; view.addItem(item) }
+        view.addItem(.separator())
+        let sidebar = NSMenuItem(title: L10n.text(store.sidebarHidden ? "显示边栏" : "隐藏边栏"), action: #selector(toggleSidebar), keyEquivalent: "s")
+        sidebar.keyEquivalentModifierMask = [.control, .command]; sidebar.target = self; view.addItem(sidebar)
         main.addItem(viewItem); NSApplication.shared.mainMenu = main
         let windows = NSMenu(title: L10n.text("窗口")); let windowsItem = NSMenuItem(title: L10n.text("窗口"), action: nil, keyEquivalent: ""); windowsItem.submenu = windows
         windows.addItem(withTitle: L10n.text("最小化"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
@@ -242,6 +245,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc func about() { NSApplication.shared.orderFrontStandardAboutPanel(options: [.applicationName: L10n.text("模型管理"), .applicationVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "", .credits: NSAttributedString(string: L10n.text("模型与下载任务管理、命令启动和统一网关"))]) }
     @objc func addFolder() { store.addLocation() }
     @objc func rescan() { store.scan() }
+    @objc func toggleSidebar() { store.sidebarHidden.toggle() }
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(toggleSidebar) { item.title = L10n.text(store.sidebarHidden ? "显示边栏" : "隐藏边栏") }
+        return true
+    }
+    func applyAppearance() {
+        let forced = argumentValue("--appearance").flatMap(AppAppearance.init(rawValue:))
+        let appearance = (forced ?? store.appearance).appearance
+        NSApplication.shared.appearance = appearance
+        // The popover keeps its own appearance; nil lets it follow the app again.
+        statusPopover.appearance = appearance
+    }
     @objc func selectTab(_ sender: NSMenuItem) { store.tab = AppTab.allCases[sender.tag] }
 
     func capture(_ name: String, folder: URL) throws {

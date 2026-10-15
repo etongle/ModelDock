@@ -1,18 +1,32 @@
+import AppKit
 import SwiftUI
 
 enum WindowCloseBehavior: String, Codable, CaseIterable {
     case keepRunning, confirmQuit
 }
 
+/// Interface appearance; `.system` follows the macOS Light/Dark setting.
+enum AppAppearance: String, Codable, CaseIterable {
+    case system, light, dark
+    var title: String { switch self { case .system: return "跟随系统"; case .light: return "浅色"; case .dark: return "深色" } }
+    var appearance: NSAppearance? { switch self { case .system: return nil; case .light: return NSAppearance(named: .aqua); case .dark: return NSAppearance(named: .darkAqua) } }
+}
+
 struct AppPreferences: Codable {
     var windowCloseBehavior: WindowCloseBehavior = .keepRunning
     var language: AppLanguage = .english
-    enum CodingKeys: String, CodingKey { case windowCloseBehavior, language }
-    init(windowCloseBehavior: WindowCloseBehavior = .keepRunning, language: AppLanguage = .english) { self.windowCloseBehavior = windowCloseBehavior; self.language = language }
+    var appearance: AppAppearance = .system
+    var sidebarHidden = false
+    enum CodingKeys: String, CodingKey { case windowCloseBehavior, language, appearance, sidebarHidden }
+    init(windowCloseBehavior: WindowCloseBehavior = .keepRunning, language: AppLanguage = .english, appearance: AppAppearance = .system, sidebarHidden: Bool = false) {
+        self.windowCloseBehavior = windowCloseBehavior; self.language = language; self.appearance = appearance; self.sidebarHidden = sidebarHidden
+    }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         windowCloseBehavior = try values.decodeIfPresent(WindowCloseBehavior.self, forKey: .windowCloseBehavior) ?? .keepRunning
         language = AppLanguage(rawValue: try values.decodeIfPresent(String.self, forKey: .language) ?? "en") ?? .english
+        appearance = AppAppearance(rawValue: try values.decodeIfPresent(String.self, forKey: .appearance) ?? "system") ?? .system
+        sidebarHidden = try values.decodeIfPresent(Bool.self, forKey: .sidebarHidden) ?? false
     }
 }
 
@@ -33,6 +47,11 @@ struct PreferencesView: View {
                     Text(verbatim: L10n.text("默认使用英语。切换立即生效，设置会自动保存。"))
                         .font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
+                Section(L10n.text("外观")) {
+                    Picker(L10n.text("外观"), selection: $store.appearance) {
+                        ForEach(AppAppearance.allCases, id: \.self) { option in Text(verbatim: L10n.text(option.title)).tag(option) }
+                    }.pickerStyle(.segmented).accessibilityIdentifier("app-appearance")
+                }
                 Section(L10n.text("关闭主界面时")) {
                     Picker(L10n.text("关闭行为"), selection: $store.windowCloseBehavior) {
                         Text(verbatim: L10n.text("保持程序后台运行（默认）")).tag(WindowCloseBehavior.keepRunning)
@@ -45,13 +64,14 @@ struct PreferencesView: View {
                          : "点击关闭按钮或按 ⌘W，会先询问是否退出。退出时暂停下载并结束监测；已启动的模型服务继续运行。"))
                         .font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
-            }.formStyle(.grouped)
+            // Separate window: rebuild on language change so pickers and labels never keep the previous language.
+            }.formStyle(.grouped).id(store.language)
             HStack {
                 Text(verbatim: L10n.text(store.preferencesError ?? "设置会自动保存。")).font(.system(size: TypeScale.callout)).foregroundStyle(store.preferencesError == nil ? Theme.muted : Theme.errorText)
                 Spacer()
                 Button(L10n.text("完成"), action: close).keyboardShortcut(.defaultAction)
             }.padding(.horizontal, 24).padding(.bottom, 20)
-        }.frame(width: 580, height: 660).background(Theme.background).environment(\.locale, L10n.locale)
+        }.frame(width: 580, height: 780).background(Theme.background).environment(\.locale, L10n.locale)
     }
 }
 
