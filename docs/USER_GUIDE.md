@@ -14,7 +14,7 @@ Current packages use an ad-hoc signature and have not been Apple-notarized. If a
 
 English is the default on first launch, including on non-English systems. Click the **globe/language button at the top right of the main window**, then choose **English**, **简体中文**, **Français**, **Português**, or **Follow system**. In a narrow window, the button shows the globe and a language abbreviation such as **EN**. You can also open **ModelDock → Settings…** (⌘,) to change **Interface language**. The interface changes immediately and the choice is saved.
 
-Under **Settings → Appearance**, choose **Follow system**, **Light**, or **Dark**; the main window and menu-bar panel switch immediately. To give the details more room, click the sidebar button at the right of a sidebar's title (or press ⌃⌘S); a slim rail keeps the button to bring it back, and the choice is remembered.
+Settings has three pages: **General**, **Appearance**, and **App updates**. Under **Appearance**, choose **Follow system**, **Light**, or **Dark**; the main window and menu-bar panel switch immediately. To give the details more room, drag the divider between the sidebar and the details (double-click it to restore the automatic width), or click the sidebar button at the right of a sidebar's title (or press ⌃⌘S) to collapse it; a slim rail keeps the button to bring it back. Both choices are remembered.
 
 ![Interface language and close behavior](assets/images/en-settings.png)
 
@@ -32,7 +32,7 @@ The public packages currently use ad-hoc signing; automatic updating does not ma
 
 ## 2. Prepare an engine
 
-Open **Engines** and select an installed engine. An engine card can be selected anywhere in its area, including whitespace. **Global engine settings** controls which engines appear in normal lists; individual engine settings contain supported defaults and options.
+Open **Engines** and select an installed engine. An engine card can be selected anywhere in its area, including whitespace. **Global engine settings** controls which engines appear in normal lists; individual engine settings contain supported defaults and options. Each engine page is split into **Overview**, **Service instances**, **Configuration**, and **Maintenance**.
 
 ![Engine and multimodal launch configuration](assets/images/en-engines.png)
 
@@ -108,7 +108,7 @@ For a missing or damaged file, use its **Repair** action when the original repos
 
 ## 5. Start a model service
 
-Select a compatible engine/model from **Engines**, or choose its launch option in **Model Files**. Review:
+Click **Start Service…** — from the **+** in the Services sidebar, an engine's **Service instances**, or **Configure Service** on a model — then choose the engine and model in the sheet and review:
 
 1. **Port:** use an unused port. Each independently hosted service needs its own endpoint; the manager identifies listeners by process identity as well as the port.
 2. **Context window:** configure a size supported by the engine/model and your available memory. Client limits must match the actual service window.
@@ -116,7 +116,7 @@ Select a compatible engine/model from **Engines**, or choose its launch option i
 4. **Auxiliary components:** choose the matching vision projector or draft model when the engine supports that component.
 5. **Runtime options:** use only the options exposed for that engine. Additional supported CLI launches can be configured through **Launch from command…**.
 
-Click **Start service**. The detail shows startup stages, available percentage information, the endpoint, and logs. A preparation/download stage may precede model loading. A phase percentage is a progress estimate for that phase, not a precise measure of all GPU work. An unreported percentage should remain unknown.
+Click **Start service**. The sheet closes and **Services** shows startup stages, available percentage information, the endpoint, and logs. A preparation/download stage may precede model loading. A phase percentage is a progress estimate for that phase, not a precise measure of all GPU work. An unreported percentage should remain unknown.
 
 ![Service configuration and endpoint](assets/images/en-services.png)
 
@@ -163,6 +163,8 @@ Web search is a client/tool capability. Enable the offered search-tool integrati
 ## 9. Monitor from the menu bar
 
 ![System and service resources](assets/images/en-resources.png)
+
+Choose **Settings → Appearance → Menu bar → Icon only** to keep the menu-bar item narrow, which helps on displays with a camera notch. **Settings → General → Notifications** sends macOS notifications when a download finishes or fails and when a service becomes ready, fails to start, or stops unexpectedly.
 
 The menu-bar panel shows system CPU, memory, disk and library usage, service resources, downloads that are still in progress or need attention, and recent measurements when available. Click a download's management action to open the relevant task.
 
