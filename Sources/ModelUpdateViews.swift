@@ -39,7 +39,7 @@ struct CommandLaunchView: View {
             if let error = draft.error { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
             Divider()
             HStack {
-                Button(L10n.text("取消")) { store.commandDraft = nil }.buttonStyle(.bordered).keyboardShortcut(.cancelAction)
+                Button(L10n.text("取消")) { store.commandDraft = nil }.buttonStyle(SecondaryButton()).keyboardShortcut(.cancelAction)
                 Spacer()
                 Button { store.startCommand(draft) } label: { Label(L10n.text("启动服务"), systemImage: "play.fill") }.buttonStyle(AccentButton()).disabled(!canStart).accessibilityIdentifier("launch-service-command")
             }
@@ -117,7 +117,7 @@ struct ModelUpdateView: View {
             }
             Divider()
             HStack {
-                Button(L10n.text("关闭")) { store.modelUpdate = nil }.buttonStyle(.bordered).disabled(draft.updating).keyboardShortcut(.cancelAction)
+                Button(L10n.text("关闭")) { store.modelUpdate = nil }.buttonStyle(SecondaryButton()).disabled(draft.updating).keyboardShortcut(.cancelAction)
                 Spacer()
                 if draft.model.format == "Ollama" { Button(L10n.text("更新此模型")) { draft.ollamaUpdate(store: store) }.buttonStyle(AccentButton()).disabled(draft.updating || store.maintaining) }
                 else { Button { draft.download(store: store) } label: { Label(L10n.text("下载模型版本"), systemImage: "arrow.down.circle") }.buttonStyle(AccentButton()).disabled(draft.selectedFiles.isEmpty || draft.checking || store.downloads.activeID != nil || store.maintaining).accessibilityIdentifier("download-model-version") }

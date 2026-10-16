@@ -95,7 +95,7 @@ enum ModelManagementChecks {
             let spec = try store.services.start(engine: ollama, model: nil, port: port, context: 8192)
             for _ in 0..<50 { await store.services.refresh(); if store.services.status(spec) == .running { break }; try await Task.sleep(nanoseconds: 100_000_000) }
             let plan = EngineCatalog.plan(engine: ollama, release: .init(kind: .ollama, version: "0.0-test", source: "隔离测试 · 不执行更新", method: .brew))
-            try ConnectionChecks.require(plan.blockers.isEmpty && store.installBlockers(ollama).contains { $0.contains("端口 \(port)") } && !store.installBlockers(ollama).contains { $0.contains("端口 \(llama.first.port)") }, "Update blockers did not isolate the target engine")
+            try ConnectionChecks.require(plan.blockers.isEmpty && store.installBlockers(ollama).isEmpty && store.restartableServices(ollama).map(\.port) == [port], "Update restart scope did not isolate the target engine")
             store.engineID = "ollama"; store.tab = .engines; store.installation.plan = plan
             try await capture?("ollama-update-scope-preview")
             store.installation.plan = nil; store.showEngineServices("ollama")
@@ -116,9 +116,9 @@ enum ModelManagementChecks {
             try ConnectionChecks.require(spec.pid.map { processStartTime($0) == spec.processStart } == true && (try? String(contentsOf: root.appendingPathComponent("deleted-name"), encoding: .utf8)) == "first:latest", "Model deletion stopped the engine or targeted the wrong model")
             try await EngineServiceChecks.stopAndWait(spec, store: store)
             store.services.engineProcesses = fixtureProcesses
-            try ConnectionChecks.require(store.installBlockers(ollama).isEmpty && plan.blockers.isEmpty, "Stopped runtime left a stale update blocker")
+            try ConnectionChecks.require(store.installBlockers(ollama).isEmpty && store.restartableServices(ollama).isEmpty && plan.blockers.isEmpty, "Stopped runtime left a stale update blocker")
             await EngineServiceChecks.cleanup(store: store)
-            let result: [String: Any] = ["result": "passed", "checks": ["Other engine services and maintenance do not block target update", "Interpreter/shared library does not identify a serving engine", "Target update blockers list only related services/processes", "Runtime blockers clear after stopping and are not saved in plan", "Update navigation filters to target engine", "Local import preserves originals", "Incomplete compatible models remain visible in engine filter", "Missing shard and cache reference size are accurate", "Ollama namespace/config/model layers/shared references are accurate", "Active files and other model directories are protected", "Loaded Ollama model deletion is blocked", "Native deletion targets one model and preserves shared layers, another model and engine PID", "Owned lightweight services cleaned up"], "realModelsDeleted": false, "realServicesStopped": false]
+            let result: [String: Any] = ["result": "passed", "checks": ["Other engine services and maintenance do not block target update", "Interpreter/shared library does not identify a serving engine", "Target update restarts only related services; external processes still block", "Runtime blockers clear after stopping and are not saved in plan", "Update navigation filters to target engine", "Local import preserves originals", "Incomplete compatible models remain visible in engine filter", "Missing shard and cache reference size are accurate", "Ollama namespace/config/model layers/shared references are accurate", "Active files and other model directories are protected", "Loaded Ollama model deletion is blocked", "Native deletion targets one model and preserves shared layers, another model and engine PID", "Owned lightweight services cleaned up"], "realModelsDeleted": false, "realServicesStopped": false]
             let data = try ConnectionFiles.json(result); try data.write(to: root.appendingPathComponent("result.json")); print(String(decoding: data, as: UTF8.self))
         } catch { store.installation.plan = nil; await EngineServiceChecks.cleanup(store: store); throw error }
     }

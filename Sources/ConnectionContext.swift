@@ -23,23 +23,6 @@ extension ConnectionController {
             catch { self.error = error.localizedDescription }
         }
     }
-    private func waitForRelease(_ services: ServiceController, port: Int) async throws {
-        for _ in 0..<48 {
-            await services.refresh()
-            if !NetworkProbe.portOccupied(port), !services.portReserved(port) { return }
-            try await Task.sleep(nanoseconds: 250_000_000)
-        }
-        throw LaunchError.message("服务端口尚未释放，已停止后续操作。请查看服务状态。")
-    }
-    private func waitForReady(_ services: ServiceController, spec: ServiceSpec) async throws -> ServiceSpec {
-        for _ in 0..<120 {
-            await services.refresh()
-            if services.status(spec) == .running, let current = services.records.first(where: { $0.id == spec.id }) { return current }
-            if [.failed, .conflicted].contains(services.status(spec)) { throw LaunchError.message(services.errors[spec.id] ?? "引擎启动失败，请查看运行日志。") }
-            try await Task.sleep(nanoseconds: 1_000_000_000)
-        }
-        throw LaunchError.message("服务启动超时，请查看运行日志。")
-    }
     @discardableResult func expandContext(store: AppStore, port: Int, context: Int) async throws -> ServiceSpec {
         guard !busy, canExpandContext(store: store, port: port),
               let saved = store.services.records.first(where: { $0.port == port && $0.pid != nil }),
@@ -58,12 +41,12 @@ extension ConnectionController {
             throw LaunchError.message("服务进程已经改变，未执行重启。")
         }
         try store.services.stop(current)
-        try await waitForRelease(store.services, port: port)
+        try await store.services.waitForRelease(port: port)
         var replacement: ServiceSpec?
         do {
             let spec = try store.services.start(engine: engine, model: model, port: port, context: context, maximumLoadedModels: saved.maximumLoadedModels ?? 3, inputMode: saved.inputMode ?? .automatic, projectorPath: saved.projectorPath)
             replacement = spec
-            let ready = try await waitForReady(store.services, spec: spec)
+            let ready = try await store.services.waitForReady(spec)
             if let target = store.connectionTargets.first(where: { $0.port == port }) { modelID = target.id; self.context = context }
             lastConnection = nil
             if store.parsedPort == port { store.context = context }
@@ -73,11 +56,11 @@ extension ConnectionController {
             do {
                 await store.services.refresh()
                 if let replacement, let current = store.services.records.first(where: { $0.id == replacement.id }), current.pid != nil {
-                    try store.services.stop(current); try await waitForRelease(store.services, port: port)
+                    try store.services.stop(current); try await store.services.waitForRelease(port: port)
                 }
                 guard !NetworkProbe.portOccupied(port), !store.services.portReserved(port) else { throw LaunchError.message("端口已被占用") }
                 let fallback = try store.services.start(engine: engine, model: model, port: port, context: saved.context, maximumLoadedModels: saved.maximumLoadedModels ?? 3, inputMode: saved.inputMode ?? .automatic, projectorPath: saved.projectorPath)
-                _ = try await waitForReady(store.services, spec: fallback)
+                _ = try await store.services.waitForReady(fallback)
                 throw LaunchError.message("扩展失败，已恢复原来的 \(saved.context) 上下文服务：\(failure)")
             } catch LaunchError.message(let text) where text.contains("已恢复原来的") { throw LaunchError.message(text) }
             catch { throw LaunchError.message("扩展失败，自动恢复也未成功，请查看日志并重新启动服务：\(failure)；\(error.localizedDescription)") }

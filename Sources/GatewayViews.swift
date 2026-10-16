@@ -14,7 +14,7 @@ struct GatewayWorkspace: View {
             }
             VStack(alignment: .leading, spacing: 16) {
                 HStack { StateLabel(title: gateway.ready ? "网关运行中" : gateway.busy ? "正在处理" : "网关未启动", color: gateway.ready ? .green : gateway.busy ? .orange : .gray); Spacer(); Text(verbatim: L10n.text("\(gateway.routes.filter(\.enabled).count) 个模型路由")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
-                HStack { TextField(L10n.text("18790"), text: $gateway.portText).textFieldStyle(.roundedBorder).frame(width: 90).disabled(gateway.ownsProcess()); Text(verbatim: L10n.text(gateway.endpoint)).font(.system(size: TypeScale.body, design: .monospaced)).textSelection(.enabled); Spacer() }
+                HStack { TextField(L10n.text("18790"), text: $gateway.portText).textFieldStyle(.roundedBorder).frame(width: 90).disabled(gateway.ownsProcess()); Text(verbatim: L10n.text(gateway.endpoint)).font(.system(size: TypeScale.body, design: .monospaced)).textSelection(.enabled); CopyIconButton(help: "复制完整接口地址") { store.copy(gateway.endpoint) }; Spacer() }
                 ViewThatFits(in: .horizontal) { HStack(spacing: 12) { controls }; VStack(alignment: .leading, spacing: 12) { controls } }
                 Text(verbatim: L10n.text("网关只监听本机，使用独立密钥。停止网关只停止转发，各模型服务仍可直连。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 if gateway.ready { HStack(spacing: 22) { Text(verbatim: L10n.text("已转发 \(gateway.requests) 次")); Text(verbatim: L10n.text("当前并发 \(gateway.active)")); Text(verbatim: L10n.text("失败 \(gateway.failed) 次")) }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
@@ -44,9 +44,11 @@ struct GatewayWorkspace: View {
     @ViewBuilder var controls: some View {
         if gateway.ownsProcess() { Button { gateway.stop() } label: { Label(L10n.text("停止网关"), systemImage: "stop.fill") }.buttonStyle(AccentButton(destructive: true)).disabled(gateway.busy) }
         else { Button { gateway.start(store: store) } label: { Label(L10n.text("启动网关"), systemImage: "play.fill") }.buttonStyle(AccentButton()).disabled(gateway.busy) }
-        Button(L10n.text("复制接口与密钥")) { store.copy("Base URL: \(gateway.endpoint)\nAPI Key: \(gateway.settings.apiKey)") }.buttonStyle(.bordered).disabled(!gateway.ready)
-        Button(L10n.text("一键接入")) { store.connections.present(port: gateway.settings.port, targets: store.gatewayConnectionTargets) }.buttonStyle(.bordered).disabled(!gateway.ready || store.gatewayConnectionTargets.isEmpty)
-        Button { store.reveal(gateway.root.appendingPathComponent("gateway.log").path) } label: { Image(systemName: "doc.text") }.buttonStyle(.bordered).help(L10n.text("查看网关日志"))
+        Button(L10n.text("复制接口与密钥")) { store.copy("Base URL: \(gateway.endpoint)\nAPI Key: \(gateway.settings.apiKey)") }.buttonStyle(SecondaryButton()).disabled(!gateway.ready)
+        Button(L10n.text("一键接入")) { store.connections.present(port: gateway.settings.port, targets: store.gatewayConnectionTargets) }.buttonStyle(SecondaryButton()).disabled(!gateway.ready || store.gatewayConnectionTargets.isEmpty)
+        let log = gateway.root.appendingPathComponent("gateway.log").path
+        Button { store.reveal(log) } label: { Label(L10n.text("运行日志"), systemImage: "doc.text") }.buttonStyle(SecondaryButton())
+            .disabled(!store.canReveal(log)).help(L10n.text(store.canReveal(log) ? "查看网关日志" : "网关启动后才会生成运行日志"))
     }
     func copy(_ route: GatewayRoute) { store.copy("Base URL: \(gateway.endpoint)\nModel: \(route.alias)\nAPI Key: \(gateway.settings.apiKey)") }
 }
@@ -74,7 +76,7 @@ struct GatewayEndpointView: View {
             if let message = draft.message { Text(verbatim: L10n.text(message)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
             Spacer()
             Divider()
-            HStack { Button(L10n.text("取消")) { gateway.editor = nil }.disabled(draft.busy); Spacer(); if draft.busy { ProgressView().controlSize(.small) }; Button(L10n.text(draft.busy ? "正在检测…" : "检测模型并保存")) { gateway.addEndpoint(draft, store: store) }.buttonStyle(AccentButton()).disabled(draft.busy || draft.url.isEmpty) }
+            HStack { Button(L10n.text("取消")) { gateway.editor = nil }.buttonStyle(SecondaryButton()).disabled(draft.busy); Spacer(); if draft.busy { ProgressView().controlSize(.small) }; Button(L10n.text(draft.busy ? "正在检测…" : "检测模型并保存")) { gateway.addEndpoint(draft, store: store) }.buttonStyle(AccentButton()).disabled(draft.busy || draft.url.isEmpty) }
         }.padding(26).frame(width: 670, height: 550).background(Theme.background).interactiveDismissDisabled(draft.busy)
     }
 }

@@ -61,7 +61,7 @@ enum StrataChecks {
             let details = ServiceComponentEvidence.collect(spec: first, models: merged, log: store.services.log(first.id), capabilities: .init(inputs: ["text", "image"], known: true), status: .running)
             try ConnectionChecks.require(details?.entries.contains(where: { $0.id == "draft" && $0.confirmed && $0.state == "已启用" }) == true && details?.entries.contains(where: { $0.id == "ngram" && $0.path == ngram.path }) == true, "Auxiliary component evidence missing")
             let other = Engine(kind: .llama, name: "Llama", version: "fixture", path: "", installed: false, canServe: false, installation: "fixture", description: "fixture", defaultPort: 9931, symbol: "cube")
-            try ConnectionChecks.require(store.installBlockers(other).isEmpty && !store.installBlockers(engine).isEmpty, "Strata update blockers affected another engine")
+            try ConnectionChecks.require(store.restartableServices(other).isEmpty && !store.restartableServices(engine).isEmpty, "Strata update restart scope affected another engine")
             try store.services.stop(first)
             for _ in 0..<30 { await store.services.refresh(); if !NetworkProbe.portOccupied(first.port) { break }; try await Task.sleep(nanoseconds: 100_000_000) }
             let second = await NetworkProbe.models(port: ports[1], strata: true)

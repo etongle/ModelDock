@@ -29,19 +29,96 @@ enum Theme {
     static let errorText = adaptive(NSColor(red: 0.68, green: 0.15, blue: 0.13, alpha: 1), NSColor(red: 1, green: 0.54, blue: 0.51, alpha: 1))
 }
 
+/// Copied flag for CopyIconButton; the swiftc build has no SwiftUI macro plugin, so @State is unavailable.
+@MainActor final class CopyFeedback: ObservableObject {
+    @Published var copied = false
+    private var token = 0
+    func flash() {
+        token += 1; let current = token
+        // Respect "Reduce motion": switch the icon without animating.
+        let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        withAnimation(still ? nil : .easeOut(duration: 0.15)) { copied = true }
+        // Only the latest click resets the icon, so rapid clicks keep the checkmark visible.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self, self.token == current else { return }
+            withAnimation(still ? nil : .easeIn(duration: 0.2)) { self.copied = false }
+        }
+    }
+}
+
+/// Copy icon that briefly turns into a checkmark after copying.
+struct CopyIconButton: View {
+    var help: String
+    var action: () -> Void
+    @StateObject private var feedback = CopyFeedback()
+    @StateObject private var hover = HoverState()
+    var body: some View {
+        Button { action(); feedback.flash() } label: {
+            Image(systemName: feedback.copied ? "checkmark" : "doc.on.doc").frame(width: 28, height: 28)
+                .foregroundStyle(feedback.copied ? Color.green : hover.active ? Color.primary : Theme.muted)
+                .background(hover.active ? Theme.line.opacity(0.6) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle()).contentTransition(.symbolEffect(.replace))
+        }
+        .onHover { hover.active = $0 }
+        .buttonStyle(.plain).help(L10n.text(feedback.copied ? "已复制" : help)).accessibilityLabel(L10n.text(feedback.copied ? "已复制" : "复制地址"))
+    }
+}
+
+/// Shared metrics so primary and secondary buttons in the same row line up.
+enum ButtonMetrics {
+    static let height: CGFloat = 34
+    static let padding: CGFloat = 16
+    static let radius: CGFloat = 8
+}
+
 struct AccentButton: ButtonStyle {
     var destructive = false
+    func makeBody(configuration: Configuration) -> some View { FilledButtonBody(configuration: configuration, accent: true, destructive: destructive) }
+}
+
+/// Secondary action placed beside an AccentButton; same size, neutral fill.
+struct SecondaryButton: ButtonStyle {
+    var destructive = false
+    func makeBody(configuration: Configuration) -> some View { FilledButtonBody(configuration: configuration, accent: false, destructive: destructive) }
+}
+
+/// Shared body for AccentButton and SecondaryButton: one size, plus hover and pressed feedback.
+private struct FilledButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let accent: Bool
+    let destructive: Bool
     @Environment(\.isEnabled) private var enabled
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(.white)
-            .padding(.horizontal, 24).frame(minHeight: 48)
-            .background((destructive ? Color.red : Theme.accent).opacity(enabled ? (configuration.isPressed ? 0.76 : 1) : 0.35), in: RoundedRectangle(cornerRadius: 10))
+    @StateObject private var hover = HoverState()
+    var body: some View {
+        let active = enabled && hover.active
+        let shape = RoundedRectangle(cornerRadius: ButtonMetrics.radius)
+        configuration.label.font(.system(size: TypeScale.body, weight: accent ? .semibold : .medium))
+            .foregroundStyle(accent ? Color.white : destructive ? Theme.errorText : Color.primary)
+            .padding(.horizontal, ButtonMetrics.padding).frame(minHeight: ButtonMetrics.height)
+            .background(fill(active: active), in: shape)
+            .opacity(accent || enabled ? 1 : 0.45).contentShape(shape)
+            .onHover { hover.active = $0 }
+            .animation(.easeOut(duration: 0.12), value: active)
+    }
+    private func fill(active: Bool) -> Color {
+        if accent {
+            let base = destructive ? Color.red : Theme.accent
+            return base.opacity(!enabled ? 0.35 : configuration.isPressed ? 0.76 : active ? 0.88 : 1)
+        }
+        return Theme.line.opacity(configuration.isPressed ? 0.95 : active ? 0.8 : 0.6)
     }
 }
 
 struct PlainAction: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.foregroundStyle(Theme.linkColor).padding(.vertical, 8).frame(minHeight: 44).opacity(configuration.isPressed ? 0.65 : 1)
+    func makeBody(configuration: Configuration) -> some View { PlainActionBody(configuration: configuration) }
+}
+/// Link-style label; dims when disabled so it no longer reads as clickable.
+private struct PlainActionBody: View {
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.isEnabled) private var enabled
+    var body: some View {
+        configuration.label.foregroundStyle(enabled ? Theme.linkColor : Theme.muted).padding(.vertical, 8).frame(minHeight: 44)
+            .opacity(!enabled ? 0.6 : configuration.isPressed ? 0.65 : 1)
     }
 }
 
@@ -265,7 +342,7 @@ struct MainView: View {
                     let tabWidth = min(146, (geometry.size.width - 300) / CGFloat(AppTab.allCases.count))
                     HStack(spacing: 0) {
                         ForEach(Array(AppTab.allCases.enumerated()), id: \.element) { index, tab in
-                            Button { store.tab = tab } label: { Text(verbatim: L10n.text(tab.rawValue)).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8).frame(width: tabWidth, height: 44).background(store.tab == tab ? Theme.accent : .clear, in: RoundedRectangle(cornerRadius: 11)).foregroundStyle(store.tab == tab ? Color.white : Color.primary) }
+                            Button { store.tab = tab } label: { Text(verbatim: L10n.text(tab.rawValue)).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8).frame(width: tabWidth, height: 44).background(store.tab == tab ? Theme.accent : .clear, in: RoundedRectangle(cornerRadius: 11)).foregroundStyle(store.tab == tab ? Color.white : Color.primary).contentShape(RoundedRectangle(cornerRadius: 11)) }
                                 .buttonStyle(.plain).keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command).accessibilityIdentifier("tab-\(index)")
                         }
                     }.padding(3).background(Theme.line.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
@@ -323,7 +400,7 @@ struct EngineWorkspace: View {
                         engineRow(engine).padding(.vertical, 4).tag(engine.id).listRowSeparator(.hidden)
                             .help(L10n.text(engine.path)).accessibilityIdentifier("engine-\(engine.id)")
                             .contextMenu {
-                                Button(L10n.text("在 Finder 中打开")) { store.reveal(engine.path) }
+                                Button(L10n.text("在 Finder 中打开")) { store.reveal(engine.path) }.disabled(!store.canReveal(engine.path))
                                 Button(L10n.text("全局引擎设置")) { store.showGlobalEngines = true }
                             }
                     }
@@ -354,14 +431,14 @@ struct EngineWorkspace: View {
                         InfoCell(symbol: "memorychip", title: L10n.text("系统内存"), value: "\((store.inventory?.memoryBytes ?? 0) / 1_073_741_824) GB")
                     }.padding(.bottom, 24)
                     HStack(spacing: 18) { Image(systemName: "internaldrive").font(.system(size: 30)).foregroundStyle(Theme.muted); VStack(alignment: .leading, spacing: 7) { Text(verbatim: L10n.text("模型与缓存")).foregroundStyle(Theme.muted).font(.system(size: TypeScale.body)); Text(verbatim: L10n.text(sizeLabel(store.inventory?.storageBytes ?? 0))).font(.system(size: TypeScale.body)) }; Spacer(); if let app = store.engine.appPath { Button(L10n.text("打开应用")) { NSWorkspace.shared.open(URL(fileURLWithPath: app)) }.buttonStyle(PlainAction()) } }.padding(.top, 20).overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
-                    Button { store.reveal(store.engine.path) } label: { Label(L10n.text("查看引擎安装位置"), systemImage: "folder") }.buttonStyle(PlainAction()).font(.system(size: TypeScale.body)).padding(.top, 16)
+                    Button { store.reveal(store.engine.path) } label: { Label(L10n.text("查看引擎安装位置"), systemImage: "folder") }.buttonStyle(PlainAction()).disabled(!store.canReveal(store.engine.path)).font(.system(size: TypeScale.body)).padding(.top, 16)
                     case .services:
                     EngineServicesView(store: store, services: services)
                     HStack {
                         Button { store.showLaunch = true } label: { Label(L10n.text("启动服务…"), systemImage: "play.fill") }.buttonStyle(AccentButton()).disabled(!store.engine.canServe).accessibilityIdentifier("open-launch")
-                        Button { store.prepareCommand() } label: { Label(L10n.text("按命令行启动…"), systemImage: "terminal") }.buttonStyle(.bordered).disabled(!store.engine.canServe || store.installation.running || store.maintaining).accessibilityIdentifier("command-launch-entry")
+                        Button { store.prepareCommand() } label: { Label(L10n.text("按命令行启动…"), systemImage: "terminal") }.buttonStyle(SecondaryButton()).disabled(!store.engine.canServe || store.installation.running || store.maintaining).accessibilityIdentifier("command-launch-entry")
                         Spacer()
-                        if let model = store.selectedModel { Button(L10n.text("检查模型更新…")) { store.modelUpdate = ModelUpdateDraft(model: model) }.buttonStyle(.bordered) }
+                        if let model = store.selectedModel { Button(L10n.text("检查模型更新…")) { store.modelUpdate = ModelUpdateDraft(model: model) }.buttonStyle(SecondaryButton()) }
                     }.padding(.top, 16)
                     case .configuration:
                     HStack { Text(verbatim: L10n.text("兼容的本地模型")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer(); Button { store.showEngineModels(store.engineID) } label: { Label(L10n.text("管理模型文件"), systemImage: "folder") }.buttonStyle(PlainAction()).font(.system(size: TypeScale.body)) }.padding(.bottom, 22)
@@ -650,15 +727,18 @@ struct ServiceWorkspace: View {
                         if !spec.modelID.isEmpty { ModelCapabilityBadge(capabilities: store.serviceCapabilities(spec), prefix: spec.pid == nil ? "启动设置 · " : "当前服务 · ") }
                         if ["splash", "mlx", "llama", "prism"].contains(spec.engineID) { ServiceComponentsView(store: store, spec: spec) }
                         if [.starting, .running, .failed].contains(status) { StartupProgressView(services: services, spec: spec) }
-                        Text(verbatim: "http://127.0.0.1:\(spec.port)/v1").font(.system(size: TypeScale.body, design: .monospaced)).textSelection(.enabled)
-                        HStack(spacing: 14) {
+                        HStack(spacing: 8) {
+                            Text(verbatim: "http://127.0.0.1:\(spec.port)/v1").font(.system(size: TypeScale.body, design: .monospaced)).textSelection(.enabled)
+                            CopyIconButton(help: "复制完整接口地址") { store.copy("http://127.0.0.1:\(spec.port)/v1") }
+                        }
+                        HStack(spacing: 10) {
                             if spec.pid != nil { Button { store.stop(spec) } label: { Label(L10n.text("停止服务"), systemImage: "stop.fill") }.buttonStyle(AccentButton(destructive: true)).disabled(status == .stopping) }
                             else { Button { store.configureService(spec) } label: { Label(L10n.text("配置并启动"), systemImage: "play.fill") }.buttonStyle(AccentButton()) }
-                            Button(L10n.text("复制地址")) { store.copy("http://127.0.0.1:\(spec.port)/v1") }.buttonStyle(.bordered)
                             // Only shown when usable; deletion lives at the bottom of the page, away from the primary action.
-                            if status == .running { Button(L10n.text("打开服务页面")) { store.openEndpoint(spec.port) }.buttonStyle(.bordered) }
+                            if status == .running { Button(L10n.text("打开服务页面")) { store.openEndpoint(spec.port) }.buttonStyle(SecondaryButton()) }
                         }
                         if let error = services.errors[spec.id] { Text(verbatim: L10n.text(error)).foregroundStyle(Theme.errorText).font(.system(size: TypeScale.body)) }
+                        if spec.engineID != "lmstudio" { ServiceParametersView(store: store, services: services, spec: spec).id(spec.id) }
                         if let command = spec.commandText ?? spec.launchArguments.map({ ([spec.engineExecutable ?? ""] + $0).map(ServiceCommand.quote).joined(separator: " ") }) { DisclosureGroup("启动命令") { Text(verbatim: L10n.text(command)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled).padding(.top, 8) } }
                         ConnectionEntry(store: store, port: spec.port)
                         if spec.engineID == "ollama" && status == .running { OllamaLoadedView(store: store, services: services, port: spec.port) }
@@ -666,7 +746,7 @@ struct ServiceWorkspace: View {
                         HStack(spacing: 16) {
                             Text(verbatim: L10n.text("运行日志")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer()
                             Toggle(L10n.text("跟随最新输出"), isOn: $store.followLog).toggleStyle(.checkbox).font(.system(size: TypeScale.callout))
-                            Button(L10n.text("在 Finder 中打开")) { store.reveal(services.logURL(spec.id).path) }.buttonStyle(PlainAction())
+                            Button(L10n.text("在 Finder 中打开")) { store.reveal(services.logURL(spec.id).path) }.buttonStyle(PlainAction()).disabled(!store.canReveal(services.logURL(spec.id).path))
                         }
                         LogView(text: services.log(spec.id), follow: store.followLog)
                         Button(role: .destructive) { store.serviceRemoval = spec } label: { Label(L10n.text("删除服务配置…"), systemImage: "trash") }.buttonStyle(.bordered).disabled(!services.canRemoveConfiguration(spec)).help(L10n.text("保留模型文件和运行日志"))

@@ -7,7 +7,7 @@ import Combine
 enum EngineSection: String, CaseIterable { case overview = "概览", services = "服务实例", configuration = "配置", maintenance = "维护" }
 
 /// Ordered by everyday use: running services first, one-time engine setup later. Order drives the tab bar and ⌘1–⌘5.
-enum AppTab: String, CaseIterable { case services = "模型服务", models = "模型文件", downloads = "下载导入", engines = "运行引擎", monitor = "资源与性能" }
+enum AppTab: String, CaseIterable { case services = "模型服务", models = "模型文件", engines = "运行引擎", downloads = "下载导入", monitor = "资源与性能" }
 
 @MainActor
 final class AppStore: ObservableObject {
@@ -55,6 +55,7 @@ final class AppStore: ObservableObject {
     @Published var modelEngineFilter = "" { didSet { selectVisibleFile() } }
     @Published var serviceEngineFilter = ""
     @Published var preparingInstall = false
+    @Published var relaunchingServiceID: String?
     @Published var maintenanceEngineID: String?
     @Published var unloadingModel: String?
     @Published var message: String?
@@ -306,6 +307,8 @@ final class AppStore: ObservableObject {
     }
     func copy(_ value: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(value, forType: .string) }
     func reveal(_ path: String) { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
+    /// Reveal buttons stay disabled until their target exists; Finder would otherwise open an unrelated window.
+    func canReveal(_ path: String) -> Bool { FileManager.default.fileExists(atPath: path) }
     func openEndpoint(_ port: Int) { NSWorkspace.shared.open(URL(string: "http://127.0.0.1:\(port)")!) }
     func addLocation() {
         let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = true

@@ -21,7 +21,7 @@ struct DownloadFileDetails: View {
             }
             if let target = job.repairTarget {
                 Text(verbatim: L10n.text("单文件修复：" + target)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled)
-                Button(L10n.text("查看模型文件")) { store.tab = .models; store.selectedFileID = job.repairModelID }.buttonStyle(.bordered)
+                Button(L10n.text("查看模型文件")) { store.tab = .models; store.selectedFileID = job.repairModelID }.buttonStyle(SecondaryButton())
             } else if job.state == .complete {
                 Button { store.showDownloadedModel(job) } label: { Label(L10n.text("启动模型…"), systemImage: "play.fill") }.buttonStyle(AccentButton()).accessibilityIdentifier("launch-downloaded-model")
             }

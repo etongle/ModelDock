@@ -37,7 +37,7 @@ Open **Engines** and select an installed engine. An engine card can be selected 
 ![Engine and multimodal launch configuration](assets/images/en-engines.png)
 
 - Use **Check for updates** to inspect versions. Desktop applications and command-line components are listed separately; their version numbers are independent. **Up to date** means no update is needed from the selected source. **Update available** identifies an older component.
-- Stop that engine's running services before updating it. A service belonging to another engine should not block the operation.
+- Updating an engine stops the services ModelDock started with it, installs the update, then restarts them with their saved settings. If the update fails they restart on the installed version. Services of other engines are not touched; a process started outside ModelDock or an open desktop app must still be closed first.
 - Homebrew-backed installation requires Homebrew. MLX components are managed in their own environment. A local build can be managed according to its identified build output.
 - Review an uninstall or cleanup plan before applying it. Model files and personal data are retained by default; shared models and files in use are protected.
 
@@ -132,7 +132,9 @@ A vision-capable model can be run text-only when the selected runtime supports t
 
 ## 7. Manage services and model versions
 
-Every independent instance appears in **Services**, with its model, port, and status. Click anywhere on its card to select it. Stop a specific instance without stopping another one. Once stopped, its configuration can be deleted; model files and logs are retained.
+Every independent instance appears in **Services**, with its model, port, and status. Click anywhere on its card to select it. Stop a specific instance without stopping another one. Once stopped, its configuration can be deleted; model files and logs are retained. The copy icon after the endpoint copies the address.
+
+**Service parameters** on the instance page lists the port, context window, input mode and engine-specific options, and can be edited in place. **Extra launch arguments** append native engine flags (for example `-ngl 99 --threads 8` for llama.cpp); flags managed by the fields above are rejected. On a running service, **Save and Restart** stops it and starts it with the new values; if that start fails, the previous settings are restored and restarted. Services created from a launch command are edited through their command instead.
 
 A model update is downloaded as another revision when the source supports revision snapshots. The existing service keeps its launched path/version. After the new files are complete, select the new version and configure another launch or restart the intended service. Keep an older version to switch back later, or move it to the Trash when it is unused.
 
