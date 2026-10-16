@@ -43,9 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let capturing = argumentValue("--capture-dir") != nil
         let captureWidth = CGFloat(Double(argumentValue("--capture-width") ?? "1440") ?? 1440)
         let captureHeight = CGFloat(Double(argumentValue("--capture-height") ?? "1024") ?? 1024)
-        // Default to the common 1280×800 desktop size, capped at 85% of the visible screen and never below minSize.
-        let contentSize = NSSize(width: capturing ? captureWidth : max(980, min(1280, (screen.width * 0.85).rounded())),
-                                 height: capturing ? captureHeight : max(740, min(800, (screen.height * 0.85).rounded())))
+        // Default to a compact 1120×740: width capped at 85% of the visible screen, height equal to minSize.
+        let contentSize = NSSize(width: capturing ? captureWidth : max(980, min(1120, (screen.width * 0.85).rounded())),
+                                 height: capturing ? captureHeight : 740)
         window = ManagerWindow(contentRect: NSRect(origin: .zero, size: contentSize), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.delegate = self
         (window as? ManagerWindow)?.minimizeToStatusBar = { [weak self] in self?.hideMainWindow() }

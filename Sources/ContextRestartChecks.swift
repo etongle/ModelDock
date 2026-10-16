@@ -48,11 +48,28 @@ enum ContextRestartChecks {
             try ConnectionChecks.require(fallback.context == 32768 && fallback.pid != nil && store.services.status(fallback) == .running, "Rollback failed")
             try ConnectionChecks.require(fallback.inputMode == .multimodal && fallback.projectorPath == projector.path, "Rollback lost multimodal settings")
             try ConnectionChecks.require(other.pid.map { processStartTime($0) == other.processStart } == true, "Rollback altered another service")
+            // Service parameter editor: reserved flags are rejected; a running service restarts with new values and extra flags.
+            do { _ = try ServiceExtraArguments.parse("--threads 4 --port 1", engine: engine); throw LaunchError.message("Reserved flag was accepted") }
+            catch LaunchError.message(let text) where text.contains("--port") { }
+            func edit(_ spec: ServiceSpec, context: Int, extra: String) async throws -> ServiceParameterDraft {
+                let draft = ServiceParameterDraft(spec); draft.context = context; draft.extra = extra
+                store.saveServiceParameters(draft, spec: spec, launch: true)
+                try ConnectionChecks.require(draft.error == nil, "Parameter edit rejected: \(draft.error ?? "")")
+                for _ in 0..<80 { if store.relaunchingServiceID == nil { break }; try await Task.sleep(nanoseconds: 150_000_000) }
+                return draft
+            }
+            _ = try await edit(other, context: 16384, extra: "--threads 4")
+            guard let edited = store.services.records.first(where: { $0.id == other.id }) else { throw LaunchError.message("Edited service missing") }
+            let editedArguments = try JSONDecoder().decode([String].self, from: Data(contentsOf: root.appendingPathComponent("started-\(ports[1])-16384.json")))
+            try ConnectionChecks.require(edited.pid != other.pid && edited.context == 16384 && edited.extraArguments == ["--threads", "4"] && editedArguments.suffix(2) == ["--threads", "4"], "Parameter edit did not restart with new values")
+            let failed = try await edit(edited, context: 65536, extra: "--threads 8")
+            guard let restored = store.services.records.first(where: { $0.id == other.id }) else { throw LaunchError.message("Restored service missing") }
+            try ConnectionChecks.require(failed.error?.contains("已按原参数重新启动") == true && restored.pid != nil && restored.context == 16384 && restored.extraArguments == ["--threads", "4"] && store.services.status(restored) == .running, "Failed parameter edit did not roll back")
             for spec in store.services.records where spec.pid != nil { try store.services.stop(spec) }
             for _ in 0..<40 { await store.services.refresh(); if ports.allSatisfy({ !NetworkProbe.portOccupied($0) }) { break }; try await Task.sleep(nanoseconds: 250_000_000) }
             try ConnectionChecks.require(ports.allSatisfy({ !NetworkProbe.portOccupied($0) }), "Fixture services not cleaned up")
             let report = try ConnectionFiles.json(["result": "passed", "checks": ["8K to 32K restart changes only selected PID",
-                "Failed larger-context startup restores previous 32K service", "Multimodal mode and custom projector preserved on restart and rollback", "Other service identity preserved", "Owned fixtures cleaned up"], "realServicesStopped": false])
+                "Failed larger-context startup restores previous 32K service", "Multimodal mode and custom projector preserved on restart and rollback", "Other service identity preserved", "Service parameter edit restarts with extra flags", "Reserved flags rejected", "Failed parameter edit restores previous service", "Owned fixtures cleaned up"], "realServicesStopped": false])
             try report.write(to: root.appendingPathComponent("result.json")); print(String(decoding: report, as: UTF8.self))
         } catch {
             for spec in store.services.records where spec.pid != nil { try? store.services.stop(spec) }

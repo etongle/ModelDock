@@ -155,12 +155,12 @@ struct ClientConnectionsView: View {
                     Button(L10n.text("写入配置")) { controller.connect(client, store: store, launch: false, registerOnly: true) }.buttonStyle(.bordered)
                         .disabled(controller.busy || selected == nil || invalidContext || requirement != nil).accessibilityIdentifier("register-client-" + client.rawValue)
                 }
-                Button(L10n.text("复制命令")) { controller.connect(client, store: store, launch: false) }.buttonStyle(.bordered)
+                Button(L10n.text("复制命令")) { controller.connect(client, store: store, launch: false) }.buttonStyle(SecondaryButton())
                     .disabled(controller.busy || selected == nil || invalidContext || requirement != nil).accessibilityLabel(L10n.text("复制 \(client.title) 连接命令"))
                 Button { controller.connect(client, store: store, launch: true) } label: { Label(L10n.text("接入并打开"), systemImage: "arrow.up.right") }
                     .buttonStyle(AccentButton()).disabled(controller.busy || selected == nil || invalidContext || requirement != nil).accessibilityLabel(L10n.text("接入并打开 \(client.title)"))
             } else {
-                Button(L10n.text(controller.discovering ? "正在检测…" : "安装指南")) { NSWorkspace.shared.open(client.website) }.buttonStyle(.bordered).disabled(controller.discovering)
+                Button(L10n.text(controller.discovering ? "正在检测…" : "安装指南")) { NSWorkspace.shared.open(client.website) }.buttonStyle(SecondaryButton()).disabled(controller.discovering)
             }
         }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.line))
     }

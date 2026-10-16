@@ -296,6 +296,8 @@ struct ServiceSpec: Codable, Identifiable, Hashable {
     var draftModelPath: String? = nil
     var launchArguments: [String]? = nil
     var componentSnapshot: ServiceComponentSnapshot? = nil
+    // User-supplied native engine flags, appended after the managed arguments.
+    var extraArguments: [String]? = nil
 }
 
 struct LaunchPlan: Codable {

@@ -6,14 +6,15 @@ extension AppStore {
         var result: [String] = []
         if engine.kind == .strata && strata.busy { result.append("请等待 Strata 模型准备操作完成。") }
         if (maintaining || preparingMaintenance) && maintenanceEngineID == engine.id { result.append("请等待 \(engine.name) 清理完成。") }
-        let active = services.records.filter { $0.engineID == engine.id && $0.pid != nil }
-        for spec in active { result.append("\(engine.name) · 端口 \(spec.port) · \(spec.modelName)，请先停止此服务。") }
+        // Services started by ModelDock are stopped and restarted around the update, so they are not blockers.
         if let app = engine.appPath, NSRunningApplicationCheck.isRunning(app) { result.append("请先退出 \(engine.name) 原应用。") }
-        let owned = Set(active.compactMap(\.pid))
-        for process in updateProcesses(engine) where !owned.contains(process.pid) { result.append("\(engine.name) 的外部运行进程 · PID \(process.pid)，请使用原应用停止。") }
+        let owned = Set(restartableServices(engine).compactMap(\.pid))
+        // Children of a managed service share its process group and stop with it.
+        for process in updateProcesses(engine) where !owned.contains(process.pid) && !owned.contains(getpgid(process.pid)) { result.append("\(engine.name) 的外部运行进程 · PID \(process.pid)，请使用原应用停止。") }
         if multiModel?.engine.id == engine.id && multiModel?.running == true { result.append("请等待模型加载操作完成。") }
         return result
     }
+    func restartableServices(_ engine: Engine) -> [ServiceSpec] { services.records.filter { $0.engineID == engine.id && $0.pid != nil } }
     func checkInstall() {
         let chosen = engine
         guard !((maintaining || preparingMaintenance) && maintenanceEngineID == chosen.id) && !(multiModel?.engine.id == chosen.id && multiModel?.running == true) else { return }
@@ -33,7 +34,7 @@ struct EngineInstallPanel: View {
                 }
                 Spacer(minLength: 10)
                 if installer.checking == store.engineID { ProgressView().controlSize(.small); Text(verbatim: L10n.text("检查中…")).font(.system(size: TypeScale.body)) }
-                else { Button { store.checkInstall() } label: { Label(L10n.text(store.engine.kind == .mlx && !store.engine.canServe ? "安装 MLX-LM…" : store.engine.installed ? "检查更新…" : "安装引擎…"), systemImage: "arrow.triangle.2.circlepath") }.buttonStyle(.bordered).controlSize(.large).disabled(installer.checking != nil || installer.running || (store.maintaining && store.maintenanceEngineID == store.engineID)) }
+                else { Button { store.checkInstall() } label: { Label(L10n.text(store.engine.kind == .mlx && !store.engine.canServe ? "安装 MLX-LM…" : store.engine.installed ? "检查更新…" : "安装引擎…"), systemImage: "arrow.triangle.2.circlepath") }.buttonStyle(SecondaryButton()).disabled(installer.checking != nil || installer.running || (store.maintaining && store.maintenanceEngineID == store.engineID)) }
             }
             if installer.running { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text("正在安装或更新；完成后自动扫描引擎。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) } }
             else if let message = installer.message, installer.plan == nil { Text(verbatim: L10n.text(message)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(3).textSelection(.enabled) }
@@ -62,6 +63,12 @@ struct EngineInstallView: View {
                     if !blockers.isEmpty && !installer.running {
                         VStack(alignment: .leading, spacing: 12) { Label(L10n.text("\(plan.engine.name) 更新前需要处理"), systemImage: "pause.circle").fontWeight(.semibold); ForEach(blockers, id: \.self) { Text(verbatim: L10n.text($0)).font(.system(size: TypeScale.body)) }; Button(L10n.text("查看 \(plan.engine.name) 服务")) { installer.plan = nil; store.showEngineServices(plan.engine.id) }; if EnginePaths.brew == nil { Link("Homebrew 官方安装说明", destination: URL(string: "https://brew.sh")!) } }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Theme.warningText.opacity(0.08), in: RoundedRectangle(cornerRadius: 10)).foregroundStyle(Theme.warningText)
                     }
+                    if needsAction && blockers.isEmpty && !installer.running && installer.log.isEmpty && !store.restartableServices(currentEngine).isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label(L10n.text("更新时会先停止以下服务，完成后自动重新启动"), systemImage: "arrow.clockwise.circle").fontWeight(.semibold)
+                            ForEach(store.restartableServices(currentEngine)) { spec in Text(verbatim: L10n.text("端口 \(spec.port) · \(spec.modelName)")).font(.system(size: TypeScale.body)) }
+                        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+                    }
                     if !plan.commands.isEmpty { DisclosureGroup("查看实际安装命令") { ForEach(Array(plan.commands.enumerated()), id: \.offset) { _, command in VStack(alignment: .leading, spacing: 6) { Text(verbatim: L10n.text(command.title)).fontWeight(.medium); Text(verbatim: L10n.text(command.display)).font(.system(size: TypeScale.caption, design: .monospaced)).textSelection(.enabled) }.padding(.vertical, 7) } }.font(.system(size: TypeScale.body)) }
                     if installer.running || !installer.log.isEmpty {
                         HStack { Text(verbatim: L10n.text("执行进度")).fontWeight(.semibold); Spacer(); if installer.running { ProgressView().controlSize(.small) } }
@@ -72,7 +79,7 @@ struct EngineInstallView: View {
             }
             Divider()
             HStack {
-                Button(L10n.text(installer.log.isEmpty && needsAction ? "取消" : "关闭")) { installer.plan = nil }.buttonStyle(.bordered).disabled(installer.running)
+                Button(L10n.text(installer.log.isEmpty && needsAction ? "取消" : "关闭")) { installer.plan = nil }.buttonStyle(SecondaryButton()).disabled(installer.running)
                 Spacer()
                 if !installer.running && installer.log.isEmpty && needsAction { Button(L10n.text(store.preparingInstall ? "核对运行状态…" : "开始" + (plan.updating ? "更新" : "安装"))) { store.performInstall(plan) }.buttonStyle(AccentButton()).disabled(!blockers.isEmpty || store.preparingInstall || store.scanning) }
                 if installer.running { Text(verbatim: L10n.text("安装任务进行中")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
@@ -129,7 +136,7 @@ struct MultiModelView: View {
             if !draft.progress.isEmpty { HStack { if draft.running { ProgressView().controlSize(.small) }; Text(verbatim: L10n.text(draft.progress)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) } }
             if !draft.errors.isEmpty { Text(verbatim: L10n.text(draft.errors.joined(separator: "\n"))).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.errorText).lineLimit(4).textSelection(.enabled) }
             Divider()
-            HStack { Button(L10n.text("关闭")) { store.multiModel = nil }.buttonStyle(.bordered).disabled(draft.running); Spacer(); if draft.done { Button(L10n.text("查看模型服务")) { store.multiModel = nil; store.tab = .services }.buttonStyle(AccentButton()) } else { Button(L10n.text(draft.mode == .independent ? "启动所选模型" : "加载所选模型")) { store.runMultiModel(draft) }.buttonStyle(AccentButton()).disabled(draft.selected.isEmpty || draft.selected.count > 16 || draft.running || !modalityBlockers.isEmpty || store.installation.activeEngineID == draft.engine.id) } }
+            HStack { Button(L10n.text("关闭")) { store.multiModel = nil }.buttonStyle(SecondaryButton()).disabled(draft.running); Spacer(); if draft.done { Button(L10n.text("查看模型服务")) { store.multiModel = nil; store.tab = .services }.buttonStyle(AccentButton()) } else { Button(L10n.text(draft.mode == .independent ? "启动所选模型" : "加载所选模型")) { store.runMultiModel(draft) }.buttonStyle(AccentButton()).disabled(draft.selected.isEmpty || draft.selected.count > 16 || draft.running || !modalityBlockers.isEmpty || store.installation.activeEngineID == draft.engine.id) } }
         }.padding(26).frame(width: 680, height: 650).background(Theme.background).interactiveDismissDisabled(draft.running)
     }
 }

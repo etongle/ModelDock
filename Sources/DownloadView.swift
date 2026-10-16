@@ -114,7 +114,7 @@ struct DownloadTaskActions: View {
                 .disabled(downloads.activeID != nil || downloads.deletingIDs.contains(job.id))
         }
     }
-    var directory: some View { Button(L10n.text("打开目录")) { store.reveal(job.displayLocation) } }
+    var directory: some View { Button(L10n.text("打开目录")) { store.reveal(job.displayLocation) }.disabled(!store.canReveal(job.displayLocation)) }
     @ViewBuilder var cleanup: some View {
         if job.state != .complete && downloads.activeID != job.id { Button(L10n.text("清理未完成文件…"), role: .destructive) { confirmCleanup() } }
     }

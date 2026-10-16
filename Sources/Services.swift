@@ -193,11 +193,15 @@ final class ServiceController: ObservableObject {
     }
 
     @discardableResult
-    func start(engine: Engine, model: LocalModel?, port: Int, context: Int, maximumLoadedModels: Int = 3, inputMode: InputMode = .automatic, projectorPath: String? = nil) throws -> ServiceSpec {
-        let plan = try LaunchBuilder.plan(engine: engine, model: model, port: port, context: context, maximumLoadedModels: maximumLoadedModels, inputMode: inputMode, projectorPath: projectorPath)
+    // `extraArguments == nil` keeps the flags already saved on the matching configuration.
+    func start(engine: Engine, model: LocalModel?, port: Int, context: Int, maximumLoadedModels: Int = 3, inputMode: InputMode = .automatic, projectorPath: String? = nil, extraArguments: [String]? = nil) throws -> ServiceSpec {
+        var plan = try LaunchBuilder.plan(engine: engine, model: model, port: port, context: context, maximumLoadedModels: maximumLoadedModels, inputMode: inputMode, projectorPath: projectorPath)
         guard !portReserved(port), !NetworkProbe.portOccupied(port) else { throw LaunchError.message((portConflict(port) ?? "端口 \(port) 已被占用") + "，请使用空闲端口") }
         var spec = record(engineID: engine.id, modelID: model?.id, port: port) ?? ServiceSpec(engineID: engine.id, modelID: model?.id ?? "", modelName: model?.name ?? "Ollama 服务", modelPath: model?.path ?? "", port: port)
         guard spec.pid == nil else { throw LaunchError.message("这个服务已经启动，请先停止再重新配置") }
+        let extras = extraArguments ?? spec.extraArguments ?? []
+        try ServiceExtraArguments.validate(extras, engine: engine)
+        plan.arguments += extras; spec.extraArguments = extras.isEmpty ? nil : extras
         spec.context = context; spec.startedAt = Date()
         spec.inputMode = inputMode; spec.projectorPath = projectorPath?.isEmpty == false ? projectorPath : nil
         spec.engineVersion = plan.engineVersion; spec.engineExecutable = plan.executable
@@ -272,6 +276,39 @@ final class ServiceController: ObservableObject {
             if let latest = self.records.first(where: { $0.id == spec.id }), latest.pid == pid, self.ownsProcess(latest, pid: pid) { _ = kill(-pid, SIGKILL) }
             await self.refresh()
         }
+    }
+
+    /// Saves new launch parameters on a stopped configuration; the next start uses them.
+    func updateParameters(_ id: String, _ value: ServiceParameters) throws {
+        guard let index = records.firstIndex(where: { $0.id == id }) else { throw LaunchError.message("这条服务配置已删除") }
+        let current = records[index]
+        guard current.pid == nil, processes[id]?.isRunning != true else { throw LaunchError.message("服务仍在运行，请先停止") }
+        // start() reuses the record matching engine/model/port, so a second record on the new port would be ambiguous.
+        if records.contains(where: { $0.id != id && $0.engineID == current.engineID && $0.port == value.port && (current.engineID == "ollama" || $0.modelID == current.modelID) }) {
+            throw LaunchError.message("端口 \(value.port) 已有同一模型的服务配置")
+        }
+        records[index].port = value.port; records[index].context = value.context; records[index].inputMode = value.inputMode
+        records[index].projectorPath = value.projectorPath; records[index].extraArguments = value.extraArguments.isEmpty ? nil : value.extraArguments
+        if current.engineID == "ollama" { records[index].maximumLoadedModels = value.maximumLoadedModels }
+        save()
+    }
+
+    func waitForRelease(port: Int) async throws {
+        for _ in 0..<48 {
+            await refresh()
+            if !NetworkProbe.portOccupied(port), !portReserved(port) { return }
+            try await Task.sleep(nanoseconds: 250_000_000)
+        }
+        throw LaunchError.message("服务端口尚未释放，已停止后续操作。请查看服务状态。")
+    }
+    func waitForReady(_ spec: ServiceSpec) async throws -> ServiceSpec {
+        for _ in 0..<120 {
+            await refresh()
+            if status(spec) == .running, let current = records.first(where: { $0.id == spec.id }) { return current }
+            if [.failed, .conflicted].contains(status(spec)) { throw LaunchError.message(errors[spec.id] ?? "引擎启动失败，请查看运行日志。") }
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+        throw LaunchError.message("服务启动超时，请查看运行日志。")
     }
 
     func canRemoveConfiguration(_ spec: ServiceSpec) -> Bool {

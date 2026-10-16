@@ -98,7 +98,7 @@ enum EngineCatalog {
     static func validVersion(_ value: String) -> Bool { !value.isEmpty && value.utf8.count < 80 && value.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || ".-+".contains($0)) } }
     static func validHash(_ value: String) -> Bool { value.count == 64 && value.allSatisfy { $0.isHexDigit } }
     static func plan(engine: Engine, release: EngineRelease, brew: String? = EnginePaths.brew, python: String? = EnginePaths.python, prefix: String? = nil) -> EngineInstallPlan {
-        var commands: [InstallCommand] = []; var blockers: [String] = []; var notes = ["模型文件与服务配置保留。", "运行中的此引擎服务需要先停止，再执行安装或更新。"]
+        var commands: [InstallCommand] = []; var blockers: [String] = []; var notes = ["模型文件与服务配置保留。", "运行中的此引擎服务会先自动停止，完成后自动重新启动。"]
         let updating = engine.kind == .mlx ? EnginePaths.manifest(.mlx) != nil : engine.installed
         let brewRoot = prefix ?? (brew.map { URL(fileURLWithPath: $0).deletingLastPathComponent().deletingLastPathComponent().path } ?? "/opt/homebrew")
         func package(_ name: String, cask: Bool = false) {
@@ -269,8 +269,9 @@ final class EngineInstallController: ObservableObject {
             checking = nil
         }
     }
-    func perform(_ plan: EngineInstallPlan, blockers: [String], finished: @escaping () -> Void) {
-        guard !running && plan.blockers.isEmpty && blockers.isEmpty else { message = (plan.blockers + blockers).joined(separator: "\n"); return }
+    @discardableResult
+    func perform(_ plan: EngineInstallPlan, blockers: [String], finished: @escaping () -> Void) -> Bool {
+        guard !running && plan.blockers.isEmpty && blockers.isEmpty else { message = (plan.blockers + blockers).joined(separator: "\n"); return false }
         running = true; activeEngineID = plan.engine.id; log = "开始\(plan.title)…\n"; message = nil; succeeded = false
         Task { [self] in
             do {
@@ -279,5 +280,6 @@ final class EngineInstallController: ObservableObject {
             } catch { message = error.localizedDescription; finished() }
             running = false; activeEngineID = nil
         }
+        return true
     }
 }
