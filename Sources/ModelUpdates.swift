@@ -6,6 +6,7 @@ struct ModelOrigin: Codable, Hashable {
     var repository: String
     var revision: String
     var files: [String]
+    var sourceURL: String? = nil
     static func validRepository(_ value: String) -> Bool {
         let parts = value.split(separator: "/", omittingEmptySubsequences: false)
         return parts.count == 2 && parts.allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." && $0.count <= 128 && $0.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "-_.".contains($0)) } }
@@ -50,7 +51,11 @@ struct ModelOrigin: Codable, Hashable {
         return folder.path.hasPrefix(originRoot.path + "/") ? name + " · " + String(folder.path.dropFirst(originRoot.path.count + 1)) : name
     }
     static func address(_ source: ModelOrigin) -> String {
-        source.site == .modelscope ? "https://modelscope.cn/models/\(source.repository)" : "https://huggingface.co/\(source.repository)"
+        if source.site == .github {
+            if let address = source.sourceURL, let url = URL(string: address), url.scheme == "https", url.host == "github.com", url.user == nil, url.password == nil, url.pathComponents.dropFirst().prefix(2).joined(separator: "/").lowercased() == source.repository.lowercased() { return address }
+            return "https://github.com/\(source.repository)"
+        }
+        return source.site == .modelscope ? "https://modelscope.cn/models/\(source.repository)" : "https://huggingface.co/\(source.repository)"
     }
     static func hubRoot(_ path: String) -> String? {
         let parts = URL(fileURLWithPath: path).pathComponents
@@ -131,8 +136,10 @@ final class ModelUpdateDraft: ObservableObject, Identifiable {
     func download(store: AppStore) {
         guard let listing, !selectedFiles.isEmpty, !checking, !updating else { return }
         guard checkedAddress == address else { error = "仓库地址已变化，请重新检查版本"; return }
-        guard store.downloads.activeID == nil, !store.maintaining else { error = "请先暂停当前下载或等待清理完成"; return }
+        guard !store.maintaining else { error = "请先暂停当前下载或等待清理完成"; return }
         guard !store.strata.uses(model.path) else { error = "此模型正在准备 Strata 配套组件，请等待操作完成。"; return }
+        let destination = store.downloads.destination
+        store.downloads.beginImport(); store.downloads.destination = destination
         store.downloads.address = address; store.downloads.token = token
         store.downloads.listing = listing; store.downloads.selected = selected
         store.downloads.createJob()

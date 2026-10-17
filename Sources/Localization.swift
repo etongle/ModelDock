@@ -70,6 +70,9 @@ enum L10n {
         }
         return output
     }
+    static func format(_ template: String, _ arguments: [String]) -> String {
+        render(text(template), arguments: Dictionary(uniqueKeysWithValues: arguments.enumerated().map { ($0.offset, $0.element) }))
+    }
     static func text(_ value: String) -> String {
         let code = current
         let range = NSRange(value.startIndex..., in: value)

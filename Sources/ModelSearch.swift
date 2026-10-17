@@ -101,7 +101,7 @@ final class ModelSearchController: ObservableObject {
                                         .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                                 }
                                 Spacer()
-                                Button(L10n.text("选择")) { downloads.address = result.id; downloads.resolve() }.buttonStyle(SecondaryButton()).disabled(downloads.resolving)
+                                Button(L10n.text("选择")) { downloads.changeAddress(result.id); downloads.resolve() }.buttonStyle(SecondaryButton()).disabled(downloads.resolving)
                             }.padding(.vertical, 9)
                             if result.id != search.results.last?.id { Divider() }
                         }

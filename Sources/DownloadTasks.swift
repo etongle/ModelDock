@@ -88,7 +88,7 @@ enum DownloadRecovery {
     }
     static func folder(listing: RemoteListing, recovery: Bool) -> String {
         let repo = listing.repository.replacingOccurrences(of: "/", with: "--")
-        let standard = listing.site == .huggingface ? "hf-cache/hub/models--\(repo)/snapshots/\(listing.revision)" : "downloads/\(listing.site == .modelscope ? "modelscope" : "direct")/\(repo)/\(UUID().uuidString)"
+        let standard = listing.site == .github ? "downloads/github/\(repo)/\(listing.revision)" : listing.site == .huggingface ? "hf-cache/hub/models--\(repo)/snapshots/\(listing.revision)" : "downloads/\(listing.site == .modelscope ? "modelscope" : "direct")/\(repo)/\(UUID().uuidString)"
         return recovery ? "downloads/recovered/\(UUID().uuidString)/" + standard : standard
     }
 }

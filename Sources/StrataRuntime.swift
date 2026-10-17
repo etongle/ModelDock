@@ -185,6 +185,7 @@ final class StrataPreparationProcess: @unchecked Sendable {
                 let address = "https://huggingface.co/" + selection.repository + "/tree/" + selection.revision
                 let listing = try await ModelCatalog.listing(address, token: store.downloads.token)
                 guard Set(selection.files).isSubset(of: Set(listing.files.map(\.path))) else { throw LaunchError.message("官方模型版本缺少所需分片，请重新检查 Strata 版本。") }
+                store.downloads.beginImport()
                 store.downloads.listing = listing; store.downloads.address = address
                 store.downloads.selected = Set(selection.files); store.downloads.selectedTaskID = nil
                 if !folder.isEmpty { store.downloads.destination = folder }
@@ -209,7 +210,7 @@ final class StrataPreparationProcess: @unchecked Sendable {
         let initial = URL(fileURLWithPath: localShards)
         if let first = choice.files.first, !localShards.isEmpty, !FileManager.default.fileExists(atPath: initial.appendingPathComponent(URL(fileURLWithPath: first).lastPathComponent).path), FileManager.default.fileExists(atPath: initial.appendingPathComponent(first).path) { localShards = initial.appendingPathComponent(first).deletingLastPathComponent().path }
         guard !localShards.isEmpty, choice.files.allSatisfy({ FileManager.default.fileExists(atPath: URL(fileURLWithPath: localShards).appendingPathComponent(URL(fileURLWithPath: $0).lastPathComponent).path) }) else { message = "请先下载全部模型分片，并选择其所在目录。"; return }
-        if let active = store.downloads.jobs.first(where: { $0.id == store.downloads.activeID }), EngineMaintenance.contains(active.displayLocation, localShards) || EngineMaintenance.contains(localShards, active.displayLocation) { message = "这些模型分片仍在下载，请等待任务完成后再准备。"; return }
+        if store.downloads.hasWriter(affecting: localShards) { message = "这些模型分片仍在下载，请等待任务完成后再准备。"; return }
         let root = URL(fileURLWithPath: folder.isEmpty ? store.downloads.destination : folder).resolvingSymlinksInPath()
         let source = StrataRuntime.source(store.engine)
         let python = StrataRuntime.python(store.engine)

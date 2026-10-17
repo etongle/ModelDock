@@ -38,6 +38,9 @@ struct DownloadFileDetails: View {
                     Spacer()
                     Text(verbatim: L10n.text("下载速度 " + downloads.speedLabel(job.id))).foregroundStyle(Theme.muted)
                 }.font(.system(size: TypeScale.body)).monospacedDigit()
+                if job.state != .complete {
+                    HStack { Text(verbatim: L10n.text("预计剩余时间")); Spacer(); Text(verbatim: downloads.remainingTimeLabel(job)) }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).monospacedDigit().accessibilityIdentifier("download-remaining-time")
+                }
                 HStack(spacing: 18) {
                     Text(verbatim: L10n.text("已完成 \(rows.filter { $0.state == .complete }.count) / \(rows.count)"))
                     Text(verbatim: L10n.text("处理中 \(rows.filter { $0.state.processing }.count)"))
@@ -47,6 +50,7 @@ struct DownloadFileDetails: View {
                 }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 if !(job.pausedFiles ?? []).isEmpty { Button(L10n.text("继续所有暂停文件")) { downloads.resumeAllFiles(job.id) }.buttonStyle(.bordered).controlSize(.small).disabled(!downloads.canControlFiles(job.id)) }
             }.padding(18).background(Theme.selection.opacity(0.5), in: RoundedRectangle(cornerRadius: 12)).accessibilityIdentifier("download-files-summary")
+            if job.state == .queued { Label(L10n.text(downloads.queueReason(job.id)), systemImage: "clock").font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
             VStack(alignment: .leading, spacing: 6) {
                 Text(verbatim: L10n.text("保存位置")).font(.system(size: TypeScale.callout, weight: .semibold))
                 Text(job.displayLocation).font(.system(size: TypeScale.caption, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled)
@@ -107,6 +111,9 @@ struct DownloadFileRow: View {
                 if let speed = progress.speed { Text(verbatim: L10n.text(sizeLabel(Int64(max(0, min(Double(Int64.max / 2), speed.isFinite ? speed : 0)))) + "/s")).foregroundStyle(Theme.muted) }
                 else if progress.state == .complete { Text(verbatim: L10n.text(progress.file.sha256 == nil ? "大小检查通过" : "SHA-256 已校验")) }
             }.font(.system(size: TypeScale.caption)).monospacedDigit().foregroundStyle(Theme.muted)
+            if progress.state == .downloading, let seconds = DownloadEstimate.seconds(remaining: max(0, progress.file.bytes - progress.received), speed: progress.speed ?? 0) {
+                Text(verbatim: L10n.format("约剩余 {0}", [DownloadEstimate.duration(seconds)])).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
+            }
             if progress.state != .complete, progress.received > 0, progress.file.bytes > 0 {
                 UsageBar(fraction: progress.file.bytes > 0 ? Double(progress.received) / Double(progress.file.bytes) : 0, progress: true)
             }

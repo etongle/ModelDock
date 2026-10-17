@@ -41,7 +41,7 @@ extension DownloadController {
         if job.finished.contains(file.path) { result.state = .complete; return result }
         if job.pausedFiles?.contains(file.path) == true { result.state = .paused; return result }
         let writer = jobs.first { candidate in
-            candidate.id == activeID && candidate.state == .downloading &&
+            isActive(candidate.id) && candidate.state == .downloading &&
             candidate.currentFile == file.path &&
             URL(fileURLWithPath: candidate.root).standardizedFileURL == URL(fileURLWithPath: job.root).standardizedFileURL &&
             candidate.folder == job.folder && candidate.files.contains { $0.path == file.path && $0.url == file.url }

@@ -176,7 +176,8 @@ struct RemovalCleanup {
 @MainActor extension AppStore {
     func removalCleanup(model: LocalModel, removedPath: String) -> RemovalCleanup {
         // Ollama 服务同时承载多个模型，保留其服务配置，只按模型名称清理登记。
-        let owned = services.records.filter { $0.modelID == model.id && $0.engineID != "ollama" }
+        // 复用模型实例的匹配规则：按 ID、版本路径、Splash/Strata 预备组合识别属于此模型的服务。
+        let owned = modelServices(model).filter { $0.engineID != "ollama" }
         var names: Set<String> = [model.path, removedPath]
         if let repository = model.repository { names.insert(repository); names.insert(OllamaModelManagement.canonical(repository)) }
         if let origin = ModelOrigin.read(model)?.repository { names.insert(origin) }
