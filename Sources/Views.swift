@@ -366,7 +366,7 @@ struct MainView: View {
             .alert(L10n.text("删除端口 \(store.serviceRemoval?.port ?? 0) 的服务配置"), isPresented: Binding(get: { store.serviceRemoval != nil }, set: { if !$0 { store.serviceRemoval = nil } })) {
                 Button(L10n.text("删除"), role: .destructive) { if let spec = store.serviceRemoval { store.removeServiceConfiguration(spec) }; store.serviceRemoval = nil }
                 Button(L10n.text("取消"), role: .cancel) { store.serviceRemoval = nil }
-            } message: { Text(verbatim: L10n.text("保留模型文件和运行日志")) }
+            } message: { Text(verbatim: store.serviceRemoval.map(store.serviceRemovalMessage) ?? "") }
             .alert(L10n.text("模型管理"), isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) { Button(L10n.text("好")) { store.message = nil } } message: { Text(verbatim: L10n.text(store.message ?? "")) }
             .sheet(item: $store.maintenancePlan) { plan in MaintenanceView(store: store, plan: plan) }
             .sheet(isPresented: $store.showLaunch) { LaunchSheet(store: store, services: services) }
@@ -376,6 +376,7 @@ struct MainView: View {
             .sheet(item: $store.modelUpdate) { draft in ModelUpdateView(store: store, draft: draft) }
             .sheet(item: $store.engineConfigurationDraft) { draft in EngineConfigurationView(store: store, draft: draft) }
             .sheet(item: $store.associationDraft) { draft in ModelAssociationView(store: store, draft: draft) }
+            .sheet(item: $store.chat) { session in ChatPlaygroundView(store: store, session: session) }
             .sheet(isPresented: $store.showGlobalEngines) { GlobalEngineSettingsView(store: store) }
             .sheet(item: Binding(get: { store.connections.draft }, set: { store.connections.draft = $0 })) { draft in ClientConnectionsView(store: store, controller: store.connections, port: draft.port) }
             .sheet(item: Binding(get: { store.gateway.editor }, set: { store.gateway.editor = $0 })) { draft in GatewayEndpointView(store: store, gateway: store.gateway, draft: draft) }
@@ -516,6 +517,7 @@ struct LaunchPanel: View {
                 if supportsContext { Button { store.advanced.toggle() } label: { Label(L10n.text("更多设置"), systemImage: store.advanced ? "chevron.up" : "chevron.down").font(.system(size: TypeScale.body)) }.buttonStyle(PlainAction()) }
             }
             InputModeView(store: store)
+            if [EngineKind.llama, .prism, .mlx, .splash].contains(store.engine.kind) { MemoryEstimateView(store: store, model: store.selectedModel, context: store.context) }
             if store.advanced && supportsContext { HStack { Text(verbatim: L10n.text("上下文长度")).foregroundStyle(Theme.muted); Picker(L10n.text("上下文长度"), selection: $store.context) { ForEach([2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144], id: \.self) { Text(verbatim: L10n.text("\($0) tokens")).tag($0) } }.labelsHidden().frame(width: 170); Spacer() }.font(.system(size: TypeScale.body)) }
             if store.advanced && store.engine.kind == .ollama { HStack { Text(verbatim: L10n.text("最大常驻模型")).foregroundStyle(Theme.muted); Picker(L10n.text("最大常驻模型"), selection: $store.maximumLoadedModels) { ForEach(1...8, id: \.self) { Text(verbatim: L10n.text("\($0) 个")).tag($0) } }.labelsHidden().frame(width: 170); Spacer() }.font(.system(size: TypeScale.body)); Text(verbatim: L10n.text("启动此服务时生效；实际加载数量仍取决于可用内存。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
             HStack {
@@ -707,11 +709,17 @@ struct ServiceWorkspace: View {
                 VStack(alignment: .leading, spacing: 24) {
                     if let port = store.selectedExternal, let external = store.visibleExternalServices.first(where: { $0.port == port }) {
                         Text(verbatim: L10n.text(external.engineName)).font(.system(size: TypeScale.display, weight: .bold)); StateLabel(title: external.ready ? "接口可用 · 外部启动" : "端口已占用 · 外部启动", color: external.ready ? .green : .orange)
-                        Text(verbatim: "http://127.0.0.1:\(port)/v1").font(.system(size: TypeScale.body, design: .monospaced)).textSelection(.enabled)
+                        HStack(spacing: 8) {
+                            Text(verbatim: "http://127.0.0.1:\(port)/v1").font(.system(size: TypeScale.body, design: .monospaced)).textSelection(.enabled)
+                            CopyIconButton(help: "复制完整接口地址") { store.copy("http://127.0.0.1:\(port)/v1") }
+                        }
                         if let pid = external.pid { Text(verbatim: L10n.text("监听进程 · PID \(pid)")).font(.system(size: TypeScale.body, design: .monospaced)).foregroundStyle(Theme.muted) }
                         Text(verbatim: L10n.text(external.engineID == nil ? "尚未识别引擎；端口和模型名称不能确认引擎类型。" : "引擎已根据监听进程识别。"))
                             .font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
-                        HStack { Button(L10n.text("复制接口地址")) { store.copy("http://127.0.0.1:\(port)/v1") }.buttonStyle(.bordered); Button(L10n.text("打开服务页面")) { store.openEndpoint(port) }.buttonStyle(.bordered) }
+                        HStack(spacing: 10) {
+                            if external.ready && !external.models.isEmpty { Button { store.openChat(port: port) } label: { Label(L10n.text("试聊"), systemImage: "bubble.left.and.bubble.right") }.buttonStyle(SecondaryButton()) }
+                            Button(L10n.text("打开服务页面")) { store.openEndpoint(port) }.buttonStyle(SecondaryButton())
+                        }
                         ConnectionEntry(store: store, port: port)
                         Divider(); Text(verbatim: L10n.text("服务报告的模型")).font(.system(size: TypeScale.section, weight: .semibold))
                         ForEach(external.models, id: \.self) { name in VStack(alignment: .leading, spacing: 8) { Text(name).font(.system(size: TypeScale.body, design: .monospaced)).textSelection(.enabled); ModelCapabilityBadge(capabilities: services.modelCapabilities[port]?[name] ?? ModelCapabilities(), prefix: "当前服务 · ") } }
@@ -735,12 +743,22 @@ struct ServiceWorkspace: View {
                             if spec.pid != nil { Button { store.stop(spec) } label: { Label(L10n.text("停止服务"), systemImage: "stop.fill") }.buttonStyle(AccentButton(destructive: true)).disabled(status == .stopping) }
                             else { Button { store.configureService(spec) } label: { Label(L10n.text("配置并启动"), systemImage: "play.fill") }.buttonStyle(AccentButton()) }
                             // Only shown when usable; deletion lives at the bottom of the page, away from the primary action.
-                            if status == .running { Button(L10n.text("打开服务页面")) { store.openEndpoint(spec.port) }.buttonStyle(SecondaryButton()) }
+                            if status == .running {
+                                Button { store.openChat(port: spec.port) } label: { Label(L10n.text("试聊"), systemImage: "bubble.left.and.bubble.right") }.buttonStyle(SecondaryButton())
+                                Button(L10n.text("打开服务页面")) { store.openEndpoint(spec.port) }.buttonStyle(SecondaryButton())
+                            }
                         }
                         if let error = services.errors[spec.id] { Text(verbatim: L10n.text(error)).foregroundStyle(Theme.errorText).font(.system(size: TypeScale.body)) }
                         if spec.engineID != "lmstudio" { ServiceParametersView(store: store, services: services, spec: spec).id(spec.id) }
-                        if let command = spec.commandText ?? spec.launchArguments.map({ ([spec.engineExecutable ?? ""] + $0).map(ServiceCommand.quote).joined(separator: " ") }) { DisclosureGroup("启动命令") { Text(verbatim: L10n.text(command)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled).padding(.top, 8) } }
-                        ConnectionEntry(store: store, port: spec.port)
+                        if let command = spec.commandText ?? spec.launchArguments.map({ ([spec.engineExecutable ?? ""] + $0).map(ServiceCommand.quote).joined(separator: " ") }) { DisclosureGroup("启动命令") { Text(verbatim: L10n.text(command)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8) } }
+                        if store.serviceModelMissing(spec) {
+                            // 模型已被删除：此服务无法再启动，接入入口没有意义，只提供清理。
+                            VStack(alignment: .leading, spacing: 10) {
+                                Label(L10n.text("模型文件已删除，此服务无法再启动。"), systemImage: "exclamationmark.triangle").font(.system(size: TypeScale.body, weight: .medium)).foregroundStyle(Theme.warningText)
+                                Text(verbatim: spec.modelPath).font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled).lineLimit(2).truncationMode(.middle)
+                                Button(role: .destructive) { store.serviceRemoval = spec } label: { Label(L10n.text("移除服务及相关接入…"), systemImage: "trash") }.buttonStyle(AccentButton(destructive: true))
+                            }.frame(maxWidth: .infinity, alignment: .leading).padding(16).background(Theme.line.opacity(0.22), in: RoundedRectangle(cornerRadius: 10))
+                        } else { ConnectionEntry(store: store, port: spec.port) }
                         if spec.engineID == "ollama" && status == .running { OllamaLoadedView(store: store, services: services, port: spec.port) }
                         Divider()
                         HStack(spacing: 16) {

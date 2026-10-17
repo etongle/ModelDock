@@ -228,6 +228,7 @@ final class ServiceController: ObservableObject {
         var spec = original
         spec.launchArguments = plan.arguments
         spec.componentSnapshot = nil
+        spec.sleeping = nil
         func argument(_ flag: String) -> String? { guard let index = plan.arguments.firstIndex(of: flag), index + 1 < plan.arguments.count else { return nil }; return plan.arguments[index + 1] }
         spec.draftModelPath = argument("--draft-model")
         spec.projectorPath = argument("--mmproj")
@@ -279,6 +280,15 @@ final class ServiceController: ObservableObject {
     }
 
     /// Saves new launch parameters on a stopped configuration; the next start uses them.
+    /// 保存运行方式（随 App 启动、空闲停止、休眠标记），不影响运行中的进程。
+    func updateBehavior(_ id: String, autoStart: Bool? = nil, idleMinutes: Int?? = nil, sleeping: Bool? = nil) {
+        guard let index = records.firstIndex(where: { $0.id == id }) else { return }
+        if let autoStart { records[index].autoStart = autoStart ? true : nil }
+        if let idleMinutes { records[index].idleMinutes = idleMinutes }
+        if let sleeping { records[index].sleeping = sleeping ? true : nil }
+        save()
+    }
+
     func updateParameters(_ id: String, _ value: ServiceParameters) throws {
         guard let index = records.firstIndex(where: { $0.id == id }) else { throw LaunchError.message("这条服务配置已删除") }
         let current = records[index]

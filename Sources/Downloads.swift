@@ -257,6 +257,8 @@ final class DownloadController: ObservableObject {
     @Published var token = ""
     @Published var destination = Scanner.defaultRoot.path
     @Published var listing: RemoteListing?
+    /// 任务详情中文件列表的展开状态；未设置时下载中展开、已完成收起。
+    @Published var fileListExpanded: [String: Bool] = [:]
     @Published var selected = Set<String>()
     @Published var resolving = false
     @Published var message: String?

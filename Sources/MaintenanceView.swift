@@ -29,7 +29,7 @@ struct MaintenanceView: View {
                             }
                         }
                         if plan.items.isEmpty { Text(verbatim: L10n.text("未发现可清理项目。")).foregroundStyle(Theme.muted) }
-                        if plan.mode == .uninstall { Divider(); Toggle(L10n.text("移除本工具中的该引擎服务配置与日志"), isOn: $store.removeMaintenanceConfigurations).toggleStyle(.checkbox) }
+                        if plan.mode == .uninstall { Divider(); Toggle(L10n.text("移除该引擎的服务配置、日志、测速记录，以及 pi/OpenCode 中的接入登记"), isOn: $store.removeMaintenanceConfigurations).toggleStyle(.checkbox) }
                         Divider(); Text(verbatim: L10n.text("保留的模型目录与源文件")).fontWeight(.semibold)
                         Text(verbatim: L10n.text(plan.preserved.joined(separator: "\n"))).font(.system(size: TypeScale.caption, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled)
                         ForEach(plan.notes, id: \.self) { Text(verbatim: L10n.text($0)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }

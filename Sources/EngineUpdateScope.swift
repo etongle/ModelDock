@@ -80,11 +80,7 @@ extension AppStore {
             let spec = services.records.first { $0.id == saved.id } ?? saved
             guard spec.pid == nil else { continue }
             do {
-                guard let engine = engines.first(where: { $0.id == spec.engineID }) else { throw LaunchError.message("未找到引擎") }
-                let model = models.first { $0.id == spec.modelID || $0.path == spec.modelPath }
-                guard model != nil || engine.kind == .ollama else { throw LaunchError.message("未找到服务使用的模型文件。") }
-                try services.start(engine: engine, model: model, port: spec.port, context: spec.context, maximumLoadedModels: spec.maximumLoadedModels ?? 3,
-                                   inputMode: spec.inputMode ?? .automatic, projectorPath: spec.projectorPath)
+                _ = try startSaved(spec)
                 if log { installation.log += "已重新启动 · 端口 \(spec.port) · \(spec.modelName)\n" }
             } catch { failures.append("端口 \(spec.port) · \(spec.modelName)：\(error.localizedDescription)") }
         }

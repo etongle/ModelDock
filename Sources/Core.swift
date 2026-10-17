@@ -298,6 +298,12 @@ struct ServiceSpec: Codable, Identifiable, Hashable {
     var componentSnapshot: ServiceComponentSnapshot? = nil
     // User-supplied native engine flags, appended after the managed arguments.
     var extraArguments: [String]? = nil
+    /// ModelDock 启动后自动启动此服务。
+    var autoStart: Bool? = nil
+    /// 空闲多少分钟后自动停止；nil 表示不自动停止。
+    var idleMinutes: Int? = nil
+    /// 因空闲被自动停止；经网关的请求可唤醒。手动停止或启动时清除。
+    var sleeping: Bool? = nil
 }
 
 struct LaunchPlan: Codable {

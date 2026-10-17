@@ -61,6 +61,8 @@ Strata requires matched **Flash-Next weights + n-gram + vocabulary/model pack**.
 
 ## 3. Download a model
 
+If you do not know the repository name, search Hugging Face at the top of the page: enter keywords and pick a format (all, GGUF, MLX). Results are sorted by downloads; **Select** resolves the repository's files. GGUF files in the list are labeled **Fits this Mac**, **Tight on memory** or **Exceeds this Mac's memory** by size (context cache not included).
+
 Open **Downloads & Import**, choose the destination library, and enter either:
 
 ```text
@@ -111,7 +113,7 @@ For a missing or damaged file, use its **Repair** action when the original repos
 Click **Start Service…** — from the **+** in the Services sidebar, an engine's **Service instances**, or **Configure Service** on a model — then choose the engine and model in the sheet and review:
 
 1. **Port:** use an unused port. Each independently hosted service needs its own endpoint; the manager identifies listeners by process identity as well as the port.
-2. **Context window:** configure a size supported by the engine/model and your available memory. Client limits must match the actual service window.
+2. **Context window:** configure a size supported by the engine/model and your available memory. Client limits must match the actual service window. The panel estimates memory use as weights + context cache + runtime overhead and marks it as enough, tight or exceeding against the memory available now. It is an approximation assuming an f16 cache; when the model structure cannot be read, only the weights are counted.
 3. **Input mode:** choose automatic, text-only, or multimodal where supported. A text-only model cannot gain image support through a checkbox.
 4. **Auxiliary components:** choose the matching vision projector or draft model when the engine supports that component.
 5. **Runtime options:** use only the options exposed for that engine. Additional supported CLI launches can be configured through **Launch from command…**.
@@ -132,13 +134,19 @@ A vision-capable model can be run text-only when the selected runtime supports t
 
 ## 7. Manage services and model versions
 
-Every independent instance appears in **Services**, with its model, port, and status. Click anywhere on its card to select it. Stop a specific instance without stopping another one. Once stopped, its configuration can be deleted; model files and logs are retained. The copy icon after the endpoint copies the address.
+Every independent instance appears in **Services**, with its model, port, and status. Click anywhere on its card to select it. Stop a specific instance without stopping another one. Once stopped, its configuration can be deleted; model files and logs are retained, and its pi/OpenCode registrations are removed. A service whose model files were deleted shows a notice with **Remove Service and Integrations…**. If a client still lists registrations of deleted models or services, **Clean up stale client registrations** appears below **Connect Coding Assistant**. The copy icon after the endpoint copies the address.
 
 **Service parameters** on the instance page lists the port, context window, input mode and engine-specific options, and can be edited in place. **Extra launch arguments** append native engine flags (for example `-ngl 99 --threads 8` for llama.cpp); flags managed by the fields above are rejected. On a running service, **Save and Restart** stops it and starts it with the new values; if that start fails, the previous settings are restored and restarted. Services created from a launch command are edited through their command instead.
+
+**Presets** on the instance page save the context, input mode and extra launch arguments under a name for other services of the same engine; after applying one, click **Save** or **Save and Restart**. Under **Run behavior**, check **Start with ModelDock** and choose **Stop when idle**: the service stops to free memory after receiving no gateway requests with an idle CPU for the set time, and the next request through the gateway wakes it (the first request waits for the model to load). Direct requests to the service port do not wake it, and services you stop manually are never woken.
+
+Once a service is ready, **Try chat** sends messages straight to it so you can confirm the model answers. Each reply shows first-token latency, generation speed and token count; **Chat settings** sets the system prompt, temperature and maximum output, and services that accept images let you attach them. The chat calls the service's own API, not the gateway, and writes no client configuration. Completed replies for which the service reports usage are added to **Measurement history**, marked as from chat. **Compare…** picks another running service; the same message then goes to both and the replies and speeds appear side by side.
 
 A model update is downloaded as another revision when the source supports revision snapshots. The existing service keeps its launched path/version. After the new files are complete, select the new version and configure another launch or restart the intended service. Keep an older version to switch back later, or move it to the Trash when it is unused.
 
 Files used by running main/auxiliary models and shared cache references are protected. Ollama manages registered models differently: deletion uses Ollama's native operation and requires the model to be unloaded. It is not a Trash operation.
+
+Deleting a model also cleans up what refers to it, and the confirmation lists what will be removed: stopped service configurations and logs for that model, the model's pi/OpenCode registrations written by ModelDock (including a default model and pi compaction overrides), gateway route preferences for those services, draft/projector links in other models or engine defaults that pointed to the deleted files, and the model's benchmark records. Client configs are backed up before they are changed; providers and models you added yourself are untouched. Uninstalling an engine with **Remove this engine's service configs…** checked cleans up the same way.
 
 ## 8. Connect directly or through the gateway
 
@@ -153,6 +161,8 @@ The **Unified gateway** provides one OpenAI-compatible endpoint for enabled rout
 - Keep the gateway access key private. Remote endpoints and keys are configuration, not public documentation.
 
 The gateway and individual services remain separate endpoints. A client can use either connection method.
+
+**LAN sharing** is off by default. When on, the gateway listens on all interfaces and shows this Mac's LAN address; other devices must send the gateway key. Turn it on only in trusted networks.
 
 ### pi and OpenCode
 
@@ -173,6 +183,10 @@ The menu-bar panel shows system CPU, memory, disk and library usage, service res
 Clicking inside the panel keeps it usable; clicking another window or desktop area closes it. Clicking its status icon toggles the panel. **Open Management Interface** reopens the main window. Closing the main window keeps background work running by default; **Quit ModelDock** pauses downloads and stops monitoring while independently running model services remain available.
 
 Performance values labeled as measurements come from an actual benchmark or supported service logs. Unknown measurements remain unavailable; do not compare startup estimates with generation throughput.
+
+**Gateway Requests** lists requests made through the gateway: per-model requests, failures, input/output tokens and average time, plus recent requests. Only this metadata is recorded, never request or reply content.
+
+The trash icon on each **Measurement history** row deletes that record. When records of deleted models remain, **Clean up deleted models** appears next to the heading; if a model is on a disconnected drive, connect it before cleaning up.
 
 ## 10. Troubleshooting
 

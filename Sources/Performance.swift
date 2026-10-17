@@ -153,11 +153,26 @@ final class PerformanceController: ObservableObject {
             do {
                 let result = try await worker.run(target: target, tokens: limit, chip: chip, apiKey: key) { [weak self] value in Task { @MainActor in if self?.measurementID == measurementID && self?.running == true { self?.phase = value } } }
                 guard let self else { return }
-                self.records.insert(result, at: 0); self.records = Array(self.records.prefix(100))
-                try JSONEncoder().encode(self.records).write(to: self.file, options: .atomic); self.phase = "测量完成"
+                try self.add(result); self.phase = "测量完成"
             } catch { self?.message = Task.isCancelled ? "测量已取消" : error.localizedDescription; self?.phase = "" }
             self?.running = false; self?.runner = nil; self?.task = nil; self?.measurementID = nil
         }
     }
     func cancel() { task?.cancel(); runner?.cancel() }
+    /// 新增一条记录（最新在前，最多保留 100 条）并保存。
+    func add(_ result: BenchmarkResult) throws {
+        let next = Array(([result] + records).prefix(100))
+        try JSONEncoder().encode(next).write(to: file, options: .atomic)
+        records = next
+    }
+    /// 删除符合条件的历史记录并保存，返回删除数量。
+    @discardableResult
+    func remove(where match: (BenchmarkResult) -> Bool) throws -> Int {
+        let remaining = records.filter { !match($0) }
+        let count = records.count - remaining.count
+        guard count > 0 else { return 0 }
+        try JSONEncoder().encode(remaining).write(to: file, options: .atomic)
+        records = remaining
+        return count
+    }
 }

@@ -76,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             store.appUpdates.begin()
             if CommandLine.arguments.contains("--start-hidden") { hideMainWindow() }
         }
-        if !CommandLine.arguments.contains("--documentation-ui") { store.services.beginMonitoring(); store.scan(); store.beginResourceMonitoring() }
+        if !CommandLine.arguments.contains("--documentation-ui") { store.autoStartOnLaunch = !passiveTesting; store.loadServicePresets(); if !passiveTesting { store.beginIdleMonitor() }; store.services.beginMonitoring(); store.scan(); store.beginResourceMonitoring() }
         // Notifications only in normal runs: tests and captures must never trigger the permission prompt.
         if !passiveTesting, argumentValue("--capture-dir") == nil, !CommandLine.arguments.contains("--documentation-ui") { store.beginNotifications() }
         if let task = argumentValue("--resume-download-job"), UUID(uuidString: task) != nil, store.downloads.jobs.contains(where: { $0.id == task }) {
@@ -634,6 +634,11 @@ enum Entry {
         if args.contains("--gateway-live-checks") { Task { do { try await GatewayLive.run(); exit(0) } catch { fputs("GATEWAY LIVE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--engine-service-checks") { Task { do { try await EngineServiceChecks.run(); exit(0) } catch { fputs("ENGINE SERVICE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--model-management-checks") { Task { do { try await ModelManagementChecks.run(); exit(0) } catch { fputs("MODEL MANAGEMENT CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--memory-estimate-checks") { do { try MemoryEstimateChecks.run(); exit(0) } catch { fputs("MEMORY ESTIMATE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }
+        if args.contains("--gateway-extras-checks") { Task { do { try await GatewayExtrasChecks.run(); exit(0) } catch { fputs("GATEWAY EXTRAS CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--service-behavior-checks") { Task { do { try await ServiceBehaviorChecks.run(); exit(0) } catch { fputs("SERVICE BEHAVIOR CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--chat-checks") { Task { do { try await ChatChecks.run(); exit(0) } catch { fputs("CHAT CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--removal-cleanup-checks") { Task { do { try RemovalCleanupChecks.run(); exit(0) } catch { fputs("REMOVAL CLEANUP CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--context-restart-checks") { Task { do { try await ContextRestartChecks.run(); exit(0) } catch { fputs("CONTEXT RESTART CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--splash-checks") { do { try SplashChecks.run() } catch { fputs("SPLASH CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--feature-checks") { Task { do { try await FeatureChecks.run(); exit(0) } catch { fputs("FEATURE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }

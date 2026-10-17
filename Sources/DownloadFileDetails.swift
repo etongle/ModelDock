@@ -52,16 +52,25 @@ struct DownloadFileDetails: View {
                 Text(job.displayLocation).font(.system(size: TypeScale.caption, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled)
                 if job.site != .direct { Text(verbatim: L10n.text("版本 · " + job.revision)).font(.system(size: TypeScale.caption, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled) }
             }
-            HStack {
-                Text(verbatim: L10n.text("文件 · \(rows.count)")).font(.system(size: TypeScale.body, weight: .semibold))
-                Spacer()
-            }
+            let expanded = downloads.fileListExpanded[job.id] ?? (job.state != .complete)
+            let finished = rows.filter { $0.state == .complete }.count
+            // 文件较多时列表很长：做成可折叠，标题行显示完成情况。
+            Button { downloads.fileListExpanded[job.id] = !expanded } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).rotationEffect(.degrees(expanded ? 90 : 0)).foregroundStyle(Theme.muted)
+                    Text(verbatim: L10n.text("文件 · \(rows.count)")).font(.system(size: TypeScale.body, weight: .semibold))
+                    Text(verbatim: L10n.text("已完成 \(finished) / \(rows.count)")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                    Spacer()
+                }.contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityLabel(L10n.text(expanded ? "收起文件列表" : "展开文件列表"))
+            if expanded {
             VStack(spacing: 0) {
                 ForEach(rows) { progress in
                     DownloadFileRow(progress: progress, controlsEnabled: downloads.canControlFiles(job.id), pause: { downloads.pauseFile(job.id, path: progress.id) }, resume: { downloads.resumeFile(job.id, path: progress.id) }, prioritize: { downloads.resumeFile(job.id, path: progress.id, first: true) })
                     if progress.id != rows.last?.id { Divider() }
                 }
             }.padding(.horizontal, 16).background(Theme.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+            }
             if let error = job.error { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
             Label(L10n.text(job.repairTarget != nil ? "修复只替换原版本中的这个文件；其他文件保留，使用中的文件会拦截。" : "下载新版本保留旧版本文件，不会自动切换正在运行的服务。"), systemImage: "info.circle").font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
         }.accessibilityIdentifier("download-file-details-\(job.id)")

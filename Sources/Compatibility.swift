@@ -112,10 +112,11 @@ extension LocalModel {
 
 // Read metadata only; never load tensor data. Limits also cover malformed files.
 enum GGUFMetadata {
-    static func read(_ url: URL) -> (architecture: String?, prism: Bool?, inputs: [String]?) {
-        guard let file = try? FileHandle(forReadingFrom: url) else { return (nil, nil, nil) }
-        defer { try? file.close() }
+    /// 键值读取器：visit 返回 true 表示已读取该值，否则跳过。
+    struct Reader {
+        let file: FileHandle
         let limit: UInt64 = 32 * 1024 * 1024
+        static let sizes: [UInt64: UInt64] = [0: 1, 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 1, 10: 8, 11: 8, 12: 8]
         func bytes(_ count: Int) throws -> Data {
             guard count >= 0, try file.offset() + UInt64(count) <= limit,
                   let data = try file.read(upToCount: count), data.count == count else { throw LaunchError.message("GGUF 元数据不完整") }
@@ -124,32 +125,67 @@ enum GGUFMetadata {
         func integer(_ count: Int) throws -> UInt64 { try bytes(count).enumerated().reduce(0) { $0 | UInt64($1.element) << ($1.offset * 8) } }
         func string() throws -> String { let count = try integer(8); guard count <= 4_000_000 else { throw LaunchError.message("GGUF 字符串过长") }; return String(decoding: try bytes(Int(count)), as: UTF8.self) }
         func skip(_ count: UInt64) throws { let offset = try file.offset(); guard count <= limit, offset + count <= limit else { throw LaunchError.message("GGUF 元数据过大") }; try file.seek(toOffset: offset + count) }
-        let sizes: [UInt64: UInt64] = [0: 1, 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 1, 10: 8, 11: 8, 12: 8]
         func skipValue(_ type: UInt64, nested: Bool = false) throws {
-            if let size = sizes[type] { try skip(size) }
+            if let size = Self.sizes[type] { try skip(size) }
             else if type == 8 { try skip(try integer(8)) }
             else if type == 9 && !nested {
                 let element = try integer(4); let count = try integer(8)
                 guard count <= 1_000_000 else { throw LaunchError.message("GGUF 数组过长") }
-                if let size = sizes[element] { try skip(count * size) }
+                if let size = Self.sizes[element] { try skip(count * size) }
                 else { for _ in 0..<count { try skipValue(element, nested: true) } }
             } else { throw LaunchError.message("未知 GGUF 元数据类型") }
         }
+        /// 读取整数（含有符号）标量或整数数组；其他类型返回 nil 且已跳过。
+        func integers(_ type: UInt64) throws -> [Int]? {
+            func scalar(_ type: UInt64) throws -> Int? {
+                switch type {
+                case 0, 1: return Int(try integer(1))
+                case 2, 3: return Int(try integer(2))
+                case 4: return Int(try integer(4))
+                case 5: return Int(Int32(truncatingIfNeeded: try integer(4)))
+                case 10: return Int(clamping: try integer(8))
+                case 11: return Int(Int64(bitPattern: try integer(8)))
+                default: try skipValue(type); return nil
+                }
+            }
+            guard type == 9 else { return try scalar(type).map { [$0] } }
+            let element = try integer(4); let count = try integer(8)
+            guard count <= 100_000, [0, 1, 2, 3, 4, 5, 10, 11].contains(element) else {
+                guard count <= 1_000_000 else { throw LaunchError.message("GGUF 数组过长") }
+                if let size = Self.sizes[element] { try skip(count * size) } else { for _ in 0..<count { try skipValue(element, nested: true) } }
+                return nil
+            }
+            return try (0..<count).compactMap { _ in try scalar(element) }
+        }
+    }
+    /// 依次访问每个元数据键；文件不是 GGUF 时返回 false。
+    @discardableResult
+    static func scan(_ url: URL, visit: (_ key: String, _ type: UInt64, _ reader: Reader) throws -> Bool) throws -> Bool {
+        let file = try FileHandle(forReadingFrom: url)
+        defer { try? file.close() }
+        let reader = Reader(file: file)
+        guard try reader.bytes(4) == Data("GGUF".utf8), [2, 3].contains(try reader.integer(4)) else { return false }
+        _ = try reader.integer(8); let count = try reader.integer(8)
+        guard count <= 20_000 else { return false }
+        for _ in 0..<count {
+            let key = try reader.string(); let type = try reader.integer(4)
+            if try !visit(key, type, reader) { try reader.skipValue(type) }
+        }
+        return true
+    }
+    static func read(_ url: URL) -> (architecture: String?, prism: Bool?, inputs: [String]?) {
         var architecture: String?; var prism: Bool = false; var inputs = ["text"]; var encoderFlags = Set<String>()
         do {
-            guard try bytes(4) == Data("GGUF".utf8), [2, 3].contains(try integer(4)) else { return (nil, nil, nil) }
-            _ = try integer(8); let count = try integer(8)
-            guard count <= 20_000 else { return (nil, nil, nil) }
-            for _ in 0..<count {
-                let key = try string(); let type = try integer(4)
+            guard try scan(url, visit: { key, type, reader in
                 if key.hasPrefix("prism.hadamard.") { prism = true }
-                if key == "general.architecture" && type == 8 { architecture = try string() }
-                else if ["clip.has_vision_encoder", "clip.has_audio_encoder"].contains(key), type == 7 {
+                if key == "general.architecture" && type == 8 { architecture = try reader.string(); return true }
+                if ["clip.has_vision_encoder", "clip.has_audio_encoder"].contains(key), type == 7 {
                     encoderFlags.insert(key)
-                    if try integer(1) != 0 { inputs.append(key == "clip.has_vision_encoder" ? "image" : "audio") }
+                    if try reader.integer(1) != 0 { inputs.append(key == "clip.has_vision_encoder" ? "image" : "audio") }
+                    return true
                 }
-                else { try skipValue(type) }
-            }
+                return false
+            }) else { return (nil, nil, nil) }
             return (architecture, prism, inputs.count > 1 || encoderFlags.count == 2 ? inputs : nil)
         } catch { return (architecture, prism ? true : nil, nil) }
     }

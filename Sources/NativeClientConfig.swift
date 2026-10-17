@@ -105,35 +105,47 @@ enum NativeClientConfig {
         let json = configRoot.appendingPathComponent(connection.client == .pi ? "models.json" : "opencode.json")
         let jsonc = configRoot.appendingPathComponent("opencode.jsonc")
         let target = connection.client == .opencode && FileManager.default.fileExists(atPath: jsonc.path) ? jsonc : json
+        var result: Result?
+        try transaction(configRoot: configRoot, client: connection.client, root: root) { read in
+            var updates: [URL: Data] = [:]
+            let profile = try object(Data(contentsOf: URL(fileURLWithPath: connection.configuration)))
+            updates[target] = try ConnectionFiles.json(merge(read(target), profile: profile, client: connection.client, provider: connection.providerID, webSearch: webSearch))
+            if connection.client == .pi {
+                let settings = configRoot.appendingPathComponent("settings.json")
+                updates[settings] = try ConnectionFiles.json(PiConnectionPolicy.settings(read(settings), provider: connection.providerID, model: connection.model, context: connection.context))
+            }
+            if connection.client == .pi && webSearch {
+                let file = configRoot.appendingPathComponent("mcp.json")
+                var mcp = try read(file), servers = try dictionary(mcp, "mcpServers")
+                servers[WebSearchConnection.name] = WebSearchConnection.pi; mcp["mcpServers"] = servers
+                updates[file] = try ConnectionFiles.json(mcp)
+            }
+            return updates
+        } done: { backup, files in result = .init(configuration: target, backups: backup ?? root, files: files) }
+        return result!
+    }
+    /// Shared write path for registering and unregistering: lock the client's config directory, read the
+    /// originals, back them up, then write only if each file is still unchanged; roll back on failure.
+    static func transaction(configRoot: URL, client: CodingClient, root: URL, build: (_ read: (URL) throws -> [String: Any]) throws -> [URL: Data], done: (_ backup: URL?, _ files: [URL]) -> Void) throws {
         let lockURL = configRoot.appendingPathComponent(".model-manager-config.lock")
         let descriptor = open(lockURL.path, O_CREAT | O_RDWR | O_NOFOLLOW, mode_t(0o600))
         guard descriptor >= 0 else { throw LaunchError.message("无法锁定客户端配置，原文件保留") }
         defer { close(descriptor) }
         guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else { throw LaunchError.message("客户端配置正在被写入，请稍后重试") }
         defer { flock(descriptor, LOCK_UN) }
-        var originals: [URL: Data?] = [:], updates: [URL: Data] = [:]
+        var originals: [URL: Data?] = [:]
         func read(_ url: URL) throws -> [String: Any] {
             guard url.standardizedFileURL == url.resolvingSymlinksInPath().standardizedFileURL else { throw LaunchError.message("客户端配置包含符号链接，原文件保留") }
             if !FileManager.default.fileExists(atPath: url.path) { originals[url] = .some(nil); return [:] }
             guard let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 4_000_000 else { throw LaunchError.message("客户端配置过大，原文件保留") }
             let data = try Data(contentsOf: url); originals[url] = .some(data); return try object(data)
         }
-        let profile = try object(Data(contentsOf: URL(fileURLWithPath: connection.configuration)))
-        updates[target] = try ConnectionFiles.json(merge(read(target), profile: profile, client: connection.client, provider: connection.providerID, webSearch: webSearch))
-        if connection.client == .pi {
-            let settings = configRoot.appendingPathComponent("settings.json")
-            updates[settings] = try ConnectionFiles.json(PiConnectionPolicy.settings(read(settings), provider: connection.providerID, model: connection.model, context: connection.context))
-        }
-        if connection.client == .pi && webSearch {
-            let file = configRoot.appendingPathComponent("mcp.json")
-            var mcp = try read(file), servers = try dictionary(mcp, "mcpServers")
-            servers[WebSearchConnection.name] = WebSearchConnection.pi; mcp["mcpServers"] = servers
-            updates[file] = try ConnectionFiles.json(mcp)
-        }
-        let backup = root.appendingPathComponent("client-config-backups/" + connection.client.rawValue + "/" + UUID().uuidString)
+        let updates = try build(read)
+        guard !updates.isEmpty else { done(nil, []); return }
+        let backup = root.appendingPathComponent("client-config-backups/" + client.rawValue + "/" + UUID().uuidString)
         try ConnectionFiles.privateDirectory(backup)
         for (file, data) in originals { if let data { try ConnectionFiles.write(data, to: backup.appendingPathComponent(file.lastPathComponent + ".backup")) } }
-        try ConnectionFiles.write(try ConnectionFiles.json(["client": connection.client.rawValue, "files": updates.keys.map(\.path), "createdAt": Date().ISO8601Format()]), to: backup.appendingPathComponent("record.json"))
+        try ConnectionFiles.write(try ConnectionFiles.json(["client": client.rawValue, "files": updates.keys.map(\.path), "createdAt": Date().ISO8601Format()]), to: backup.appendingPathComponent("record.json"))
         var written: [URL] = []
         do {
             for (file, data) in updates.sorted(by: { $0.key.path < $1.key.path }) {
@@ -150,6 +162,6 @@ enum NativeClientConfig {
             }
             throw error
         }
-        return .init(configuration: target, backups: backup, files: Array(updates.keys))
+        done(backup, Array(updates.keys))
     }
 }

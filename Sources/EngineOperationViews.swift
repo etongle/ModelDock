@@ -69,7 +69,14 @@ struct EngineInstallView: View {
                             ForEach(store.restartableServices(currentEngine)) { spec in Text(verbatim: L10n.text("端口 \(spec.port) · \(spec.modelName)")).font(.system(size: TypeScale.body)) }
                         }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
                     }
-                    if !plan.commands.isEmpty { DisclosureGroup("查看实际安装命令") { ForEach(Array(plan.commands.enumerated()), id: \.offset) { _, command in VStack(alignment: .leading, spacing: 6) { Text(verbatim: L10n.text(command.title)).fontWeight(.medium); Text(verbatim: L10n.text(command.display)).font(.system(size: TypeScale.caption, design: .monospaced)).textSelection(.enabled) }.padding(.vertical, 7) } }.font(.system(size: TypeScale.body)) }
+                    if !plan.commands.isEmpty { DisclosureGroup("查看实际安装命令") {
+                        // 左对齐并占满宽度；样式与下方“执行进度”日志一致。
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(Array(plan.commands.enumerated()), id: \.offset) { _, command in
+                                VStack(alignment: .leading, spacing: 6) { Text(verbatim: L10n.text(command.title)).fontWeight(.medium); Text(verbatim: L10n.text(command.display)).font(.system(size: TypeScale.caption, design: .monospaced)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) }
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(14).background(Theme.line.opacity(0.3), in: RoundedRectangle(cornerRadius: 10)).padding(.top, 8)
+                    }.font(.system(size: TypeScale.body)) }
                     if installer.running || !installer.log.isEmpty {
                         HStack { Text(verbatim: L10n.text("执行进度")).fontWeight(.semibold); Spacer(); if installer.running { ProgressView().controlSize(.small) } }
                         Text(verbatim: L10n.text(String(installer.log.suffix(24_000)))).font(.system(size: TypeScale.caption, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(14).background(Theme.line.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
