@@ -1567,8 +1567,6 @@
   "{0} 分钟": "{0} min",
   "下载 {0}": "{0} downloads",
   "保存参数预设": "Salvar predefinição",
-  "展开文件列表": "Expandir lista de arquivos",
-  "收起文件列表": "Recolher lista de arquivos",
   "空闲自动停止": "Parar quando ocioso",
   "超出本机内存": "Excede a memória deste Mac",
   "例如：长上下文": "ex.: Contexto longo",
@@ -1603,5 +1601,12 @@
   "网关监听本机和局域网，使用独立密钥。停止网关只停止转发，各模型服务仍可直连。": "O gateway escuta neste Mac e na rede local com chave própria. Pará-lo só interrompe o encaminhamento.",
   "经统一网关的请求会自动唤醒服务，首个请求需等待模型加载；直接访问服务端口不会唤醒。": "Requisições pelo gateway despertam o serviço; a primeira aguarda o carregamento. Acessos diretos à porta não o despertam.",
   "统一网关只记录时间、模型、接口、状态码、耗时和 token 数，不记录请求和回复内容。": "O gateway registra apenas hora, modelo, endpoint, status, duração e tokens — nunca o conteúdo.",
-  "同一网络中的设备可以通过本机地址访问网关里的模型，请求必须携带网关密钥。请只在可信网络中开启，并妥善保管密钥。macOS 可能会询问是否允许接入网络连接。": "Dispositivos da mesma rede poderão acessar os modelos pelo endereço deste Mac; toda requisição precisa da chave do gateway. Ative apenas em redes confiáveis e guarde a chave. O macOS pode pedir para permitir conexões de entrada."
+  "同一网络中的设备可以通过本机地址访问网关里的模型，请求必须携带网关密钥。请只在可信网络中开启，并妥善保管密钥。macOS 可能会询问是否允许接入网络连接。": "Dispositivos da mesma rede poderão acessar os modelos pelo endereço deste Mac; toda requisição precisa da chave do gateway. Ative apenas em redes confiáveis e guarde a chave. O macOS pode pedir para permitir conexões de entrada.",
+  "启动": "Inicialização",
+  "登录 Mac 时启动 ModelDock": "Abrir o ModelDock ao iniciar sessão",
+  "登录后自动打开 ModelDock；标记为“随 ModelDock 启动”的服务会随之启动。": "O ModelDock abre após o login; serviços marcados com “Iniciar com o ModelDock” iniciam junto.",
+  "关闭时不会自动打开 ModelDock。开启后会加入系统设置的“登录项”。": "Desativado, o ModelDock não abre automaticamente. Ativado, ele é adicionado aos Itens de Início nos Ajustes do Sistema.",
+  "需要在系统设置的“登录项”中允许 ModelDock。": "Permita o ModelDock nos Itens de Início dos Ajustes do Sistema.",
+  "打开登录项设置": "Abrir Itens de Início",
+  "登录项设置失败：": "Não foi possível alterar o item de início: "
 }

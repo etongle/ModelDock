@@ -143,7 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc func showSettings() {
         statusPopover.performClose(nil)
         if settingsWindow == nil {
-            let preferences = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 560), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let preferences = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 640), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             preferences.title = L10n.text("设置"); preferences.isReleasedWhenClosed = false; preferences.delegate = self
             preferences.contentView = NSHostingView(rootView: PreferencesView(store: store, close: { [weak self] in self?.settingsWindow?.performClose(nil) }))
             preferences.backgroundColor = .windowBackgroundColor

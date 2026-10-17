@@ -60,6 +60,7 @@ final class AppStore: ObservableObject {
     @Published var chat: ChatSession?
     @Published var servicePresets: [ServicePreset] = []
     let modelSearch = ModelSearchController()
+    let loginItem = LoginItemController()
     /// 由应用启动流程设置；首次扫描完成后启动标记为“随 App 启动”的服务。
     var autoStartOnLaunch = false
     var idleTimer: Timer?

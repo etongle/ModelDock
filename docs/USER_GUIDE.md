@@ -192,7 +192,7 @@ Web search is a client/tool capability. Enable the offered search-tool integrati
 
 ![System and service resources](assets/images/en-resources.png)
 
-Choose **Settings → Appearance → Menu bar → Icon only** to keep the menu-bar item narrow, which helps on displays with a camera notch. **Settings → General → Notifications** sends macOS notifications when a download finishes or fails and when a service becomes ready, fails to start, or stops unexpectedly.
+Choose **Settings → Appearance → Menu bar → Icon only** to keep the menu-bar item narrow, which helps on displays with a camera notch. Turn on **Settings → General → Startup → Launch ModelDock at login** to open ModelDock after you log in and start services marked **Start with ModelDock**; when off, it does not open automatically. It is added to Login Items in System Settings, so keep ModelDock in Applications before turning it on. **Settings → General → Notifications** sends macOS notifications when a download finishes or fails and when a service becomes ready, fails to start, or stops unexpectedly.
 
 The menu-bar panel shows system CPU, memory, disk and library usage, service resources, downloads that are still in progress or need attention, and recent measurements when available. Click a download's management action to open the relevant task.
 

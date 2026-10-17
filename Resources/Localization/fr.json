@@ -1567,8 +1567,6 @@
   "{0} 分钟": "{0} min",
   "下载 {0}": "{0} téléchargements",
   "保存参数预设": "Enregistrer le préréglage",
-  "展开文件列表": "Développer la liste des fichiers",
-  "收起文件列表": "Réduire la liste des fichiers",
   "空闲自动停止": "Arrêt si inactif",
   "超出本机内存": "Dépasse la mémoire de ce Mac",
   "例如：长上下文": "p. ex. Contexte long",
@@ -1603,5 +1601,12 @@
   "网关监听本机和局域网，使用独立密钥。停止网关只停止转发，各模型服务仍可直连。": "La passerelle écoute sur ce Mac et le réseau local avec sa propre clé. L’arrêter ne fait que suspendre le transfert.",
   "经统一网关的请求会自动唤醒服务，首个请求需等待模型加载；直接访问服务端口不会唤醒。": "Les requêtes via la passerelle réveillent le service ; la première attend le chargement du modèle. Les accès directs au port ne le réveillent pas.",
   "统一网关只记录时间、模型、接口、状态码、耗时和 token 数，不记录请求和回复内容。": "La passerelle n’enregistre que l’heure, le modèle, l’API, le statut, la durée et les jetons, jamais le contenu.",
-  "同一网络中的设备可以通过本机地址访问网关里的模型，请求必须携带网关密钥。请只在可信网络中开启，并妥善保管密钥。macOS 可能会询问是否允许接入网络连接。": "Les appareils du même réseau pourront accéder aux modèles via l’adresse de ce Mac ; chaque requête doit inclure la clé de la passerelle. N’activez cette option que sur un réseau de confiance et protégez la clé. macOS peut demander d’autoriser les connexions entrantes."
+  "同一网络中的设备可以通过本机地址访问网关里的模型，请求必须携带网关密钥。请只在可信网络中开启，并妥善保管密钥。macOS 可能会询问是否允许接入网络连接。": "Les appareils du même réseau pourront accéder aux modèles via l’adresse de ce Mac ; chaque requête doit inclure la clé de la passerelle. N’activez cette option que sur un réseau de confiance et protégez la clé. macOS peut demander d’autoriser les connexions entrantes.",
+  "启动": "Démarrage",
+  "登录 Mac 时启动 ModelDock": "Ouvrir ModelDock à la connexion",
+  "登录后自动打开 ModelDock；标记为“随 ModelDock 启动”的服务会随之启动。": "ModelDock s’ouvre après la connexion ; les services marqués « Démarrer avec ModelDock » démarrent aussi.",
+  "关闭时不会自动打开 ModelDock。开启后会加入系统设置的“登录项”。": "Désactivé, ModelDock ne s’ouvre pas automatiquement. Activé, il est ajouté aux éléments d’ouverture des Réglages Système.",
+  "需要在系统设置的“登录项”中允许 ModelDock。": "Autorisez ModelDock dans les éléments d’ouverture des Réglages Système.",
+  "打开登录项设置": "Ouvrir les éléments d’ouverture",
+  "登录项设置失败：": "Impossible de modifier l’élément d’ouverture : "
 }
