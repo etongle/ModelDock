@@ -3,7 +3,7 @@ import Darwin
 
 func processStartTime(_ pid: Int32) -> UInt64 { mm_process_start_time(pid) }
 
-enum EngineKind: String, Codable { case splash, llama, prism, ollama, mlx, lmstudio, strata }
+enum EngineKind: String, Codable { case splash, llama, prism, ollama, mlx, lmstudio, strata, audio }
 enum ModelKind: String, Codable { case language, embedding, adapter, speech, draft }
 
 struct Engine: Identifiable, Codable, Hashable {
@@ -117,7 +117,8 @@ enum Scanner {
             Engine(kind: .mlx, name: "MLX · LM / VLM", version: (EnginePaths.manifest(.mlx)?.version ?? mlxVersion ?? "—") + (mlxVision.map { " · VLM " + $0.version } ?? ""), path: mlx ?? visionPath ?? "/opt/homebrew/Cellar/mlx", installed: mlxVersion != nil || mlx != nil || visionPath != nil, canServe: mlx != nil || visionPath != nil, installation: visionPath != nil ? "MLX-LM / MLX-VLM 模型服务" : mlx == nil ? "推理库 · 未发现服务程序" : "MLX-LM 模型服务", description: "苹果芯片文本与多模态推理组件", defaultPort: 8081, symbol: "cpu", visionPath: visionPath, visionVersion: mlxVision?.version),
             Engine(kind: .lmstudio, name: "LM Studio", version: lmInfo?["CFBundleShortVersionString"] as? String ?? "—", path: home.appendingPathComponent(".lmstudio").path, appPath: lmInfo == nil ? nil : "/Applications/LM Studio.app", installed: lmInfo != nil, canServe: false, installation: lmInfo == nil ? (hasLMComponents ? "仅残留组件" : "未安装") : "桌面应用", description: "模型管理与 MLX / llama.cpp 推理组件", defaultPort: 1234, symbol: "cube"),
             Engine(kind: .prism, name: "llama.cpp · Prism", version: EnginePaths.manifest(.prism)?.version ?? "本地编译版", path: prism, installed: present(prism), canServe: present(prism), installation: EnginePaths.manifest(.prism) == nil ? "本地编译工具" : "官方发行包 · 本工具管理", description: "支持 Bonsai 三值量化的 llama.cpp 引擎", defaultPort: 8080, symbol: "leaf"),
-            Engine(kind: .strata, name: "Strata", version: EnginePaths.manifest(.strata)?.version ?? "—", path: EnginePaths.executable(.strata) ?? "", installed: EnginePaths.executable(.strata) != nil, canServe: EnginePaths.executable(.strata) != nil, installation: "Apple Silicon · Metal 源码编译", description: "Niko1221/Strata · Flash-Next 推理与兼容 API", defaultPort: 8095, symbol: "square.3.layers.3d")
+            Engine(kind: .strata, name: "Strata", version: EnginePaths.manifest(.strata)?.version ?? "—", path: EnginePaths.executable(.strata) ?? "", installed: EnginePaths.executable(.strata) != nil, canServe: EnginePaths.executable(.strata) != nil, installation: "Apple Silicon · Metal 源码编译", description: "Niko1221/Strata · Flash-Next 推理与兼容 API", defaultPort: 8095, symbol: "square.3.layers.3d"),
+            Engine(kind: .audio, name: "MLX Audio", version: EnginePaths.manifest(.audio)?.version ?? "—", path: EnginePaths.executable(.audio) ?? "", installed: EnginePaths.executable(.audio) != nil, canServe: EnginePaths.executable(.audio) != nil, installation: "独立语音运行环境", description: "Apple Silicon 语音识别与语音合成", defaultPort: 8096, symbol: "waveform")
         ]
     }
 
@@ -160,6 +161,7 @@ enum Scanner {
             return isMLX ? (quant["bits"] as? Int).map { "MLX \($0)-bit" } ?? "MLX" : "Safetensors"
         }
         func configurationMissing(_ folder: URL) -> [String] {
+            if let config = jsonFile(folder.appendingPathComponent("config.json")), let missing = AudioModelPolicy.missing(folder, config: config) { return missing }
             var missing: [String] = []
             if !fm.fileExists(atPath: folder.appendingPathComponent("config.json").path) { missing.append("config.json") }
             if !["tokenizer.json", "tokenizer.model", "vocab.json"].contains(where: { fm.fileExists(atPath: folder.appendingPathComponent($0).path) }) { missing.append("tokenizer 文件") }
@@ -189,21 +191,23 @@ enum Scanner {
         for file in files where file.lastPathComponent == "model.safetensors.index.json" {
             guard let index = jsonFile(file), let map = index["weight_map"] as? [String: String] else { continue }
             let folder = file.deletingLastPathComponent(); let shards = Set(map.values).sorted()
+            if folder.lastPathComponent == "speech_tokenizer", let parent = jsonFile(folder.deletingLastPathComponent().appendingPathComponent("config.json")), AudioModelPolicy.task(parent) == "tts" { continue }
             let missing = shards.filter { !DownloadPaths.safeRelative($0) || !fm.fileExists(atPath: folder.appendingPathComponent($0).path) } + configurationMissing(folder)
             let config = jsonFile(folder.appendingPathComponent("config.json")) ?? [:]
             var name = ModelOrigin.displayName(folder: folder) ?? folder.lastPathComponent
             if name.hasSuffix("-bit") { name = folder.deletingLastPathComponent().lastPathComponent }
             let bytes = shards.filter(DownloadPaths.safeRelative).reduce(Int64(0)) { $0 + actualSize(folder.appendingPathComponent($1)) }
-            add(LocalModel(id: "mlx:\(folder.path)", name: name, format: tensorFormat(folder, config), path: folder.path, kind: .language, bytes: bytes, complete: missing.isEmpty, verification: missing.isEmpty ? "\(shards.count) 个分片与配置齐全" : "缺少 \(missing.count) 项文件", missingFiles: missing, removalPath: folder.path))
+            add(LocalModel(id: "mlx:\(folder.path)", name: name, format: tensorFormat(folder, config), path: folder.path, kind: AudioModelPolicy.task(config) == nil ? .language : .speech, bytes: bytes, complete: missing.isEmpty, verification: missing.isEmpty ? "\(shards.count) 个分片与配置齐全" : "缺少 \(missing.count) 项文件", missingFiles: missing, removalPath: folder.path))
         }
 
         for file in files where file.lastPathComponent == "model.safetensors" && !file.path.contains("/laya/") {
             let folder = file.deletingLastPathComponent()
+            if folder.lastPathComponent == "speech_tokenizer", let parent = jsonFile(folder.deletingLastPathComponent().appendingPathComponent("config.json")), AudioModelPolicy.task(parent) == "tts" { continue }
             guard !fm.fileExists(atPath: folder.appendingPathComponent("model.safetensors.index.json").path) else { continue }
             let config = jsonFile(folder.appendingPathComponent("config.json")) ?? [:]
             let draft = DraftModelPolicy.isDraft(config)
             let missing = draft ? (fm.fileExists(atPath: folder.appendingPathComponent("config.json").path) ? [] : ["config.json"]) : configurationMissing(folder)
-            add(LocalModel(id: "tensor:\(folder.path)", name: ModelOrigin.displayName(folder: folder) ?? folder.lastPathComponent, format: draft ? "DFlash2 草稿" : tensorFormat(folder, config), path: folder.path, kind: draft ? .draft : .language, bytes: actualSize(file), complete: missing.isEmpty, verification: missing.isEmpty ? (draft ? "草稿权重与配置齐全 · 共用主模型 tokenizer" : "权重与配置齐全") : "缺少配置或 tokenizer", missingFiles: missing, removalPath: folder.path))
+            add(LocalModel(id: "tensor:\(folder.path)", name: ModelOrigin.displayName(folder: folder) ?? folder.lastPathComponent, format: draft ? "DFlash2 草稿" : tensorFormat(folder, config), path: folder.path, kind: draft ? .draft : AudioModelPolicy.task(config) == nil ? .language : .speech, bytes: actualSize(file), complete: missing.isEmpty, verification: missing.isEmpty ? (draft ? "草稿权重与配置齐全 · 共用主模型 tokenizer" : "权重与配置齐全") : "缺少配置或 tokenizer", missingFiles: missing, removalPath: folder.path))
         }
 
         for file in files where file.pathExtension.lowercased() == "gguf" {
@@ -335,6 +339,10 @@ enum LaunchBuilder {
         var args: [String] = []; var env: [String: String] = [:]
         var executable = engine.path; var version = engine.version
         switch engine.kind {
+        case .audio:
+            guard let model, let task = AudioModelPolicy.task(model) else { throw LaunchError.message("请选择支持的 Qwen3-ASR 或 Qwen3-TTS 模型") }
+            args = ["--model", model.path, "--task", task, "--port", String(port)]
+            env = ["HF_HUB_OFFLINE": "1", "HF_HUB_DISABLE_PROGRESS_BARS": "0", "PYTHONDONTWRITEBYTECODE": "1"]
         case .splash:
             if let selection = model?.splashSelection, let runtime = SplashRuntime.current(engine), !runtime.supportsPacked {
                 guard let record = jsonFile(URL(fileURLWithPath: model!.path).appendingPathComponent("model.json")),

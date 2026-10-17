@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         if !passiveTesting && !capturing && !CommandLine.arguments.contains("--documentation-ui") {
             store.appUpdates.installBlocker = { [weak self] in
                 guard let self else { return "应用正在退出" }
-                if self.store.maintaining || self.store.installation.running || self.store.multiModel?.running == true || self.store.strata.busy || self.store.downloads.hasPendingWork || self.store.repairingFile != nil || self.store.preparingInstall || self.store.preparingMaintenance { return "请等待引擎操作、模型准备或下载完成后安装应用更新。" }
+                if self.store.solutions.preparingID != nil || self.store.maintaining || self.store.installation.running || self.store.multiModel?.running == true || self.store.strata.busy || self.store.downloads.hasPendingWork || self.store.repairingFile != nil || self.store.preparingInstall || self.store.preparingMaintenance { return "请等待引擎操作、模型准备或下载完成后安装应用更新。" }
                 if self.window.attachedSheet != nil || self.store.commandDraft != nil || self.store.associationDraft != nil || self.store.engineConfigurationDraft != nil || self.store.modelUpdate != nil { return "请先完成或关闭当前配置窗口，再安装应用更新。" }
                 return nil
             }
@@ -76,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             store.appUpdates.begin()
             if CommandLine.arguments.contains("--start-hidden") { hideMainWindow() }
         }
-        if !CommandLine.arguments.contains("--documentation-ui") && !CommandLine.arguments.contains("--download-queue-ui") { store.autoStartOnLaunch = !passiveTesting; store.loadServicePresets(); if !passiveTesting { store.beginIdleMonitor() }; store.services.beginMonitoring(); store.scan(); store.beginResourceMonitoring() }
+        if !CommandLine.arguments.contains("--documentation-ui") && !CommandLine.arguments.contains("--download-queue-ui") && !CommandLine.arguments.contains("--solutions-ui") { store.autoStartOnLaunch = !passiveTesting; store.loadServicePresets(); if !passiveTesting { store.beginIdleMonitor() }; store.services.beginMonitoring(); store.scan(); store.beginResourceMonitoring() }
         // Notifications only in normal runs: tests and captures must never trigger the permission prompt.
         if !passiveTesting, argumentValue("--capture-dir") == nil, !CommandLine.arguments.contains("--documentation-ui") { store.beginNotifications() }
         if let task = argumentValue("--resume-download-job"), UUID(uuidString: task) != nil, store.downloads.jobs.contains(where: { $0.id == task }) {
@@ -98,7 +98,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             }
         }
         if store.gateway.settings.enabled && !passiveTesting { store.gateway.start(store: store) }
-        if CommandLine.arguments.contains("--download-queue-ui") {
+        if CommandLine.arguments.contains("--solutions-ui") {
+            Task { do { guard let path = argumentValue("--capture-dir") else { throw LaunchError.message("Capture directory required") }; let folder = URL(fileURLWithPath: path); try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true); try await SolutionScreens.run(self, folder: folder) } catch { fputs("SOLUTION CAPTURE FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }
+        } else if CommandLine.arguments.contains("--download-queue-ui") {
             Task { do {
                 guard let path = argumentValue("--capture-dir") else { throw LaunchError.message("Capture directory required") }
                 let folder = URL(fileURLWithPath: path); try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -634,6 +636,7 @@ enum Entry {
         if args.contains("--connection-checks") { Task { do { try await ConnectionChecks.run(); exit(0) } catch { fputs("CONNECTION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--gateway-checks") { Task { do { try await GatewayChecks.run(); exit(0) } catch { fputs("GATEWAY CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--github-download-network-checks") { Task { do { try await DownloadQueueChecks.network(); exit(0) } catch { fputs("GITHUB DOWNLOAD CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--solutions-checks") { Task { do { try await SolutionChecks.run(); exit(0) } catch { fputs("SOLUTION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--model-instance-checks") { Task { do { try await ModelInstanceChecks.run(); exit(0) } catch { fputs("MODEL INSTANCE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--download-queue-checks") { Task { do { try await DownloadQueueChecks.run(); exit(0) } catch { fputs("DOWNLOAD QUEUE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--download-task-checks") { Task { do { try await DownloadTaskChecks.run(); exit(0) } catch { fputs("DOWNLOAD TASK CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }

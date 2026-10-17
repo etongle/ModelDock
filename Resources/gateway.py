@@ -81,10 +81,14 @@ def touch(source):
         except OSError:
             pass
 
-def wake(alias):
+def wake(alias, expected):
     # Ask the app to start a service stopped for idleness, then wait until its route is live again.
     config = configuration()
     route = next((r for r in config['routes'] if r['alias'] == alias), None)
+    def matches(candidate):
+        return candidate and candidate.get('enabled', True) and all(candidate.get(key) == expected.get(key) for key in ['id', 'sourceID', 'model'])
+    if not matches(route):
+        return None
     if not route or not route.get('sleeping'):
         return route
     name = re.sub(r'[^A-Za-z0-9_-]', '_', route.get('sourceID', ''))[:128]
@@ -99,6 +103,8 @@ def wake(alias):
         time.sleep(1)
         config = configuration()
         route = next((r for r in config['routes'] if r['alias'] == alias), None)
+        if not matches(route):
+            return None
         if route and not route.get('sleeping') and pinned(route):
             return route
     return None
@@ -168,6 +174,48 @@ def media_needed(value):
             needed.update(media_needed(item))
     return needed
 
+
+class SolutionRouteError(Exception):
+    def __init__(self, status, message, code):
+        self.status, self.message, self.code = status, message, code
+
+
+def solution_scope(config, path):
+    if not path.startswith('/solutions/'):
+        return None, path
+    match = re.fullmatch(r'/solutions/([0-9a-fA-F-]{36})(/v1(?:/.*)?)?/?', path)
+    if not match:
+        raise SolutionRouteError(404, '未找到方案接口。', 'solution_not_found')
+    selected = next((s for s in config.get('solutions', []) if s['id'].lower() == match[1].lower()), None)
+    if selected is None:
+        raise SolutionRouteError(404, '方案已移除或地址无效。', 'solution_not_found')
+    return selected, (match[2] or '/v1').rstrip('/')
+
+
+def solution_bindings(config, solution):
+    routes = {route['id']: route for route in config['routes']}
+    return [(component['role'], routes.get(component.get('routeID'))) for component in solution['components']]
+
+
+def solution_route(config, solution, path, alias):
+    accepted = {'/v1/audio/transcriptions': ['asr'], '/v1/audio/speech': ['tts'],
+                '/v1/chat/completions': ['translation', 'chat', 'vision'],
+                '/v1/completions': ['translation', 'chat'], '/v1/responses': ['translation', 'chat', 'vision']}.get(path, [])
+    bindings = solution_bindings(config, solution)
+    matches = [(role, route) for role, route in bindings if (role in accepted if alias is None else
+               alias == role or (route is not None and alias == route['alias']))]
+    if not matches:
+        raise SolutionRouteError(404, '此方案未提供指定组件或接口。', 'solution_model_not_found')
+    if len(matches) != 1:
+        raise SolutionRouteError(400, '请使用方案公布的组件模型名称。', 'ambiguous_solution_model')
+    role, route = matches[0]
+    if role not in accepted:
+        raise SolutionRouteError(400, '此组件不支持该接口。', 'unsupported_solution_operation')
+    if not solution.get('configured') or route is None or not route.get('enabled', True):
+        raise SolutionRouteError(503, '方案组件尚未启动、已停用或服务配置已变化。', 'solution_component_unavailable')
+    return route
+
+
 class Gateway(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
     server_version = 'ModelManagerGateway/1'
@@ -197,29 +245,41 @@ class Gateway(BaseHTTPRequestHandler):
             if not self.authenticated(config):
                 self.error(401, '网关密钥无效。', 'authentication_error'); return
             path = urllib.parse.urlsplit(self.path).path
+            solution, path = solution_scope(config, path)
+            if solution is not None and urllib.parse.urlsplit(self.path).query:
+                self.error(404, '此方案接口不接受查询参数。', 'not_found'); return
+            if solution is not None and path in ['/v1', '/v1/health']:
+                bindings = solution_bindings(config, solution)
+                components = [{'model': role, 'ready': bool(solution.get('configured') and route and route.get('enabled', True) and pinned(route))} for role, route in bindings]
+                self.json_response(200, {'id': solution['id'], 'recipe': solution['recipe'],
+                    'ready': bool(components) and all(c['ready'] for c in components), 'components': components}); return
             if path == '/health':
                 self.json_response(200, {'status': 'ready', 'instance': config['instance'], 'schema': 1,
-                                         'pid': os.getpid(), 'birth': identity.mm_process_start_time(os.getpid())}); return
+                                         'pid': os.getpid(), 'birth': identity.mm_process_start_time(os.getpid()),
+                                         'features': ['solution_routes']}); return
             if path == '/gateway/status':
                 with stats_lock:
                     value = dict(stats)
                 value['uptime'] = time.time() - started
                 self.json_response(200, value); return
-            routes = [r for r in config['routes'] if r.get('enabled', True) and (r.get('sleeping') or pinned(r))]
-            def model(route):
-                return {'id': route['alias'], 'object': 'model', 'created': int(started),
+            routes = [(r['alias'], r) for r in config['routes']] if solution is None else (solution_bindings(config, solution) if solution.get('configured') else [])
+            routes = [(alias, route) for alias, route in routes if route and route.get('enabled', True) and (route.get('sleeping') or pinned(route))]
+            def model(alias, route):
+                return {'id': alias, 'object': 'model', 'created': int(started),
                         'owned_by': 'model-manager', 'name': route['name'],
                         'input_modalities': route['inputs'], 'context_length': route.get('context'),
-                        'backend_revision': route['revision'], 'upstream_model': route['model'],
+                        'backend_revision': route.get('revision', ''), 'upstream_model': route['model'],
                         'modalities': {'input': route['inputs'], 'output': route.get('outputs', ['text'])}}
             if path == '/v1/models':
-                self.json_response(200, {'object': 'list', 'data': [model(r) for r in routes]}); return
+                self.json_response(200, {'object': 'list', 'data': [model(alias, route) for alias, route in routes]}); return
             if path.startswith('/v1/models/'):
                 alias = urllib.parse.unquote(path[len('/v1/models/'):])
-                selected = next((r for r in routes if r['alias'] == alias), None)
+                selected = next((route for name, route in routes if name == alias), None)
                 if selected:
-                    self.json_response(200, model(selected)); return
+                    self.json_response(200, model(alias, selected)); return
             self.error(404, '未找到网关接口或模型。', 'not_found')
+        except SolutionRouteError as error:
+            self.error(error.status, error.message, error.code)
         except (BrokenPipeError, ConnectionResetError):
             pass
         except Exception:
@@ -239,6 +299,7 @@ class Gateway(BaseHTTPRequestHandler):
             if not self.authenticated(config):
                 self.error(401, '网关密钥无效。', 'authentication_error'); return
             path = urllib.parse.urlsplit(self.path).path
+            solution, path = solution_scope(config, path)
             if path not in allowed or urllib.parse.urlsplit(self.path).query:
                 self.error(404, '此接口未提供网关路由。', 'not_found'); return
             if self.headers.get('Transfer-Encoding'):
@@ -271,24 +332,37 @@ class Gateway(BaseHTTPRequestHandler):
                     value = json.loads(body)
                 except (ValueError, UnicodeError):
                     self.error(400, '请求不是有效 JSON。', 'invalid_request_error'); return
-                if not isinstance(value, dict) or not isinstance(value.get('model'), str):
+                if not isinstance(value, dict) or ('model' in value and not isinstance(value['model'], str)) or (solution is None and not isinstance(value.get('model'), str)):
                     self.error(400, '请选择网关公布的模型。', 'invalid_request_error'); return
                 # Tool schemas may describe image fields; inspect user input, not schemas.
-                payload = {k: value[k] for k in ['messages', 'input', 'prompt', 'images'] if k in value}
-                alias, needed = value['model'], media_needed(payload)
-            route = next((r for r in config['routes'] if r['alias'] == alias and r.get('enabled', True)), None)
+                payload = {k: value[k] for k in ['messages', 'input', 'prompt', 'images', 'reference_audio'] if k in value}
+                alias, needed = value.get('model'), media_needed(payload)
+                if value.get('reference_audio'):
+                    needed.add('audio')
+            if path in ['/v1/audio/transcriptions', '/v1/audio/translations']:
+                needed.add('audio')
+            route = solution_route(config, solution, path, alias) if solution is not None else next((r for r in config['routes'] if r['alias'] == alias and r.get('enabled', True)), None)
             if not route:
                 self.error(404, '模型未注册到网关。', 'model_not_found'); return
             if route.get('sleeping'):
-                route = wake(alias)
+                route = wake(route['alias'], route)
                 if not route:
                     self.error(503, '模型服务因空闲已停止，唤醒超时或未能启动，请查看模型服务。', 'backend_unavailable'); return
+                if solution is not None:
+                    current_config = configuration()
+                    current, _ = solution_scope(current_config, urllib.parse.urlsplit(self.path).path)
+                    bound = solution_route(current_config, current, path, alias)
+                    if bound['id'] != route['id']:
+                        self.error(503, '方案组件绑定已变化。', 'solution_component_unavailable'); return
+            alias = route['alias']  # Usage is grouped by the backend alias, not a shared solution role such as "translation".
             source = route.get('sourceID')
             touch(source)
             if not pinned(route):
                 self.error(503, '原模型服务已停止或端口归属已改变。', 'backend_unavailable'); return
             if not needed.issubset(set(route['inputs'])):
                 self.error(400, '此路由的输入模式不接受这些媒体：' + ', '.join(sorted(needed)), 'unsupported_modality'); return
+            if path == '/v1/audio/speech' and 'audio' not in route.get('outputs', []):
+                self.error(400, '此模型没有声明语音输出能力。', 'unsupported_modality'); return
             # Verify the model still belongs to the pinned backend before forwarding payloads.
             probe = urllib.request.Request(upstream_url(route, '/v1/models'), headers=authorization(route))
             with opener.open(probe, timeout=10) as response:
@@ -329,6 +403,10 @@ class Gateway(BaseHTTPRequestHandler):
             if upstream.status >= 400:
                 with stats_lock:
                     stats['failed'] += 1
+        except SolutionRouteError as error:
+            with stats_lock:
+                stats['failed'] += 1
+            self.error(error.status, error.message, error.code)
         except (BrokenPipeError, ConnectionResetError):
             self.close_connection = True
         except Exception:

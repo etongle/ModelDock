@@ -177,6 +177,13 @@ final class ServiceController: ObservableObject {
         do { try JSONEncoder().encode(records).write(to: stateDirectory.appendingPathComponent("services.json"), options: .atomic) }
         catch { errors["storage"] = "配置保存失败：\(error.localizedDescription)" }
     }
+    /// Save a stopped configuration without starting or touching any model process.
+    func registerConfiguration(_ spec: ServiceSpec) throws {
+        guard UUID(uuidString: spec.id) != nil, spec.pid == nil, !records.contains(where: { $0.id == spec.id || $0.port == spec.port }), (1024...65535).contains(spec.port) else { throw LaunchError.message("服务配置或端口已变化，请重试") }
+        try FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
+        try JSONEncoder().encode(records + [spec]).write(to: stateDirectory.appendingPathComponent("services.json"), options: .atomic)
+        records.append(spec)
+    }
     func captureComponents(_ value: ServiceComponentSnapshot, spec: ServiceSpec) {
         guard let index = records.firstIndex(where: { $0.id == spec.id && $0.pid == spec.pid && $0.processStart == spec.processStart && $0.startedAt == spec.startedAt }), records[index].componentSnapshot != value else { return }
         if let old = records[index].componentSnapshot, !old.entries.contains(where: { $0.id == "draft" && !$0.confirmed }) { return }

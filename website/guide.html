@@ -3,6 +3,8 @@
 <li><a href="#modeldock-user-guide">ModelDock user guide</a><ul>
 <li><a href="#1-install-and-choose-a-language">1. Install and choose a language</a><ul>
 <li><a href="#update-modeldock-itself">Update ModelDock itself</a></li>
+<li><a href="#solutions">Solutions</a></li>
+<li><a href="#per-solution-gateway-url">Per-solution gateway URL</a></li>
 </ul>
 </li>
 <li><a href="#2-prepare-an-engine">2. Prepare an engine</a><ul>
@@ -45,6 +47,58 @@
 <p>Only a newer stable release from <code>etongle/ModelDock</code> is installed. The Apple Silicon ZIP must have a GitHub SHA-256 digest. ModelDock checks that digest, archive paths, bundle identity, version, architecture, minimum macOS and code signature before replacing the app. It does not downgrade or install prereleases.</p>
 <p>Installation waits for active model downloads, engine operations, model preparation and configuration sheets. The app then closes, replaces its bundle, and reopens, restoring menu-bar mode if hidden. Running model services retain their processes; model libraries and personal settings stay in place. The old app bundle is retained beside the installation as <code>.ModelDock-backup-…app</code>. A replacement or relaunch-command failure restores the original bundle. If the folder is not writable, install manually from Releases.</p>
 <p>The public packages currently use ad-hoc signing; automatic updating does not make them Apple-notarized. SHA-256 verifies the package published in the official repository.</p>
+<h3 id="solutions">Solutions</h3>
+<p>Open the <strong>Solutions</strong> tab (⌘6). It uses the same sidebar and <strong>Overview / Configuration / Instances / Maintenance</strong> sections as the engine pages. Built-in recipes cover speech translation with reference-voice dubbing, transcription, a local coding assistant, and image/document-screenshot Q&amp;A.</p>
+<p><img alt="Solutions configuration" src="assets/en-solutions.png" /></p>
+<p>The service sidebar, engine instance cards, and service details display each service's source: <strong>Standalone service</strong> means it was created directly in Engines, <strong>Solution service</strong> means a solution created it, and <strong>Reused by solution</strong> marks an existing service referenced by another solution. Labels can appear together, such as “Standalone service · Reused by solution.” Service details list linked solutions with navigation to each one; stopping the service affects every linked solution.</p>
+<p><img alt="Service source and linked solutions" src="assets/en-service-origins.png" /></p>
+<p>In <strong>Configuration</strong>, review each component and use <strong>Change</strong> to select a compatible local model or download the recipe default. Local chat models can be reused automatically. Speech recipes provide Light, Balanced and High quality presets; these select speech model sizes, not measured performance guarantees. The target speech language is separate from the interface language. <strong>More Settings</strong> selects the model library location.</p>
+<p>Click <strong>Install &amp; configure</strong>. Model repositories are pinned to recorded commits. Missing engines install into separate managed environments; installed engines are retained. The app reuses matching download tasks, including resumable paused tasks, checks the downloaded files, and allocates separate service ports. Installation creates stopped service configurations. <strong>Start solution</strong> loads them when needed. Downloads show their progress, rate and remaining time, with a link to the existing download manager. Installation can resume after a pause or app restart. A failed component retains its task and error details for retry. A new configuration is saved as a separate deployment.</p>
+<p><strong>Instances</strong> links each component to the existing service details and filtered engine instance page. A solution never stops a process that it merely borrowed from outside the solution manager. A process referenced by another solution is retained; removing its original solution transfers management to a remaining solution. <strong>Maintenance → Remove solution configuration</strong> keeps model weights, download tasks and engines. Stop unshared owned instances first. Use <strong>Change → Manage model files</strong> for file inspection and repair.</p>
+<p>Speech recipes add the <strong>MLX Audio</strong> engine. Qwen3-ASR is classified as a speech model; Qwen3-TTS includes its <code>speech_tokenizer</code> decoder rather than treating it as another chat model. See the <a href="https://github.com/Blaizzy/mlx-audio">MLX Audio project</a> for runtime and model support. Model licenses apply independently of the application license.</p>
+<p>After all components are running, <strong>Try solution</strong> accepts an audio file up to 20 MiB. The translation recipe shows the transcript and translation and produces a WAV using the input speaker as a voice reference. Use a short, clear, single-speaker recording. The initial workflow processes uploaded files; it does not promise live simultaneous interpretation. Transcription runs only the ASR stage. Coding and vision recipes offer a small test prompt; vision accepts images up to 10 MiB. PDF pages can be supplied as screenshots. Client connections remain available from the existing service details.</p>
+<h3 id="per-solution-gateway-url">Per-solution gateway URL</h3>
+<p>Copy the address from <strong>Solutions → Instances</strong>, or <strong>Services → Unified gateway → Solution endpoint</strong>. Each saved deployment has its own Base URL, for example:</p>
+<pre><code class="language-text">http://127.0.0.1:18790/solutions/fba3cb54-89b0-410d-a606-17a9cdf949c4/v1
+</code></pre>
+<p><img alt="Per-solution gateway addresses" src="assets/en-solution-gateway.png" /></p>
+<p>The deployment retains this URL across app restarts, component restarts, and model port changes. A new deployment with another configuration gets another URL. Changing the gateway's own port requires updating client Base URLs. <strong>Copy solution connection</strong> exports the URL, gateway API key, and component model names. The gateway listens only on loopback by default; optional LAN sharing uses the same gateway key. An older running gateway offers a restart control to enable these endpoints.</p>
+<table>
+<thead>
+<tr>
+<th>Component model</th>
+<th>Path relative to this Base URL</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>asr</code></td>
+<td><code>/audio/transcriptions</code></td>
+<td>Multipart file upload with <code>model=asr</code> and <code>file</code></td>
+</tr>
+<tr>
+<td><code>translation</code></td>
+<td><code>/chat/completions</code></td>
+<td>Supply the translation instruction and target language in messages</td>
+</tr>
+<tr>
+<td><code>tts</code></td>
+<td><code>/audio/speech</code></td>
+<td>WAV synthesis; Base requires base64 <code>reference_audio</code> and its <code>reference_text</code></td>
+</tr>
+<tr>
+<td><code>chat</code> / <code>vision</code></td>
+<td><code>/chat/completions</code></td>
+<td>Chat or image questions, depending on the recipe</td>
+</tr>
+</tbody>
+</table>
+<p>Only the deployment's components appear at <code>GET &lt;Base URL&gt;/models</code>. <code>GET &lt;Base URL&gt;/health</code> reports readiness. Requests use <code>Authorization: Bearer &lt;gateway API key&gt;</code>. Each request invokes one component; speech translation clients call transcription, translation, and synthesis sequentially through the same Base URL. Chat JSON requests may omit <code>model</code> when only one component matches the operation. Multipart uploads must specify the component model name.</p>
+<p>The endpoint card's <strong>Copy request example</strong> menu exports complete status, model-list and component requests. Export the gateway key as <code>MODELDOCK_API_KEY</code> first; scripts retain the selected solution URL without embedding its key. Transcription reads <code>MODELDOCK_AUDIO_FILE</code>. Reference-voice synthesis also needs <code>MODELDOCK_REFERENCE_TEXT</code> (the reference transcript) and <code>MODELDOCK_SPEECH_TEXT</code> (text to speak). WAV output defaults to <code>modeldock-speech.wav</code>; override it with <code>MODELDOCK_OUTPUT_FILE</code>. Image examples read <code>MODELDOCK_IMAGE_FILE</code>. Examples require curl; speech synthesis and image requests also require Python 3.</p>
+<p><strong>Try solution → Trial connection</strong> defaults to <strong>Solution gateway</strong>. It runs transcription, translation and synthesis through the displayed solution URL, exercising the same routes external clients use. Start the components and gateway, then wait for readiness. An unavailable gateway shows its status and start control. You can explicitly select <strong>Direct service connection</strong> to test the original endpoints. A gateway failure never silently switches to direct access.</p>
+<p><img alt="Try the solution through its gateway" src="assets/en-solution-trial.png" /></p>
+<p>Stopped, disabled, or changed component bindings return explicit errors while retaining the URL. Removing the solution makes its URL return 404. Requests never fall back to another solution or another model with the same name. Shared standalone services retain direct access through their original addresses.</p>
 <h2 id="2-prepare-an-engine">2. Prepare an engine</h2>
 <p>Open <strong>Engines</strong> and select an installed engine. An engine card can be selected anywhere in its area, including whitespace. <strong>Global engine settings</strong> controls which engines appear in normal lists; individual engine settings contain supported defaults and options. Each engine page is split into <strong>Overview</strong>, <strong>Service instances</strong>, <strong>Configuration</strong>, and <strong>Maintenance</strong>.</p>
 <p><img alt="Engine and multimodal launch configuration" src="assets/en-engines.png" /></p>

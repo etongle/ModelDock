@@ -22,7 +22,7 @@ enum MultiModelPlanner {
     }
 }
 extension Engine {
-    var independentModels: Bool { [.splash, .llama, .prism, .mlx, .strata].contains(kind) }
+    var independentModels: Bool { [.splash, .llama, .prism, .mlx, .strata, .audio].contains(kind) }
     var multiModelDescription: String {
         switch kind {
         case .ollama: return "一个服务管理多个模型；实际常驻数量由内存和加载设置决定。"

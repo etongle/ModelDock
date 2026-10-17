@@ -61,6 +61,7 @@ struct EngineServicesView: View {
                 HStack { metadata(spec); Spacer(minLength: 12); actions(spec) }
                 VStack(alignment: .leading, spacing: 12) { metadata(spec); actions(spec) }
             }
+            ServiceOriginBadges(store: store, spec: spec)
             if !spec.modelID.isEmpty { ModelCapabilityBadge(capabilities: store.serviceCapabilities(spec), prefix: spec.pid == nil ? "启动设置 · " : "当前输入 · ") }
             ServiceComponentsSummary(store: store, spec: spec)
             if status == .starting { StartupProgressView(services: services, spec: spec, compact: true) }

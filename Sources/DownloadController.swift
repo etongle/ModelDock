@@ -194,6 +194,27 @@ final class DownloadController: ObservableObject {
             return left.offset > right.offset
         }.map(\.element)
     }
+    /// Enqueue a bundle dependency without replacing the user's open import form or credentials.
+    func enqueueSolution(_ listing: RemoteListing, root: URL) throws -> (job: ModelDownload, created: Bool) {
+        let files = listing.files.filter { ModelCatalog.suggested(listing).contains($0.path) }
+        guard !files.isEmpty else { throw LaunchError.message("方案仓库没有可下载的模型文件") }
+        let priorSelection = selectedTaskID
+        defer { selectedTaskID = priorSelection }
+        let matches = matching(listing: listing, files: files, root: root)
+        for candidate in matches {
+            if isScheduled(candidate.id) { return (candidate, false) }
+            guard candidate.resumeBlockedReason == nil, var restored = try? DownloadRecovery.reconcile(candidate) else { continue }
+            if restored.state == .complete { return (restored, false) }
+            restored.files = files
+            if let index = jobs.firstIndex(where: { $0.id == restored.id }) { jobs[index] = restored }
+            run(restored.id, allowReplacement: true, credential: "")
+            return (jobs.first { $0.id == restored.id }!, false)
+        }
+        let before = Set(jobs.map(\.id))
+        add(listing: listing, files: files, root: root, replacing: matches.first, credential: "")
+        guard let job = jobs.first(where: { !before.contains($0.id) }), isScheduled(job.id) else { throw LaunchError.message(message ?? "方案下载任务创建失败") }
+        return (job, true)
+    }
     var preferredPausedTask: ModelDownload? {
         guard let listing, !selectedFiles.isEmpty else { return nil }
         let root = URL(fileURLWithPath: destination).resolvingSymlinksInPath().standardizedFileURL

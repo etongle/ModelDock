@@ -4,7 +4,7 @@ enum LocalModelVersions {
     static func key(_ model: LocalModel) -> String? { ModelOrigin.replacement(model) ?? ModelOrigin.read(model)?.repository }
     static func related(_ model: LocalModel, models: [LocalModel]) -> [LocalModel] {
         guard let key = key(model) else { return [model] }
-        return models.filter { $0.kind == .language && self.key($0) == key }.sorted {
+        return models.filter { $0.kind == model.kind && self.key($0) == key }.sorted {
             if ($0.id == model.id) != ($1.id == model.id) { return $0.id == model.id }
             return $0.name.localizedStandardCompare($1.name) == .orderedAscending
         }
@@ -47,7 +47,7 @@ extension AppStore {
     }
     func downloadedModels(_ job: ModelDownload) -> [LocalModel] {
         let folder = URL(fileURLWithPath: job.root).appendingPathComponent(job.folder).standardizedFileURL.path
-        return models.filter { $0.kind == .language && $0.complete && ($0.path == folder || $0.path.hasPrefix(folder + "/")) }
+        return models.filter { ($0.kind == .language || $0.kind == .speech) && $0.complete && ($0.path == folder || $0.path.hasPrefix(folder + "/")) }
     }
     func showDownloadedModel(_ job: ModelDownload) {
         if let model = downloadedModels(job).first { showModelFile(model); return }

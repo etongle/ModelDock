@@ -358,6 +358,7 @@ struct MainView: View {
                 case .services: ServiceWorkspace(store: store, services: services, sidebarWidth: sidebarWidth)
                 case .downloads: DownloadWorkspace(store: store, downloads: store.downloads, sidebarWidth: sidebarWidth)
                 case .monitor: MonitorWorkspace(store: store, services: services, monitor: store.resources, performance: store.performance)
+                case .solutions: SolutionWorkspace(store: store, controller: store.solutions, sidebarWidth: sidebarWidth)
                 }
             }.background(Theme.background)
         // Child views translate inside their own body; an unchanged input (e.g. StateLabel("未启动")) would keep
@@ -600,7 +601,7 @@ struct ModelWorkspace: View {
                                     HStack(spacing: 6) { UsageBadge(model: model); ModelCapabilityBadge(capabilities: store.modelCapabilities(model), compact: true) }
                                     VStack(alignment: .leading, spacing: 4) { UsageBadge(model: model); ModelCapabilityBadge(capabilities: store.modelCapabilities(model), compact: true) }
                                 }
-                                if model.kind == .language || model.kind == .embedding || store.modelInstanceCounts(model).total > 0 { ModelInstancesLink(store: store, model: model, compact: true) }
+                                if model.kind == .language || model.kind == .embedding || AudioModelPolicy.task(model) != nil || store.modelInstanceCounts(model).total > 0 { ModelInstancesLink(store: store, model: model, compact: true) }
                             }
                             Spacer(minLength: 0)
                         }.padding(.vertical, 4).tag(Optional(model.id)).listRowSeparator(.hidden).help(L10n.text(model.path))
@@ -625,7 +626,7 @@ struct ModelWorkspace: View {
                         ModelCapabilityBadge(capabilities: store.modelCapabilities(model), prefix: "模型输入 · ")
                         Text(verbatim: L10n.text(store.modelCapabilities(model).source)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                         StateLabel(title: model.verification, color: model.complete ? .green : .orange)
-                        if model.kind == .language || model.kind == .embedding || store.modelInstanceCounts(model).total > 0 { ModelInstancesLink(store: store, model: model) }
+                        if model.kind == .language || model.kind == .embedding || AudioModelPolicy.task(model) != nil || store.modelInstanceCounts(model).total > 0 { ModelInstancesLink(store: store, model: model) }
                         Divider()
                         if model.kind == .draft { DraftModelInfo(store: store, model: model) }
                         else {
@@ -681,7 +682,7 @@ struct ServiceWorkspace: View {
                     Section { 
                         if store.visibleServices.isEmpty { Text(verbatim: L10n.text("此范围还没有配置服务")).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).listRowSeparator(.hidden) }
                         ForEach(store.visibleServices) { spec in
-                            serviceRow(title: store.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, detail: "\(spec.modelName) · \(spec.port)", status: services.statusTitle(spec), color: services.status(spec).color, engine: store.engines.first { $0.id == spec.engineID })
+                            serviceRow(title: store.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, detail: "\(spec.modelName) · \(spec.port)", status: services.statusTitle(spec), color: services.status(spec).color, engine: store.engines.first { $0.id == spec.engineID }, origin: store.serviceOrigin(spec))
                                 .tag(ServiceListSelection.managed(spec.id)).listRowSeparator(.hidden)
                                 .contextMenu {
                                     Button(L10n.text("复制接口地址")) { store.copy("http://127.0.0.1:\(spec.port)/v1") }
@@ -717,7 +718,7 @@ struct ServiceWorkspace: View {
                         Text(verbatim: L10n.text(external.engineID == nil ? "尚未识别引擎；端口和模型名称不能确认引擎类型。" : "引擎已根据监听进程识别。"))
                             .font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                         HStack(spacing: 10) {
-                            if external.ready && !external.models.isEmpty { Button { store.openChat(port: port) } label: { Label(L10n.text("试聊"), systemImage: "bubble.left.and.bubble.right") }.buttonStyle(SecondaryButton()) }
+                            if external.ready && store.directConnectionTargets.contains(where: { $0.port == port }) { Button { store.openChat(port: port) } label: { Label(L10n.text("试聊"), systemImage: "bubble.left.and.bubble.right") }.buttonStyle(SecondaryButton()) }
                             Button(L10n.text("打开服务页面")) { store.openEndpoint(port) }.buttonStyle(SecondaryButton())
                         }
                         ConnectionEntry(store: store, port: port)
@@ -732,6 +733,7 @@ struct ServiceWorkspace: View {
                         Text(spec.modelName).font(.system(size: TypeScale.section)).foregroundStyle(Theme.muted)
                         if let version = spec.engineVersion { Text(verbatim: L10n.text("运行版本 · " + version)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
                         StateLabel(title: services.statusTitle(spec), color: status.color)
+                        ServiceOriginDetails(store: store, spec: spec)
                         if !spec.modelID.isEmpty { ModelCapabilityBadge(capabilities: store.serviceCapabilities(spec), prefix: spec.pid == nil ? "启动设置 · " : "当前服务 · ") }
                         if ["splash", "mlx", "llama", "prism"].contains(spec.engineID) { ServiceComponentsView(store: store, spec: spec) }
                         if [.starting, .running, .failed].contains(status) { StartupProgressView(services: services, spec: spec) }
@@ -744,7 +746,7 @@ struct ServiceWorkspace: View {
                             else { Button { store.configureService(spec) } label: { Label(L10n.text("配置并启动"), systemImage: "play.fill") }.buttonStyle(AccentButton()) }
                             // Only shown when usable; deletion lives at the bottom of the page, away from the primary action.
                             if status == .running {
-                                Button { store.openChat(port: spec.port) } label: { Label(L10n.text("试聊"), systemImage: "bubble.left.and.bubble.right") }.buttonStyle(SecondaryButton())
+                                if store.directConnectionTargets.contains(where: { $0.port == spec.port }) { Button { store.openChat(port: spec.port) } label: { Label(L10n.text("试聊"), systemImage: "bubble.left.and.bubble.right") }.buttonStyle(SecondaryButton()) }
                                 Button(L10n.text("打开服务页面")) { store.openEndpoint(spec.port) }.buttonStyle(SecondaryButton())
                             }
                         }
@@ -791,13 +793,14 @@ struct ServiceWorkspace: View {
         case nil: break
         }
     }
-    func serviceRow(title: String, detail: String, status: String, color: Color, engine: Engine? = nil) -> some View {
+    func serviceRow(title: String, detail: String, status: String, color: Color, engine: Engine? = nil, origin: ServiceOrigin? = nil) -> some View {
         HStack(alignment: .top, spacing: 10) {
             if let engine { EngineIcon(engine: engine, size: 32) } else { SidebarSymbol(symbol: "network") }
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: L10n.text(title)).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1)
                 Text(verbatim: L10n.text(detail)).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 HStack(spacing: 6) { Circle().fill(color).frame(width: 6, height: 6); Text(verbatim: L10n.text(status)) }.font(.system(size: TypeScale.callout)).foregroundStyle(.secondary)
+                if let origin { Text(verbatim: origin.labels.map(L10n.text).joined(separator: " · ")).font(.system(size: TypeScale.caption)).foregroundStyle(origin.uses.isEmpty ? Theme.muted : Theme.linkColor).lineLimit(2).fixedSize(horizontal: false, vertical: true).help((origin.labels + origin.uses.map(\.title)).map(L10n.text).joined(separator: " · ")) }
             }
             Spacer(minLength: 0)
         }.padding(.vertical, 4)

@@ -19,6 +19,7 @@ struct ModelCompatibility {
 extension Engine {
     var modelRule: String {
         switch kind {
+        case .audio: return "Qwen3-ASR / Qwen3-TTS · MLX 语音组件"
         case .strata: return "Flash-Next · Metal 主模型与配套组件"
         case .splash: return SplashRuntime.current(self)?.supportsPacked == false ? "新版上游模型 · packed 使用匹配旧组件" : "Splash 专属封装"
         case .llama: return "通用 GGUF · 不含 Prism 特殊格式"
@@ -71,6 +72,8 @@ extension LocalModel {
         }
     }
     func compatibility(with engine: Engine) -> ModelCompatibility {
+        if engine.kind == .audio { return .init(level: AudioModelPolicy.task(self) == nil ? .unsupported : complete ? .direct : .incomplete, reason: "语音模型由 MLX Audio 加载；识别与合成能力分别标记。") }
+        if AudioModelPolicy.task(self) != nil { return .init(level: .unsupported, reason: "此语音模型需要 MLX Audio，不能作为聊天模型加载。") }
         if kind == .draft { return .init(level: .unsupported, reason: "草稿模型应在主模型的引擎配置中选择，不单独启动服务。") }
         if engine.kind == .strata {
             guard let prepared = preparedForStrata() else { return .init(level: .unsupported, reason: "Strata Metal 需要已准备的 Flash-Next 主权重、n-gram、词表及匹配组件；请在 Strata 页面准备模型。") }

@@ -20,6 +20,8 @@ struct GatewayWorkspace: View {
                 if gateway.ready { HStack(spacing: 22) { Text(verbatim: L10n.text("已转发 \(gateway.requests) 次")); Text(verbatim: L10n.text("当前并发 \(gateway.active)")); Text(verbatim: L10n.text("失败 \(gateway.failed) 次")) }.font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
                 if let error = gateway.error { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
             }.padding(18).background(Theme.surface, in: RoundedRectangle(cornerRadius: 13)).overlay { RoundedRectangle(cornerRadius: 13).stroke(Theme.line) }
+            GatewaySolutionsSection(store: store, gateway: gateway)
+            Divider()
             GatewayLANView(store: store, gateway: gateway)
             HStack { Text(verbatim: L10n.text("模型路由与输入模式")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer(); Button(L10n.text("刷新")) { store.synchronizeGateway(); Task { await gateway.poll(); await store.services.refresh() } }.buttonStyle(PlainAction()) }
             if gateway.routes.isEmpty { EmptyMessage(symbol: "point.3.connected.trianglepath.dotted", title: L10n.text("还没有可用模型"), detail: "启动本地模型服务，或添加一个外部 OpenAI 兼容接口。") }

@@ -64,6 +64,7 @@ struct GatewayConfiguration: Codable {
     var instance: String
     var apiKey: String
     var routes: [GatewayRoute]
+    var solutions: [GatewaySolution] = []
 }
 
 @MainActor
@@ -111,9 +112,11 @@ final class GatewayController: ObservableObject {
     @Published var settings: GatewaySettings
     @Published var process: GatewayProcess?
     @Published var ready = false
+    @Published var supportsSolutionRoutes = false
     @Published var busy = false
     @Published var error: String?
     @Published var routes: [GatewayRoute] = []
+    @Published var solutionRoutes: [GatewaySolution] = []
     @Published var editor: GatewayEndpointDraft?
     @Published var portText = "18790"
     @Published var requests = 0
@@ -147,7 +150,7 @@ final class GatewayController: ObservableObject {
         let arguments = PortIdentity.arguments(process.pid)
         return arguments.contains(configurationURL.path) && arguments.contains { URL(fileURLWithPath: $0).lastPathComponent == "gateway.py" }
     }
-    func synchronize(_ targets: [ConnectionTarget], local: [LocalModel], services: ServiceController) {
+    func synchronize(_ targets: [ConnectionTarget], local: [LocalModel], services: ServiceController, deployments: [SolutionDeployment] = []) {
         var values: [GatewayRoute] = []
         for target in targets where target.engineID != "gateway" {
             let source = target.sourceID ?? "\(target.engineID):\(target.port)"
@@ -176,8 +179,9 @@ final class GatewayController: ObservableObject {
             if let data = try? JSONEncoder().encode(cache) { try? ConnectionFiles.write(data, to: root.appendingPathComponent("sleeping-routes.json")) }
         }
         routes = values.sorted { $0.alias.localizedStandardCompare($1.alias) == .orderedAscending }
+        solutionRoutes = synchronizeSolutions(deployments, local: local, services: services)
         do {
-            let data = try JSONEncoder().encode(GatewayConfiguration(instance: settings.instance, apiKey: settings.apiKey, routes: routes))
+            let data = try JSONEncoder().encode(GatewayConfiguration(instance: settings.instance, apiKey: settings.apiKey, routes: routes, solutions: solutionRoutes))
             if data != lastConfiguration { try ConnectionFiles.privateDirectory(root); try ConnectionFiles.write(data, to: configurationURL); lastConfiguration = data }
         } catch { self.error = "网关配置未能保存：\(error.localizedDescription)" }
     }
@@ -235,7 +239,7 @@ final class GatewayController: ObservableObject {
     }
     func poll() async {
         guard !polling else { return }; polling = true; defer { polling = false }
-        guard ownsProcess(), let process else { ready = false; return }
+        guard ownsProcess(), let process else { ready = false; supportsSolutionRoutes = false; return }
         do {
             var request = URLRequest(url: URL(string: "http://127.0.0.1:\(process.port)/health")!); request.timeoutInterval = 2
             request.setValue("Bearer " + settings.apiKey, forHTTPHeaderField: "Authorization")
@@ -243,13 +247,14 @@ final class GatewayController: ObservableObject {
             let value = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             let before = await PortIdentity.snapshot(ports: [process.port])
             ready = (response as? HTTPURLResponse)?.statusCode == 200 && value?["instance"] as? String == settings.instance && value?["pid"] as? Int32 == process.pid && ownsProcess() && !(before[process.port] ?? []).isEmpty && (before[process.port] ?? []).allSatisfy { $0.belongs(pid: process.pid, birth: process.birth) }
+            supportsSolutionRoutes = ready && (value?["features"] as? [String] ?? []).contains("solution_routes")
             if ready {
                 request.url = URL(string: "http://127.0.0.1:\(process.port)/gateway/status")!
                 let (stats, _) = try await URLSession.shared.data(for: request)
                 let object = try JSONSerialization.jsonObject(with: stats) as? [String: Any]
                 requests = object?["requests"] as? Int ?? 0; active = object?["active"] as? Int ?? 0; failed = object?["failed"] as? Int ?? 0
             }
-        } catch { ready = false }
+        } catch { ready = false; supportsSolutionRoutes = false }
     }
     func addEndpoint(_ draft: GatewayEndpointDraft, store: AppStore) {
         guard !draft.busy else { return }; draft.busy = true; draft.message = nil
@@ -290,12 +295,12 @@ final class GatewayController: ObservableObject {
 @MainActor
 extension AppStore {
     func synchronizeGateway() {
-        gateway.synchronize(directConnectionTargets, local: models, services: services)
+        gateway.synchronize(gatewaySourceTargets, local: models, services: services, deployments: solutions.deployments)
         services.ignoredPorts = gateway.ownsProcess() ? [gateway.settings.port] : []
     }
     var gatewayConnectionTargets: [ConnectionTarget] {
         guard gateway.ready, let process = gateway.process else { return [] }
-        return gateway.routes.filter { $0.enabled && $0.available }.map { route in
+        return gateway.routes.filter { $0.enabled && $0.available && $0.inputs.contains("text") && $0.outputs.contains("text") }.map { route in
             var target = ConnectionTarget(id: "gateway:\(route.id)", engineName: route.name, engineID: "gateway", model: route.alias, port: process.port, pid: process.pid, birth: process.birth, context: route.context)
             target.apiKey = gateway.settings.apiKey; target.capabilities = route.capabilities.applying(route.mode); target.sourceID = route.sourceID; target.backendRevision = route.revision
             target.supportsThinkingToggle = PiConnectionPolicy.thinkingSupported(engine: route.engineID, version: services.records.first { $0.id == route.sourceID }?.engineVersion)

@@ -3,6 +3,8 @@
 <li><a href="#modeldock">ModelDock 模型坞使用说明</a><ul>
 <li><a href="#1">1. 安装与语言选择</a><ul>
 <li><a href="#modeldock_1">更新 ModelDock 应用自身</a></li>
+<li><a href="#_1">解决方案</a></li>
+<li><a href="#_2">方案专属网关地址</a></li>
 </ul>
 </li>
 <li><a href="#2">2. 准备模型基座</a><ul>
@@ -10,8 +12,8 @@
 </ul>
 </li>
 <li><a href="#3">3. 下载模型</a><ul>
-<li><a href="#_1">看每个文件的进度，调整下载顺序</a></li>
-<li><a href="#_2">删除任务与清理未完成文件</a></li>
+<li><a href="#_3">看每个文件的进度，调整下载顺序</a></li>
+<li><a href="#_4">删除任务与清理未完成文件</a></li>
 </ul>
 </li>
 <li><a href="#4">4. 导入与检查本地模型</a></li>
@@ -24,7 +26,7 @@
 </li>
 <li><a href="#9">9. 菜单栏管理与性能</a></li>
 <li><a href="#10">10. 常见问题</a></li>
-<li><a href="#_3">快捷键与保存位置</a></li>
+<li><a href="#_5">快捷键与保存位置</a></li>
 </ul>
 </li>
 </ul>
@@ -45,6 +47,58 @@
 <p>只安装 <code>etongle/ModelDock</code> 中更新的正式 Release。Apple Silicon ZIP 必须有 GitHub 提供的 SHA-256；应用会核对哈希、包内路径、应用标识、版本、架构、最低 macOS 和代码签名。不会自动降级，也不安装预发行版本。</p>
 <p>正在下载模型、安装/清理引擎、准备模型或编辑配置弹窗时，先等待操作结束。随后应用关闭、替换自身并重新打开，原来隐藏到菜单栏时恢复该模式。运行中的模型服务继续保留，模型库和个人设置不移动。旧应用保存在安装目录旁的 <code>.ModelDock-backup-…app</code>；替换或重新打开命令失败时恢复原应用。安装目录不可写时，改用 Release 安装包手动安装。</p>
 <p>当前发行包采用临时签名，自动更新并不代表已经通过 Apple 公证；SHA-256 用于核对官方仓库发布的文件。</p>
+<h3 id="_1">解决方案</h3>
+<p>打开顶部的 <strong>解决方案</strong>（⌘6）。页面沿用现有双栏结构，以及 <strong>概览 / 配置 / 实例 / 维护</strong> 分区。内置语音翻译与参考音色配音、语音转写、本地编程助手、图片与文档截图问答方案。</p>
+<p><img alt="解决方案配置" src="assets/zh-Hans-solutions.png" /></p>
+<p>服务列表、运行引擎的实例卡片和服务详情都会显示来源：<strong>原生服务</strong>是在运行引擎直接创建的配置，<strong>方案服务</strong>由解决方案创建，<strong>方案复用</strong>表示现有服务被其他方案引用。这些标识可以同时出现，例如“原生服务 · 方案复用”。服务详情列出关联方案，点击名称可跳转；停止该服务会影响所有关联方案。</p>
+<p><img alt="服务来源与关联方案" src="assets/zh-Hans-service-origins.png" /></p>
+<p>在 <strong>配置</strong> 中查看每个环节，通过 <strong>更换</strong> 选择兼容的本地模型或下载方案默认模型。文字模型可自动复用本地资源。语音方案的轻量、均衡、高质量预设用于选择语音模型大小，不代表实测性能承诺。输出语言和界面语言分别设置；在 <strong>更多设置</strong> 中选择模型库目录。</p>
+<p>点击 <strong>一键安装并配置</strong> 后，程序固定模型仓库提交版本，在独立管理环境中安装缺少的基座，保留已经安装的引擎，复用匹配的下载任务和暂停进度，下载并检查文件，最后分配独立端口、创建未启动的服务配置。之后点击 <strong>启动方案</strong> 才加载模型。每项下载显示进度、速度、剩余时间，可跳转到原有下载管理。暂停或退出后可继续安装；失败保留任务和具体错误，支持重试。更改配置后再次安装会保存为独立的方案记录。</p>
+<p><strong>实例</strong> 可进入已有服务详情，或跳转到对应引擎筛选后的实例列表。方案不会停止只是借用的外部服务；其他方案仍在引用的实例会保留。移除原方案时，共享实例交给剩余方案管理。<strong>维护 → 移除方案配置</strong> 保留模型、下载任务和引擎，独占且正在运行的实例需要先停止。通过 <strong>更换 → 管理模型文件</strong> 进入现有文件检查与修复流程。</p>
+<p>语音方案新增 <strong>MLX Audio</strong> 基座。Qwen3-ASR 标记为语音模型；Qwen3-TTS 的 <code>speech_tokenizer</code> 解码器归属于主模型，不再单独当作聊天模型。运行组件及模型支持参见 <a href="https://github.com/Blaizzy/mlx-audio">MLX Audio 项目</a>，模型许可证独立于应用许可证。</p>
+<p>全部组件就绪后，可在 <strong>试用方案</strong> 选择不超过 20 MiB 的音频文件。翻译方案依次显示识别原文、译文，再使用输入音频的参考音色生成 WAV 配音；建议使用简短、清晰的单人录音。初版处理上传文件，不承诺实时同声传译。转写方案只运行识别环节。编程及视觉方案提供简单问题测试；视觉输入支持不超过 10 MiB 的图片，PDF 页面可使用截图。编程客户端仍通过已有服务详情中的一键接入连接。</p>
+<h3 id="_2">方案专属网关地址</h3>
+<p>在 <strong>解决方案 → 实例</strong> 或 <strong>模型服务 → 统一网关 → 方案专属地址</strong> 复制方案地址。每个已保存的方案实例都有一个独立 Base URL，例如：</p>
+<pre><code class="language-text">http://127.0.0.1:18790/solutions/fba3cb54-89b0-410d-a606-17a9cdf949c4/v1
+</code></pre>
+<p><img alt="方案专属网关地址" src="assets/zh-Hans-solution-gateway.png" /></p>
+<p>同一方案实例在程序重启、组件重启或模型端口变化后保留地址；采用另一配置安装的新实例会获得新地址。修改统一网关自身端口时，需要同步更新客户端 Base URL。点击 <strong>复制方案接入配置</strong> 可获得地址、统一网关密钥及组件模型名。网关默认只监听本机，开启局域网共享后使用同一网关密钥；已运行的旧网关会提示重启以启用新接口。</p>
+<table>
+<thead>
+<tr>
+<th>组件 model</th>
+<th>相对此 Base URL 的接口</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>asr</code></td>
+<td><code>/audio/transcriptions</code></td>
+<td>文件上传识别；multipart 表单包含 <code>model=asr</code> 和 <code>file</code></td>
+</tr>
+<tr>
+<td><code>translation</code></td>
+<td><code>/chat/completions</code></td>
+<td>翻译模型；在消息中给出翻译指令和目标语言</td>
+</tr>
+<tr>
+<td><code>tts</code></td>
+<td><code>/audio/speech</code></td>
+<td>合成 WAV；Base 模型需要 <code>reference_audio</code>（base64）和 <code>reference_text</code></td>
+</tr>
+<tr>
+<td><code>chat</code> / <code>vision</code></td>
+<td><code>/chat/completions</code></td>
+<td>对话或图片问答，根据方案选择</td>
+</tr>
+</tbody>
+</table>
+<p>各方案仅公布自身的组件。用 <code>GET &lt;Base URL&gt;/models</code> 查看可用组件，用 <code>GET &lt;Base URL&gt;/health</code> 查看就绪状态；请求须使用 <code>Authorization: Bearer &lt;统一网关密钥&gt;</code>。每次请求调用一个组件，语音翻译的客户端按识别、翻译、配音顺序调用同一 Base URL 下的三个接口。聊天 JSON 请求可省略 <code>model</code>，前提是当前接口在该方案中只有一个对应组件；上传表单仍需指定组件名。</p>
+<p>地址卡片上的 <strong>复制调用示例</strong> 菜单可以复制状态查询、组件列表以及该方案各组件的完整请求。先把网关密钥导出为 <code>MODELDOCK_API_KEY</code>；示例固定到当前方案地址，不把密钥写进脚本。音频识别使用 <code>MODELDOCK_AUDIO_FILE</code> 指定文件。参考音色配音还需设置 <code>MODELDOCK_REFERENCE_TEXT</code>（参考音频原文）、<code>MODELDOCK_SPEECH_TEXT</code>（待朗读文字），生成文件默认保存为 <code>modeldock-speech.wav</code>，可用 <code>MODELDOCK_OUTPUT_FILE</code> 修改。图片示例读取 <code>MODELDOCK_IMAGE_FILE</code>。这些示例使用 curl，配音和图片请求另需 Python 3。</p>
+<p><strong>试用方案 → 试用接入方式</strong> 默认选择 <strong>方案网关</strong>，通过上方专属地址完成识别、翻译和配音，可验证提供给外部客户端的同一路由。先启动方案组件和网关，等待就绪后开始；网关未就绪时会显示原因和启动入口。也可以显式切换为 <strong>直接连接服务</strong> 来试用原接口。网关连接失败不会自动改用直连。</p>
+<p><img alt="通过专属网关试用方案" src="assets/zh-Hans-solution-trial.png" /></p>
+<p>方案组件停止、被禁用或绑定的模型发生变化时，接口返回明确错误，保留地址等待恢复。移除方案配置后，该地址返回 404。不会自动改用其他方案或同名模型。共享原生服务仍可通过原地址直连。</p>
 <h2 id="2">2. 准备模型基座</h2>
 <p>打开“运行引擎”，选择已安装的基座。卡片的整块区域都能点击，包括留白。“全局引擎设置”控制基座是否在常规列表中展示，单个“引擎配置”保存该基座支持的默认值及选项。每个引擎页分为<strong>概览</strong>、<strong>服务实例</strong>、<strong>配置</strong>和<strong>维护</strong>四段。</p>
 <p><img alt="运行引擎及多模态启动配置" src="assets/zh-Hans-engines.png" /></p>
@@ -85,7 +139,7 @@ https://huggingface.co/mlx-community/Qwen3.8-27B-4bit
 </ul>
 <p><img alt="解析仓库及选择下载文件" src="assets/zh-Hans-downloads.png" /></p>
 <p>点击“下载并导入”。对于同一仓库、版本、文件选择及保存位置，优先续传可恢复的已有任务。同一目标路径已经有写入任务时，不会再创建冲突写入；不同版本和不同位置独立管理。</p>
-<h3 id="_1">看每个文件的进度，调整下载顺序</h3>
+<h3 id="_3">看每个文件的进度，调整下载顺序</h3>
 <p>点击任务的“查看文件”。详细页展示文件状态、已下载大小、百分比，以及正在传输时的速度。</p>
 <p><img alt="逐文件进度、暂停和优先下载" src="assets/zh-Hans-download-files.png" /></p>
 <p>仓库选择列表里的勾选仅表示“选择下载”，不表示文件已经完成。下载完整并通过相关检查后，任务详情才标记为完成。</p>
@@ -95,7 +149,7 @@ https://huggingface.co/mlx-community/Qwen3.8-27B-4bit
 <p>GitHub 支持仓库、<code>tree</code> 子目录、<code>blob</code>/raw 单文件和 Release 页面/附件地址。仓库文件固定到具体提交，Git LFS 指针会解析为实际模型数据。按需选择权重和配置文件，不会执行仓库脚本。只输入 <code>owner/repo</code> 仍默认使用 Hugging Face。</p>
 <p><img alt="新建导入清空表单，现有任务继续下载" src="assets/zh-Hans-fresh-import.png" /></p>
 <p>每个模型任务内依次处理文件。暂停某个文件会保留断点并继续处理其他文件；“优先下载”可把另一个文件放到前面。需要时继续指定文件或继续全部暂停文件。关闭主窗口继续下载，退出整个程序则暂停任务。</p>
-<h3 id="_2">删除任务与清理未完成文件</h3>
+<h3 id="_4">删除任务与清理未完成文件</h3>
 <p>任务的垃圾桶操作删除任务记录，保留已完成和未完成文件。正在下载的任务会先停止传输，再移除记录。因此，删除暂停的重复记录不会把正在被另一个任务使用的下载文件一并删除。</p>
 <p>“清理未完成文件”是另外一个操作，清理前会检查目标及共用关系。删除记录与清理磁盘文件不是同一个操作。</p>
 <h2 id="4">4. 导入与检查本地模型</h2>
@@ -195,7 +249,7 @@ https://huggingface.co/mlx-community/Qwen3.8-27B-4bit
 </tbody>
 </table>
 <p>第三方引擎日志和客户端错误可能保留原工具的语言。</p>
-<h2 id="_3">快捷键与保存位置</h2>
+<h2 id="_5">快捷键与保存位置</h2>
 <table>
 <thead>
 <tr>

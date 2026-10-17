@@ -9,17 +9,17 @@ For ordinary installation, download from [Releases](https://github.com/etongle/M
 Install [ORAS](https://oras.land/docs/installation/), then:
 
 ```sh
-oras pull ghcr.io/etongle/modeldock:0.9.5 --output modeldock-0.9.5
-cd modeldock-0.9.5
+oras pull ghcr.io/etongle/modeldock:0.10.0 --output modeldock-0.10.0
+cd modeldock-0.10.0
 shasum -a 256 -c SHA256SUMS.txt
-open ModelDock-0.9.5-AppleSilicon.dmg
+open ModelDock-0.10.0-AppleSilicon.dmg
 ```
 
 `latest` follows the latest stable GitHub Release. A private package needs an ORAS registry login; after it is public, anonymous downloads work.
 
 ## Publication
 
-The **Publish release to GitHub Packages** workflow runs when a Release is published. It can also be started manually with an existing release tag such as `v0.9.5`.
+The **Publish release to GitHub Packages** workflow runs when a Release is published. It can also be started manually with an existing release tag such as `v0.10.0`.
 
 It uses the repository's temporary `GITHUB_TOKEN` with `contents: read` and `packages: write`. No personal token or additional secret is needed. ORAS is pinned to an official release and verified archive checksum.
 
@@ -35,6 +35,6 @@ The package retains **PolyForm Noncommercial 1.0.0** and the required notices. E
 
 GitHub Packages 存放与 Release 相同的 Mac 安装文件，采用 OCI 文件包，可通过 ORAS 下载、验证校验值，再打开 DMG 安装。普通用户直接从 Release 下载安装即可。
 
-发布新 Release 时自动同步，也可手动选择 `v0.9.5` 等已有版本。流程使用临时工作流令牌，不需要个人密钥；发布前校验两个安装文件，发布后重新下载并比较七个文件的 SHA-256。
+发布新 Release 时自动同步，也可手动选择 `v0.10.0` 等已有版本。流程使用临时工作流令牌，不需要个人密钥；发布前校验两个安装文件，发布后重新下载并比较七个文件的 SHA-256。
 
 首次创建的包默认私有，需要在包页面的 **Package settings → Change visibility → Public** 中切换一次，才能让所有人匿名下载。后续版本沿用该设置。模型文件、个人配置和密钥均不加入包；非商业许可继续适用。

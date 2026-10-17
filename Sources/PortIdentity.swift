@@ -40,6 +40,7 @@ enum PortIdentity {
         let name = URL(fileURLWithPath: path).lastPathComponent.lowercased()
         if path.contains("/Cellar/splash/") { return "splash" }
         if path.contains("/engines/strata/") || name == "modeldock-strata" || (name == "strata" && path.contains("/build-metal/")) { return "strata" }
+        if path.contains("/engines/audio/") { return "audio" }
         if path.contains("/engines/prism/") || path.contains("/llama.cpp-prism/") { return "prism" }
         if path.contains("/LM Studio.app/") || path.contains("/.lmstudio/") { return "lmstudio" }
         if name == "ollama" || path.contains("/Ollama.app/") { return "ollama" }
@@ -49,6 +50,7 @@ enum PortIdentity {
         if program.contains("modeldock-strata") { return "strata" }
         if arguments.prefix(3).contains(where: { $0.contains("/engines/strata/") && ["server.py", "modeldock_strata.py"].contains(URL(fileURLWithPath: $0).lastPathComponent) }) { return "strata" }
         if program.contains(where: { ["mlx_lm.server", "mlx_vlm.server"].contains($0) }) || zip(arguments, arguments.dropFirst()).contains(where: { $0.0 == "-m" && ["mlx_lm.server", "mlx_vlm.server"].contains($0.1) }) { return "mlx" }
+        if program.contains("audio_server.py"), arguments.prefix(3).contains(where: { $0.contains("/engines/audio/") }) { return "audio" }
         if program.contains("splash") { return "splash" }
         return nil
     }
@@ -79,7 +81,7 @@ enum PortIdentity {
     }
     static func name(_ id: String?) -> String {
         if id == "strata" { return "Strata" }
-        switch id { case "splash": return "Splash"; case "mlx": return "MLX"; case "llama": return "Llama"; case "prism": return "Prism"; case "ollama": return "Ollama"; case "lmstudio": return "LM Studio"; default: return "未识别的本地服务" }
+        switch id { case "splash": return "Splash"; case "mlx": return "MLX"; case "audio": return "MLX Audio"; case "llama": return "Llama"; case "prism": return "Prism"; case "ollama": return "Ollama"; case "lmstudio": return "LM Studio"; default: return "未识别的本地服务" }
     }
 }
 

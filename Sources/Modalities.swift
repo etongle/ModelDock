@@ -38,6 +38,7 @@ struct ModelCapabilities: Codable, Hashable {
         if object["vision"] as? Bool == false || modalities["vision"] as? Bool == false || properties["vision"] as? Bool == false || flags.contains("completion") { result.known = true }
         if let output = modalities["output"] as? [String] { result.outputs = output }
         result.inputs = Array(Set(result.inputs)).sorted()
+        if object["owned_by"] as? String == "modeldock-audio", let input = object["input_modalities"] as? [String] { result.inputs = input }
         result.context = object["context_length"] as? Int ?? metadata["context_length"] as? Int
         return result
     }
@@ -52,6 +53,7 @@ enum ModalityPolicy {
     }
     static func nativeMultimodalReason(engine: Engine, model: LocalModel?, projector: String?) -> String? {
         switch engine.kind {
+        case .audio: return "语音能力由具体识别或合成模型决定，请使用自动模式。"
         case .strata:
             guard let prepared = model?.preparedForStrata(.multimodal), prepared.complete else { return "请先准备包含匹配视觉编码器和投影的 Strata 模型，再开启多模态。" }
             return nil
@@ -73,6 +75,7 @@ enum ModalityPolicy {
     }
     static func local(_ model: LocalModel) -> ModelCapabilities {
         var result = ModelCapabilities()
+        if let task = AudioModelPolicy.task(model) { result.inputs = task == "asr" ? ["audio"] : AudioModelPolicy.supportsReference(model) ? ["text", "audio"] : ["text"]; result.outputs = task == "asr" ? ["text"] : ["audio"]; result.known = true; result.source = "MLX Audio 模型配置"; return result }
         if let path = model.strataConfig, let config = jsonFile(URL(fileURLWithPath: path)) {
             result.inputs = config["vision"] == nil ? ["text"] : ["text", "image"]; result.known = true; result.source = "Strata 已准备组件"; return result
         }
@@ -118,7 +121,7 @@ struct InputModeView: View {
             }
             HStack {
                 Text(verbatim: L10n.text("本次启动模式")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
-                if store.engine.independentModels {
+                if store.engine.independentModels && store.engine.kind != .audio {
                     Picker(L10n.text("本次启动模式"), selection: $store.inputMode) {
                         Text(verbatim: L10n.text(InputMode.automatic.title)).tag(InputMode.automatic)
                         Text(verbatim: L10n.text(InputMode.text.title)).tag(InputMode.text)

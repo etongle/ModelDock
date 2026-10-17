@@ -5,6 +5,7 @@ import AppKit
 extension Engine {
     var modalityGuide: (summary: String, activation: String, url: String) {
         switch kind {
+        case .audio: return ("语音识别与语音合成使用独立的 MLX Audio 服务。", "Qwen3-ASR 接受音频并返回文字；Qwen3-TTS 接受文字并生成音频，Base 音色需要参考录音。", "https://github.com/Blaizzy/mlx-audio")
         case .strata: return ("Apple Silicon Metal 引擎，准备 Flash-Next 主模型与匹配组件后启动。", "准备时勾选图片输入组件；启动时可选择纯文本或多模态。MTP 使用此模型的配套草稿，Mac 服务一次处理一个请求，多客户端排队。", "https://github.com/Niko1221/Strata/blob/main/docs/MAC.md")
         case .splash: return ("新版 Splash 支持匹配模型的图片和 PDF；旧 packed 模型仅支持文本。", "新版默认加载兼容视觉组件；纯文本使用 --language-only。当前旧 packed 模型不能通过开关增加视觉能力。", "https://github.com/incoai/splash/blob/main/DEVELOPMENT.md#vision")
         case .llama, .prism: return ("支持带匹配投影组件的视觉或音频模型，具体模态由模型和引擎版本决定。", "多模态加载所选 GGUF 投影文件；纯文本使用 --no-mmproj，不加载视觉或音频编码器。投影文件与主模型的匹配由引擎启动时验证。", "https://github.com/ggml-org/llama.cpp/blob/master/docs/multimodal.md")

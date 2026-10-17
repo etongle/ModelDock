@@ -7,7 +7,7 @@ import Combine
 enum EngineSection: String, CaseIterable { case overview = "概览", services = "服务实例", configuration = "配置", maintenance = "维护" }
 
 /// Ordered by everyday use: running services first, one-time engine setup later. Order drives the tab bar and ⌘1–⌘5.
-enum AppTab: String, CaseIterable { case services = "模型服务", models = "模型文件", engines = "运行引擎", downloads = "下载导入", monitor = "资源与性能" }
+enum AppTab: String, CaseIterable { case services = "模型服务", models = "模型文件", engines = "运行引擎", downloads = "下载导入", monitor = "资源与性能", solutions = "解决方案" }
 
 @MainActor
 final class AppStore: ObservableObject {
@@ -91,6 +91,8 @@ final class AppStore: ObservableObject {
     let gateway: GatewayController
     let strata = StrataController()
     let appUpdates: AppUpdateController
+    let solutions: SolutionController
+    let solutionTrial: SolutionTrialController
     @Published var multiModel: MultiModelDraft?
     @Published var commandDraft: CommandDraft?
     @Published var modelUpdate: ModelUpdateDraft?
@@ -128,6 +130,8 @@ final class AppStore: ObservableObject {
         connections = ConnectionController(directory: stateDirectory)
         gateway = GatewayController(directory: stateDirectory)
         appUpdates = AppUpdateController(directory: stateDirectory)
+        solutions = SolutionController(directory: stateDirectory)
+        solutionTrial = SolutionTrialController(directory: stateDirectory)
         strata.restore(directory: stateDirectory)
         engineConfigurations = (try? Data(contentsOf: stateDirectory.appendingPathComponent("engine-configurations.json"))).flatMap { try? JSONDecoder().decode([String: EngineConfiguration].self, from: $0) } ?? [:]
         modelAssociations = (try? Data(contentsOf: stateDirectory.appendingPathComponent("model-associations.json"))).flatMap { try? JSONDecoder().decode([String: ModelAssociation].self, from: $0) } ?? [:]
@@ -151,6 +155,15 @@ final class AppStore: ObservableObject {
         gateway.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
         strata.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
         appUpdates.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
+        solutions.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
+        solutions.$deployments.dropFirst().sink { [weak self] _ in
+            Task { @MainActor in self?.synchronizeGateway() }
+        }.store(in: &subscriptions)
+        downloads.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
+        solutionTrial.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
+        downloads.$jobs.dropFirst().sink { [weak self] _ in
+            Task { @MainActor in guard let self else { return }; self.solutions.reconcile(store: self) }
+        }.store(in: &subscriptions)
         services.$logRevision.dropFirst().sink { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }

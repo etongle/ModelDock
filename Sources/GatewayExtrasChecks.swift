@@ -38,7 +38,13 @@ enum GatewayExtrasChecks {
             // 1. 请求日志与活动记录。
             let first = try await chat(alias)
             try ConnectionChecks.require(first == 200, "Gateway request failed: \(first)")
-            let entries = GatewayRequestLog.read(store.gateway.requestLogURL)
+            // The client can receive the last response bytes before the handler's finally block persists metadata.
+            var entries: [GatewayRequestEntry] = []
+            for _ in 0..<40 {
+                entries = GatewayRequestLog.read(store.gateway.requestLogURL)
+                if !entries.isEmpty { break }
+                try await Task.sleep(nanoseconds: 50_000_000)
+            }
             try ConnectionChecks.require(entries.first?.status == 200 && entries.first?.model == alias && entries.first?.promptTokens == 1 && entries.first?.completionTokens == 1 && entries.first?.client == "local", "Request log wrong: \(entries)")
             let log = try String(contentsOf: store.gateway.requestLogURL, encoding: .utf8)
             try ConnectionChecks.require(!log.contains("\"hi\"") && !log.contains("OK"), "Request log must not contain payloads")

@@ -30,6 +30,55 @@ Installation waits for active model downloads, engine operations, model preparat
 
 The public packages currently use ad-hoc signing; automatic updating does not make them Apple-notarized. SHA-256 verifies the package published in the official repository.
 
+### Solutions
+
+Open the **Solutions** tab (⌘6). It uses the same sidebar and **Overview / Configuration / Instances / Maintenance** sections as the engine pages. Built-in recipes cover speech translation with reference-voice dubbing, transcription, a local coding assistant, and image/document-screenshot Q&A.
+
+![Solutions configuration](assets/images/en-solutions.png)
+
+The service sidebar, engine instance cards, and service details display each service's source: **Standalone service** means it was created directly in Engines, **Solution service** means a solution created it, and **Reused by solution** marks an existing service referenced by another solution. Labels can appear together, such as “Standalone service · Reused by solution.” Service details list linked solutions with navigation to each one; stopping the service affects every linked solution.
+
+![Service source and linked solutions](assets/images/en-service-origins.png)
+
+In **Configuration**, review each component and use **Change** to select a compatible local model or download the recipe default. Local chat models can be reused automatically. Speech recipes provide Light, Balanced and High quality presets; these select speech model sizes, not measured performance guarantees. The target speech language is separate from the interface language. **More Settings** selects the model library location.
+
+Click **Install & configure**. Model repositories are pinned to recorded commits. Missing engines install into separate managed environments; installed engines are retained. The app reuses matching download tasks, including resumable paused tasks, checks the downloaded files, and allocates separate service ports. Installation creates stopped service configurations. **Start solution** loads them when needed. Downloads show their progress, rate and remaining time, with a link to the existing download manager. Installation can resume after a pause or app restart. A failed component retains its task and error details for retry. A new configuration is saved as a separate deployment.
+
+**Instances** links each component to the existing service details and filtered engine instance page. A solution never stops a process that it merely borrowed from outside the solution manager. A process referenced by another solution is retained; removing its original solution transfers management to a remaining solution. **Maintenance → Remove solution configuration** keeps model weights, download tasks and engines. Stop unshared owned instances first. Use **Change → Manage model files** for file inspection and repair.
+
+Speech recipes add the **MLX Audio** engine. Qwen3-ASR is classified as a speech model; Qwen3-TTS includes its `speech_tokenizer` decoder rather than treating it as another chat model. See the [MLX Audio project](https://github.com/Blaizzy/mlx-audio) for runtime and model support. Model licenses apply independently of the application license.
+
+After all components are running, **Try solution** accepts an audio file up to 20 MiB. The translation recipe shows the transcript and translation and produces a WAV using the input speaker as a voice reference. Use a short, clear, single-speaker recording. The initial workflow processes uploaded files; it does not promise live simultaneous interpretation. Transcription runs only the ASR stage. Coding and vision recipes offer a small test prompt; vision accepts images up to 10 MiB. PDF pages can be supplied as screenshots. Client connections remain available from the existing service details.
+
+### Per-solution gateway URL
+
+Copy the address from **Solutions → Instances**, or **Services → Unified gateway → Solution endpoint**. Each saved deployment has its own Base URL, for example:
+
+```text
+http://127.0.0.1:18790/solutions/fba3cb54-89b0-410d-a606-17a9cdf949c4/v1
+```
+
+![Per-solution gateway addresses](assets/images/en-solution-gateway.png)
+
+The deployment retains this URL across app restarts, component restarts, and model port changes. A new deployment with another configuration gets another URL. Changing the gateway's own port requires updating client Base URLs. **Copy solution connection** exports the URL, gateway API key, and component model names. The gateway listens only on loopback by default; optional LAN sharing uses the same gateway key. An older running gateway offers a restart control to enable these endpoints.
+
+| Component model | Path relative to this Base URL | Use |
+| --- | --- | --- |
+| `asr` | `/audio/transcriptions` | Multipart file upload with `model=asr` and `file` |
+| `translation` | `/chat/completions` | Supply the translation instruction and target language in messages |
+| `tts` | `/audio/speech` | WAV synthesis; Base requires base64 `reference_audio` and its `reference_text` |
+| `chat` / `vision` | `/chat/completions` | Chat or image questions, depending on the recipe |
+
+Only the deployment's components appear at `GET <Base URL>/models`. `GET <Base URL>/health` reports readiness. Requests use `Authorization: Bearer <gateway API key>`. Each request invokes one component; speech translation clients call transcription, translation, and synthesis sequentially through the same Base URL. Chat JSON requests may omit `model` when only one component matches the operation. Multipart uploads must specify the component model name.
+
+The endpoint card's **Copy request example** menu exports complete status, model-list and component requests. Export the gateway key as `MODELDOCK_API_KEY` first; scripts retain the selected solution URL without embedding its key. Transcription reads `MODELDOCK_AUDIO_FILE`. Reference-voice synthesis also needs `MODELDOCK_REFERENCE_TEXT` (the reference transcript) and `MODELDOCK_SPEECH_TEXT` (text to speak). WAV output defaults to `modeldock-speech.wav`; override it with `MODELDOCK_OUTPUT_FILE`. Image examples read `MODELDOCK_IMAGE_FILE`. Examples require curl; speech synthesis and image requests also require Python 3.
+
+**Try solution → Trial connection** defaults to **Solution gateway**. It runs transcription, translation and synthesis through the displayed solution URL, exercising the same routes external clients use. Start the components and gateway, then wait for readiness. An unavailable gateway shows its status and start control. You can explicitly select **Direct service connection** to test the original endpoints. A gateway failure never silently switches to direct access.
+
+![Try the solution through its gateway](assets/images/en-solution-trial.png)
+
+Stopped, disabled, or changed component bindings return explicit errors while retaining the URL. Removing the solution makes its URL return 404. Requests never fall back to another solution or another model with the same name. Shared standalone services retain direct access through their original addresses.
+
 ## 2. Prepare an engine
 
 Open **Engines** and select an installed engine. An engine card can be selected anywhere in its area, including whitespace. **Global engine settings** controls which engines appear in normal lists; individual engine settings contain supported defaults and options. Each engine page is split into **Overview**, **Service instances**, **Configuration**, and **Maintenance**.

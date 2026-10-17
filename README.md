@@ -13,12 +13,15 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 
 *Illustrated interface. Speed figures are historical single runs on M4 Max; quantization and cache differ. Documentation screenshots use demonstration data.*
 
+**New in 0.10.0:** [Solutions](docs/USER_GUIDE.md#solutions) install and configure matched engines and models, with a dedicated gateway URL for each saved deployment.
+
 ## What you can do
 
 - **Manage engines:** inspect installations, check component versions, install or update supported distributions, enable or hide engines, and review uninstall or residual-file cleanup plans.
 - **Manage models:** import local GGUF/Safetensors directories, inspect file completeness and compatibility, repair individual files, keep model revisions side by side, and choose a version for a future launch. See running/stopped instance counts for each model and jump to its engine instance list.
 - **Control downloads:** resolve a Hugging Face `owner/repo` or a full URL, use ModelScope or GitHub repositories, GitHub Release assets, or supported direct file links. Download up to 8 models concurrently (2 by default), see per-task and per-file progress, speed and estimated time remaining, and pause or prioritize individual files. Search Hugging Face directly, with fit labels on GGUF files.
 - **Run services:** configure ports, context windows, text or multimodal input, and supported runtime options; manage several independent instances; see startup stages and associated draft/vision components. Estimate memory before launch; save presets, start with ModelDock, stop when idle; try chat and compare two services side by side. Deleting models or services also removes their client registrations.
+- **Build a solution:** configure speech transcription, translation with reference-voice synthesis, a coding assistant, or image Q&A. Reuse compatible services, identify their source, and copy a stable solution gateway URL and request examples. Speech workflows process uploaded recordings.
 - **Connect clients:** register models with pi or OpenCode while preserving existing settings. Choose a direct endpoint or the OpenAI-compatible gateway; add remote compatible APIs to the same gateway. The gateway logs request usage (never content) and can optionally be shared on the LAN.
 - **Stay in the menu bar:** monitor CPU, memory, disk usage, download progress, and measured model performance. Closing the main window keeps the app running by default; clicking outside the menu-bar panel dismisses it.
 - **Update ModelDock:** check official GitHub Releases, automatically download and verify a newer Apple Silicon package, replace the app and reopen it. Model files, settings and running model services are preserved.
@@ -31,6 +34,7 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 | Llama / llama.cpp | GGUF | Text; media requires a supported model and matching projection component |
 | Ollama | Ollama-registered models | Per-model capabilities; the Ollama service manages loaded models |
 | MLX-LM / MLX-VLM | MLX Safetensors directories | MLX-LM for text; MLX-VLM for supported multimodal models |
+| MLX Audio | Supported Qwen3-ASR / Qwen3-TTS directories | Transcription and WAV synthesis; Base models use reference audio/text |
 | LM Studio | GGUF / MLX, depending on its runtime | Models are loaded through the application or its supported CLI |
 | llama.cpp · Prism | Compatible GGUF | Options and architecture support depend on the local build |
 | Strata · Niko1221 | Prepared Flash-Next GGUF / Metal assemblies | Experimental Apple Silicon source installation on macOS 15+; matched MTP and optional images; local or external API |
@@ -53,6 +57,8 @@ Read the [illustrated user guide](docs/USER_GUIDE.md) for download management, d
 **Settings → App updates** controls daily GitHub checks and automatic installation. **ModelDock → Check for app updates…** checks immediately. Updates wait for downloads, engine operations and model preparation to finish.
 
 For Strata, compile its official Metal source build from **Engines**, download a supported Flash-Next quantization, then **Prepare model and components** before starting a service. Ordinary Qwen 27B weights or Splash DFlash drafts are not interchangeable with Strata's Flash-Next/MTP assembly. This integration was verified with an actual Metal/vision build and isolated API fixtures; full Flash-Next inference has not been tested in this release.
+
+Solutions and MLX Audio integration were verified with isolated HTTP fixtures and native application checks. Full speech-model inference has not been tested in this release.
 
 ## Build from source
 

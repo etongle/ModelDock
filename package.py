@@ -15,7 +15,7 @@ version = info['CFBundleShortVersionString']
 assert info['LSMinimumSystemVersion'] == '14.0'
 assert (app / 'Contents/Resources/PythonRuntime/bin/python3').is_file()
 assert (app / 'Contents/Resources/ThirdPartyNotices').is_dir()
-allowed = {'AppIcon.icns', 'gateway.py', 'strata.py', 'app_update.py', 'ProcessIdentity.dylib', 'PythonRuntime', 'python-runtime.json', 'ThirdPartyNotices', 'Localization', 'LICENSE', 'LICENSE-NOTICE.txt'}
+allowed = {'AppIcon.icns', 'gateway.py', 'strata.py', 'app_update.py', 'audio_server.py', 'ProcessIdentity.dylib', 'PythonRuntime', 'python-runtime.json', 'ThirdPartyNotices', 'Localization', 'LICENSE', 'LICENSE-NOTICE.txt'}
 assert {p.name for p in (app / 'Contents/Resources').iterdir()} == allowed, 'Unexpected application resources'
 assert not list(app.rglob('__pycache__')), 'Bytecode should not be embedded in distribution'
 subprocess.run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)], check=True)
@@ -41,7 +41,11 @@ Apple Silicon (M-series) Macs · macOS 14 or later.
    individual files and Release assets. Download 2 models at once by default;
    change the limit (1–8) in the sidebar or Settings → Downloads. The + button
    opens a clean import form. Task/file progress includes time remaining.
-7. Close the main window to keep downloads/monitoring running. Use the
+7. Solutions (⌘6) configures matched engines and models for transcription,
+   translation with reference-voice synthesis, coding or image Q&A. Install
+   and configure first, then start the components. Each saved solution has
+   a dedicated gateway URL, request examples and a file-based trial.
+8. Close the main window to keep downloads/monitoring running. Use the
    menu-bar icon to reopen it; clicking outside its panel dismisses it.
 
 This distribution is ad-hoc signed and is not Apple-notarized. If a trusted
