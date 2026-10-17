@@ -13,7 +13,7 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 
 *Illustrated interface. Speed figures are historical single runs on M4 Max; quantization and cache differ. Documentation screenshots use demonstration data.*
 
-**New in 0.10.0:** [Solutions](docs/USER_GUIDE.md#solutions) install and configure matched engines and models, with a dedicated gateway URL for each saved deployment.
+**New in 0.10.1:** [Solutions](docs/USER_GUIDE.md#solutions) show installation stages and completed engine steps. Model downloads open their task in Downloads & Import; the solution retains component summaries and task links.
 
 ## What you can do
 

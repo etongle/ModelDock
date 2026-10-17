@@ -140,7 +140,22 @@ enum EngineCatalog {
     }
 }
 
+struct EngineInstallProgress: Codable, Equatable, Sendable {
+    var completed: Int
+    var total: Int
+    var title: String
+    var sequence = 0
+}
+
 enum InstallExecutor {
+    static func stepCount(_ plan: EngineInstallPlan) -> Int {
+        switch plan.release.method {
+        case .brew: return plan.commands.count
+        case .python: return 4 + (plan.release.visionVersion == nil ? 0 : 2) + (plan.engine.kind == .audio ? 1 : 0)
+        case .source: return 3
+        case .archive: return 7
+        }
+    }
     static func command(_ command: InstallCommand, log: @escaping @Sendable (String) -> Void) throws -> String {
         let process = Process(); process.executableURL = URL(fileURLWithPath: command.executable); process.arguments = command.arguments
         var environment = ProcessInfo.processInfo.environment
@@ -186,12 +201,24 @@ enum InstallExecutor {
             } else if line.hasPrefix("l") || line.hasPrefix("h") { throw LaunchError.message("无法核对发行包中的链接") }
         }
     }
-    static func install(_ plan: EngineInstallPlan, root: URL, log: @escaping @Sendable (String) -> Void) async throws {
+    static func install(_ plan: EngineInstallPlan, root: URL, progress: @escaping @Sendable (EngineInstallProgress) -> Void = { _ in }, log: @escaping @Sendable (String) -> Void) async throws {
         guard plan.blockers.isEmpty, plan.engine.kind == plan.release.kind else { throw LaunchError.message(plan.blockers.joined(separator: "\n")) }
+        var completed = 0
+        let total = stepCount(plan)
+        func begin(_ title: String) { progress(.init(completed: completed, total: total, title: title, sequence: completed * 2 + 1)); log("\n\(title)…\n") }
+        func finish(_ title: String) { completed += 1; progress(.init(completed: completed, total: total, title: title, sequence: completed * 2)) }
+        func execute(_ command: InstallCommand, displayOutput: Bool = true) async throws -> String {
+            begin(command.title)
+            let output: String
+            if displayOutput { output = try await InstallExecutor.run(command, log: log) }
+            else { output = try await InstallExecutor.run(command, log: { _ in }) }
+            finish(command.title)
+            return output
+        }
         if plan.release.method == .brew {
             let expected = EngineCatalog.plan(engine: plan.engine, release: plan.release).commands
             guard !expected.isEmpty, expected.map(\.display) == plan.commands.map(\.display) else { throw LaunchError.message("安装包登记发生变化，请重新检查") }
-            for step in expected { log("\n\(step.title)…\n"); _ = try await run(step, log: log) }
+            for step in expected { _ = try await execute(step) }
             return
         }
         guard root.standardizedFileURL.path == root.resolvingSymlinksInPath().path else { throw LaunchError.message("引擎安装目录包含链接，请检查安装位置") }
@@ -206,25 +233,25 @@ enum InstallExecutor {
                   let helper = StrataRuntime.helper else { throw LaunchError.message("Strata 源码安装信息无效") }
             let target = directory.appendingPathComponent("runtime")
             let portable = python == EnginePaths.bundledPython ? Bundle.main.resourceURL.map { ["--python-runtime", $0.appendingPathComponent("PythonRuntime").path] } ?? [] : []
-            _ = try await run(.init(executable: python, arguments: ["-u", helper, "install", "--revision", revision, "--destination", target.path] + portable, title: "编译 Strata Metal"), log: log)
+            _ = try await execute(.init(executable: python, arguments: ["-u", helper, "install", "--revision", revision, "--destination", target.path] + portable, title: "编译 Strata Metal"))
             binary = target.appendingPathComponent("modeldock-strata")
         } else if plan.release.method == .python {
             guard [.mlx, .audio].contains(plan.engine.kind), let python = EnginePaths.python, EngineCatalog.validVersion(plan.release.version) else { throw LaunchError.message("MLX 安装信息无效") }
             let environment = directory.appendingPathComponent("venv")
-            _ = try await run(.init(executable: python, arguments: ["-m", "venv", environment.path], title: "创建独立环境"), log: log)
+            _ = try await execute(.init(executable: python, arguments: ["-m", "venv", environment.path], title: "创建独立环境"))
             let package = plan.engine.kind == .audio ? "mlx-audio" : "mlx-lm"
-            _ = try await run(.init(executable: environment.appendingPathComponent("bin/python3").path, arguments: ["-m", "pip", "--isolated", "install", "--disable-pip-version-check", "--index-url", "https://pypi.org/simple", "\(package)==\(plan.release.version)"], title: "安装 \(package)"), log: log)
+            _ = try await execute(.init(executable: environment.appendingPathComponent("bin/python3").path, arguments: ["-m", "pip", "--isolated", "install", "--disable-pip-version-check", "--index-url", "https://pypi.org/simple", "\(package)==\(plan.release.version)"], title: "安装 \(package)"))
             if let version = plan.release.visionVersion {
                 guard EngineCatalog.validVersion(version) else { throw LaunchError.message("MLX-VLM 版本信息无效") }
-                _ = try await run(.init(executable: environment.appendingPathComponent("bin/python3").path, arguments: ["-m", "pip", "--isolated", "install", "--disable-pip-version-check", "--index-url", "https://pypi.org/simple", "mlx-vlm==\(version)"], title: "安装 MLX-VLM"), log: log)
+                _ = try await execute(.init(executable: environment.appendingPathComponent("bin/python3").path, arguments: ["-m", "pip", "--isolated", "install", "--disable-pip-version-check", "--index-url", "https://pypi.org/simple", "mlx-vlm==\(version)"], title: "安装 MLX-VLM"))
                 let vision = environment.appendingPathComponent("bin/mlx_vlm.server")
-                _ = try await run(.init(executable: vision.path, arguments: ["--help"], title: "验证 MLX-VLM"), log: log)
+                _ = try await execute(.init(executable: vision.path, arguments: ["--help"], title: "验证 MLX-VLM"))
                 let base = root.appendingPathComponent("mlx").path + "/"
                 try publish(.init(kind: .mlx, version: version, executable: String(vision.path.dropFirst(base.count)), source: plan.release.source, installedAt: Date()), root: root, record: "vision.json")
             }
             if plan.engine.kind == .audio {
                 let interpreter = environment.appendingPathComponent("bin/python3")
-                _ = try await run(.init(executable: interpreter.path, arguments: ["-B", "-c", "from mlx_audio.stt import load; from mlx_audio.tts.utils import load_model"], title: "验证 MLX Audio"), log: log)
+                _ = try await execute(.init(executable: interpreter.path, arguments: ["-B", "-c", "from mlx_audio.stt import load; from mlx_audio.tts.utils import load_model"], title: "验证 MLX Audio"))
                 guard let helper = AudioModelPolicy.helper else { throw LaunchError.message("缺少语音服务组件") }
                 let server = environment.appendingPathComponent("audio_server.py")
                 try FileManager.default.copyItem(at: URL(fileURLWithPath: helper), to: server)
@@ -235,16 +262,17 @@ enum InstallExecutor {
             } else { binary = environment.appendingPathComponent("bin/mlx_lm.server") }
         } else {
             guard plan.engine.kind == .prism, let asset = plan.release.asset, asset.scheme == "https", asset.host == "github.com", asset.path.hasPrefix("/PrismML-Eng/llama.cpp/releases/download/"), let hash = plan.release.sha256, EngineCatalog.validHash(hash) else { throw LaunchError.message("Prism 官方发行包信息无效") }
-            log("正在下载官方发行包…\n")
+            begin("正在下载官方发行包")
             let (download, response) = try await URLSession.shared.download(from: asset)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw LaunchError.message("发行包下载失败") }
             let archive = directory.appendingPathComponent("release.tar.gz"); try FileManager.default.moveItem(at: download, to: archive)
-            let checked = try await run(.init(executable: "/usr/bin/shasum", arguments: ["-a", "256", archive.path], title: "校验发行包"), log: { _ in })
+            finish("正在下载官方发行包")
+            let checked = try await execute(.init(executable: "/usr/bin/shasum", arguments: ["-a", "256", archive.path], title: "校验发行包"), displayOutput: false)
             guard checked.components(separatedBy: .whitespaces).first?.lowercased() == hash.lowercased() else { throw LaunchError.message("发行包 SHA-256 校验失败；原版本保留") }
-            let listing = try await run(.init(executable: "/usr/bin/tar", arguments: ["-tf", archive.path], title: "检查发行包"), log: { _ in }); try validateArchive(listing)
-            let links = try await run(.init(executable: "/usr/bin/tar", arguments: ["-tvf", archive.path], title: "检查链接"), log: { _ in }); try validateLinks(links)
+            let listing = try await execute(.init(executable: "/usr/bin/tar", arguments: ["-tf", archive.path], title: "检查发行包"), displayOutput: false); try validateArchive(listing)
+            let links = try await execute(.init(executable: "/usr/bin/tar", arguments: ["-tvf", archive.path], title: "检查链接"), displayOutput: false); try validateLinks(links)
             let extracted = directory.appendingPathComponent("runtime"); try FileManager.default.createDirectory(at: extracted, withIntermediateDirectories: true)
-            _ = try await run(.init(executable: "/usr/bin/tar", arguments: ["-xf", archive.path, "-C", extracted.path], title: "解压发行包"), log: log)
+            _ = try await execute(.init(executable: "/usr/bin/tar", arguments: ["-xf", archive.path, "-C", extracted.path], title: "解压发行包"))
             let entries = FileManager.default.enumerator(at: extracted, includingPropertiesForKeys: [.isSymbolicLinkKey])!
             var found: URL?
             while let item = entries.nextObject() as? URL {
@@ -253,10 +281,11 @@ enum InstallExecutor {
             }
             guard let found else { throw LaunchError.message("发行包缺少模型服务程序") }; binary = found
         }
-        log("正在验证新引擎…\n")
-        _ = try await run(.init(executable: binary.path, arguments: [plan.engine.kind == .prism ? "--version" : "--help"], title: "验证引擎"), log: log)
+        _ = try await execute(.init(executable: binary.path, arguments: [plan.engine.kind == .prism ? "--version" : "--help"], title: "验证引擎"))
         let folder = root.appendingPathComponent(plan.engine.id).path + "/"
+        begin("登记运行组件")
         try publish(.init(kind: plan.engine.kind, version: plan.release.version, executable: String(binary.path.dropFirst(folder.count)), source: plan.release.source, installedAt: Date()), root: root)
+        finish("登记运行组件")
         log("新版本验证通过，已切换服务入口。旧版程序保留。\n")
     }
 }

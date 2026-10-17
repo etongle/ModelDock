@@ -8,6 +8,7 @@ import CryptoKit
         throw LaunchError.message("Solution fixture timed out")
     }
     static func run() async throws {
+        try SolutionProgressChecks.run()
         let root = URL(fileURLWithPath: argumentValue("--check-dir") ?? "/private/tmp/modeldock-solutions").appendingPathComponent(UUID().uuidString)
         let store = AppStore(stateDirectory: root.appendingPathComponent("state"))
         let fixture = try await EngineServiceChecks.prepare(store: store, root: root)
@@ -220,6 +221,11 @@ private final class SolutionHTTPFixture: URLProtocol, @unchecked Sendable {
         let audio = Engine(kind: .audio, name: "MLX Audio", version: "—", path: "", installed: false, canServe: false, installation: "独立语音运行环境", description: "Apple Silicon 语音识别与语音合成", defaultPort: 8096, symbol: "waveform")
         store.inventory = .init(engines: [engine, audio], models: [model], storageBytes: model.bytes, memoryBytes: 137_438_953_472, chip: "Apple Silicon", roots: [], warnings: [], scannedAt: Date())
         store.tab = .solutions; store.solutions.selectedID = "voice-translation"
+        if CommandLine.arguments.contains("--solution-progress-ui") {
+            try await SolutionProgressChecks.capture(app, folder: folder)
+            if CommandLine.arguments.contains("--capture-only") { NSApplication.shared.terminate(nil) }
+            return
+        }
         for language in [AppLanguage.english, .chinese, .french, .portuguese] {
             store.language = language
             store.solutions.section = .configuration

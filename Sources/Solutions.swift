@@ -63,6 +63,7 @@ struct SolutionDeployment: Codable, Identifiable {
     var error: String?
     var log = ""
     var processes: [SolutionProcess] = []
+    var progress: SolutionPreparationProgress?
 }
 private struct SolutionState: Codable { var drafts: [String: SolutionDraft] = [:]; var deployments: [SolutionDeployment] = [] }
 struct SolutionLocalChoice: Identifiable {
@@ -168,38 +169,54 @@ struct SolutionLocalChoice: Identifiable {
             do {
                 guard let current = deployments.first(where: { $0.id == id }) else { return }
                 var listings: [String: RemoteListing] = [:]
-                update(id) { $0.stage = "正在解析并固定模型版本…" }
-                for component in current.components where component.modelPath == nil && (component.downloadID == nil || !store.downloads.jobs.contains(where: { $0.id == component.downloadID })) {
+                let unresolved = current.components.filter { component in component.modelPath == nil && (component.downloadID == nil || !store.downloads.jobs.contains(where: { $0.id == component.downloadID })) }
+                update(id) { $0.state = .preparing; $0.stage = "正在解析并固定模型版本…"; $0.progress = .init(phase: .checking, total: unresolved.count) }
+                for component in unresolved {
+                    update(id) { $0.progress?.detail = component.repository }
                     let source = SolutionModel(repository: component.repository, revision: component.revision)
                     let listing = try await (catalogLoader ?? ModelCatalog.listing)(source.address, "")
                     guard listing.repository == component.repository && listing.revision == component.revision else { throw LaunchError.message("方案仓库版本与固定清单不一致") }
                     listings[component.id] = listing; try Task.checkCancellation()
+                    update(id) { $0.progress?.completed += 1 }
                 }
                 let root = URL(fileURLWithPath: current.draft.destination ?? store.downloads.destination).standardizedFileURL.resolvingSymlinksInPath()
                 var volume = root
                 while !FileManager.default.fileExists(atPath: volume.path) && volume.path != "/" { volume.deleteLastPathComponent() }
                 let required = listings.values.reduce(Int64(0)) { $0 + $1.files.reduce(Int64(0)) { $0 + max(0, $1.bytes) } }
                 if let free = (try? FileManager.default.attributesOfFileSystem(forPath: volume.path)[.systemFreeSize]) as? NSNumber, free.int64Value < required { throw LaunchError.message("模型库所在磁盘空间不足，请更换目录或释放空间后重试") }
-                for engineID in Set(current.components.map(\.engineID)).sorted() {
+                let engineIDs = Set(current.components.map(\.engineID)).sorted()
+                update(id) { $0.progress = .init(phase: .engines, total: engineIDs.count) }
+                for engineID in engineIDs {
                     guard store.engineEnabled(engineID), let engine = store.engines.first(where: { $0.id == engineID }) else { throw LaunchError.message("方案所需基座已禁用或无法识别") }
                     let needsVision = engineID == "mlx" && current.components.contains { $0.role == .vision }
-                    if engine.canServe && (!needsVision || engine.visionPath != nil) { continue }
+                    if engine.canServe && (!needsVision || engine.visionPath != nil) { update(id) { $0.progress?.completed += 1 }; continue }
                     guard !store.installation.running, !store.maintaining else { throw LaunchError.message("请等待当前引擎操作完成后重试") }
-                    update(id) { $0.state = .installing; $0.stage = "正在安装 " + engine.name }
+                    update(id) { $0.state = .installing; $0.stage = "正在安装 " + engine.name; $0.progress?.engineID = engine.id; $0.progress?.detail = "正在检查引擎版本…"; $0.progress?.engineStep = nil }
                     store.installation.running = true; store.installation.activeEngineID = engine.id
                     defer { store.installation.running = false; store.installation.activeEngineID = nil }
                     let release = try await (releaseLoader ?? EngineCatalog.release)(engine.kind)
                     let plan = EngineCatalog.plan(engine: engine, release: release)
                     if let installEngine { try await installEngine(engine, release) }
                     else {
-                        try await InstallExecutor.install(plan, root: store.installation.root) { [weak self] text in
+                        try await InstallExecutor.install(plan, root: store.installation.root, progress: { [weak self] value in
+                            Task { @MainActor in
+                                self?.update(id) { record in
+                                    guard record.state == .installing, record.progress?.engineID == engine.id,
+                                          value.sequence >= (record.progress?.engineStep?.sequence ?? 0) else { return }
+                                    record.progress?.engineStep = value
+                                    record.progress?.detail = value.title
+                                }
+                            }
+                        }) { [weak self] text in
                             Task { @MainActor in self?.update(id) { $0.log = String(($0.log + text).suffix(30000)) } }
                         }
                         let refreshed = Scanner.engines()
                         if store.inventory != nil { store.inventory?.engines = refreshed }
                     }
                     try Task.checkCancellation()
+                    update(id) { $0.progress?.completed += 1 }
                 }
+                update(id) { $0.progress = .init(phase: .models) }
                 for component in current.components {
                     if let path = component.modelPath {
                         guard FileManager.default.fileExists(atPath: path) else { throw LaunchError.message("复用的模型文件已移动，请重新选择") }; continue
@@ -223,6 +240,7 @@ struct SolutionLocalChoice: Identifiable {
                 }
                 update(id) { $0.state = .downloading; $0.stage = "正在下载并校验配套文件" }
                 reconcile(store: store)
+                showDownloads(id, store: store, automatically: true)
             } catch is CancellationError { update(id) { $0.state = .paused; $0.stage = "已暂停，可继续安装" } }
             catch { update(id) { $0.state = .failed; $0.error = error.localizedDescription; $0.stage = "安装未完成，可重试" } }
         }
@@ -241,15 +259,17 @@ struct SolutionLocalChoice: Identifiable {
                 guard let self, let store else { return }
                 defer { completing.remove(deployment.id) }
                 do {
+                    update(deployment.id) { $0.stage = "正在配置方案服务…"; $0.progress = .init(phase: .configuration, total: $0.components.count) }
                     try configure(deployment.id, store: store)
-                    update(deployment.id) { $0.state = .configured; $0.stage = "安装完成，服务尚未启动"; $0.error = nil }
+                    update(deployment.id) { $0.state = .configured; $0.stage = "安装完成，服务尚未启动"; $0.error = nil; $0.progress?.completed = $0.components.count }
                 } catch { update(deployment.id) { $0.state = .failed; $0.error = error.localizedDescription; $0.stage = "文件或服务配置需要处理" } }
             }
         }
     }
     private func configure(_ id: String, store: AppStore) throws {
         guard let deployment = deployments.first(where: { $0.id == id }) else { return }
-        for component in deployment.components {
+        for (offset, component) in deployment.components.enumerated() {
+            update(id) { $0.progress?.completed = offset; $0.progress?.detail = component.role.rawValue }
             if let existing = component.serviceID, store.services.records.contains(where: { $0.id == existing }) { continue }
             guard let engine = store.engines.first(where: { $0.id == component.engineID }), engine.canServe, store.engineEnabled(engine.id) else { throw LaunchError.message("基座尚未安装完成或已禁用") }
             let model: LocalModel
@@ -284,6 +304,16 @@ struct SolutionLocalChoice: Identifiable {
     }
     func services(_ deployment: SolutionDeployment, store: AppStore) -> [ServiceSpec] {
         let ids = Set(deployment.components.compactMap(\.serviceID)); return store.services.records.filter { ids.contains($0.id) }
+    }
+    func showDownloads(_ id: String, store: AppStore, automatically: Bool = false) {
+        guard let record = deployments.first(where: { $0.id == id }) else { return }
+        // Background preparation must not pull the user away from another workspace.
+        if automatically && (store.tab != .solutions || selectedID != record.solutionID || draft != record.draft) { return }
+        let identifiers = Set(record.components.compactMap(\.downloadID))
+        let tasks = store.downloads.jobs.filter { identifiers.contains($0.id) }
+        if automatically && !tasks.contains(where: { $0.state != .complete }) { return }
+        guard let task = tasks.first(where: { store.downloads.isActive($0.id) }) ?? tasks.first(where: { $0.state != .complete }) ?? tasks.first else { return }
+        store.downloads.showTask(task.id); store.tab = .downloads
     }
     func start(_ id: String, store: AppStore) {
         guard let deployment = deployments.first(where: { $0.id == id && $0.state == .configured }) else { return }

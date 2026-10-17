@@ -68,10 +68,13 @@ import AppKit
     }
     private func status(_ id: String) -> String {
         guard let record = controller.deployments.last(where: { $0.solutionID == id }) else { return "待安装" }
+        let progress = store.solutionProgress(record)
+        if progress.phase == .models, progress.fraction != nil { return L10n.text(record.stage) + " · " + progress.percentage }
         return record.stage
     }
     private var configuration: some View {
         VStack(alignment: .leading, spacing: 16) {
+            if let record = controller.latest, record.draft == controller.draft { deploymentProgress(record) }
             HStack {
                 Text(verbatim: L10n.text("配套模型与引擎")).font(.system(size: TypeScale.section, weight: .semibold))
                 Spacer()
@@ -111,7 +114,7 @@ import AppKit
                     Button(L10n.text("全局引擎设置")) { store.showGlobalEngines = true }.buttonStyle(PlainAction())
                 }.padding(.top, 10)
             }.font(.system(size: TypeScale.body)).padding(.vertical, 4)
-            if let deployment = controller.latest { deploymentProgress(deployment); SolutionGatewayCard(store: store, gateway: store.gateway, deployment: deployment) }
+            if let deployment = controller.latest, deployment.state == .configured { SolutionGatewayCard(store: store, gateway: store.gateway, deployment: deployment) }
         }
     }
     private func componentRow(_ role: SolutionRole) -> some View {
@@ -120,6 +123,7 @@ import AppKit
         let deployed = controller.latest?.draft == controller.draft ? controller.latest?.components.first { $0.role == role } : nil
         let job = deployed?.downloadID.flatMap { id in store.downloads.jobs.first { $0.id == id } }
         let inspect = local ?? deployed?.modelID.flatMap { id in store.models.first { $0.id == id } }
+        let installingEngine = controller.latest?.state == .installing && controller.latest?.progress?.engineID == selection?.engineID
         return VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 12) {
                 Image(systemName: [.asr, .tts].contains(role) ? "waveform" : role == .vision ? "photo" : "cube").font(.system(size: 20)).foregroundStyle(Theme.muted).frame(width: 40, height: 40).background(Theme.line, in: RoundedRectangle(cornerRadius: 9))
@@ -130,7 +134,7 @@ import AppKit
                     Text(verbatim: store.engines.first { $0.id == selection?.engineID }?.name ?? "—").font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
                 }
                 Spacer(minLength: 6)
-                Text(verbatim: L10n.text(job?.state.rawValue ?? (local == nil ? "待下载" : "可复用"))).font(.system(size: TypeScale.callout)).foregroundStyle(local == nil ? Theme.muted : Theme.successText)
+                Text(verbatim: L10n.text(installingEngine ? "正在安装引擎" : job?.state.rawValue ?? (local == nil ? "待下载" : "可复用"))).font(.system(size: TypeScale.callout)).foregroundStyle(local == nil ? Theme.muted : Theme.successText)
                 Menu(L10n.text("更换")) {
                     Button(L10n.text("自动选择并复用")) { choose(role, value: nil) }
                     Button(L10n.text("下载方案默认模型")) { choose(role, value: "download") }
@@ -140,9 +144,11 @@ import AppKit
                 }.menuStyle(.borderlessButton).fixedSize().disabled(controller.preparingID != nil).accessibilityIdentifier("solution-model-" + role.rawValue)
             }
             if let job {
-                ProgressView(value: Double(job.received), total: Double(max(1, job.total))).tint(Theme.accent)
+                if job.totalKnown && job.total > 0 { ProgressView(value: Double(min(job.received, job.total)), total: Double(job.total)).tint(Theme.accent) }
+                else if job.state == .downloading { ProgressView().progressViewStyle(.linear).tint(Theme.accent) }
                 HStack {
-                    Text(verbatim: sizeLabel(job.received) + " / " + sizeLabel(job.total) + " · " + store.downloads.speedLabel(job.id) + " · " + store.downloads.remainingTimeLabel(job)).foregroundStyle(Theme.muted)
+                    Text(verbatim: L10n.text(job.percentageLabel)).monospacedDigit()
+                    Text(verbatim: sizeLabel(job.received) + " / " + (job.totalKnown ? sizeLabel(job.total) : L10n.text("大小待确认"))).foregroundStyle(Theme.muted)
                     Spacer()
                     Button(L10n.text("查看下载")) { store.downloads.showTask(job.id); store.tab = .downloads }.buttonStyle(PlainAction())
                 }.font(.system(size: TypeScale.callout))
@@ -152,32 +158,24 @@ import AppKit
     }
     private func choose(_ role: SolutionRole, value: String?) { var draft = controller.draft; draft.localChoices[role.rawValue] = value; controller.setDraft(draft) }
     private func deploymentProgress(_ record: SolutionDeployment) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                if [.preparing, .installing].contains(record.state) { ProgressView().controlSize(.small) }
-                Text(verbatim: L10n.text(record.stage)).font(.system(size: TypeScale.body, weight: .medium))
-                Spacer()
-                if record.state == .downloading || record.state == .preparing { Button(L10n.text("暂停")) { controller.pause(record.id, store: store) }.buttonStyle(.bordered) }
-            }
-            if let error = record.error { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
-            if !record.log.isEmpty { DisclosureGroup(L10n.text("安装日志")) { Text(verbatim: record.log).font(.system(size: TypeScale.caption, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) } }
-        }.padding(.vertical, 4)
+        SolutionInstallationCard(store: store, controller: controller, record: record)
     }
     private var actionBar: some View {
         let record = controller.latest
         let configured = record?.state == .configured && record?.draft == controller.draft
+        let installing = record?.draft == controller.draft && record.map { [.preparing, .installing, .downloading].contains($0.state) } == true
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(verbatim: L10n.text(configured ? "安装完成，按需启动组件" : "安装缺少的组件并创建服务配置")).font(.system(size: TypeScale.body, weight: .medium))
-                    Text(verbatim: L10n.text("复用本地模型与可恢复任务，保留正在运行的实例。"))
+                    Text(verbatim: L10n.text(installing ? record!.stage : configured ? "安装完成，按需启动组件" : "安装缺少的组件并创建服务配置")).font(.system(size: TypeScale.body, weight: .medium)).lineLimit(2)
+                    Text(verbatim: installing ? store.solutionProgress(record!).metric + " · " + store.solutionProgress(record!).percentage : L10n.text("复用本地模型与可恢复任务，保留正在运行的实例。"))
                         .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 }
                 Spacer()
                 if configured, let record {
                     Button { controller.start(record.id, store: store) } label: { Label(L10n.text("启动方案"), systemImage: "play.fill") }.buttonStyle(AccentButton()).disabled(controller.services(record, store: store).allSatisfy { $0.pid != nil })
                 } else {
-                    Button { controller.install(store: store) } label: { Label(L10n.text(record?.draft == controller.draft && (record.map { [.paused, .failed].contains($0.state) } ?? false) ? "继续安装" : "一键安装并配置"), systemImage: "arrow.down.circle") }.buttonStyle(AccentButton()).disabled(store.scanning || controller.preparingID != nil || (record?.draft == controller.draft && record?.state == .downloading)).accessibilityIdentifier("install-solution")
+                    Button { controller.install(store: store) } label: { Label(L10n.text(installing ? "安装进行中" : record?.draft == controller.draft && (record.map { [.paused, .failed].contains($0.state) } ?? false) ? "继续安装" : "一键安装并配置"), systemImage: "arrow.down.circle") }.buttonStyle(AccentButton()).disabled(store.scanning || controller.preparingID != nil || (record?.draft == controller.draft && record?.state == .downloading)).accessibilityIdentifier("install-solution")
                 }
             }
             if configured { Button(L10n.text("查看实例与试用")) { controller.section = .instances }.buttonStyle(PlainAction()) }
