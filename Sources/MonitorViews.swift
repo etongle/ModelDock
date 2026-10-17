@@ -132,11 +132,17 @@ struct MonitorWorkspace: View {
                     Text(verbatim: L10n.text("\(latest.chip) · 输出上限 \(latest.requestedTokens) tokens · 缓存输入 \(latest.cachedTokens.map(String.init) ?? "—") tokens")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
                 } else { Text(verbatim: L10n.text("暂无实测数据。测量后会在这里显示结果，并保存历史。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
                 if !performance.records.isEmpty {
-                    Text(verbatim: L10n.text("实测历史")).font(.system(size: TypeScale.section, weight: .semibold))
+                    HStack {
+                        Text(verbatim: L10n.text("实测历史")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer()
+                        let orphans = store.orphanedBenchmarks.count
+                        if orphans > 0 { Button { store.removeOrphanedBenchmarks() } label: { Label(L10n.text("清理已删除模型的记录（\(orphans)）"), systemImage: "trash") }.buttonStyle(PlainAction()) }
+                    }
                     ForEach(Array(performance.records.prefix(12))) { result in
-                        HStack(spacing: 20) { VStack(alignment: .leading, spacing: 7) { Text(result.target.modelName).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1); Text(verbatim: L10n.text("\(result.target.engineName) \(result.target.engineVersion) · \(result.requestedTokens) tokens · \(result.date.formatted(date: .abbreviated, time: .shortened))")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }.frame(maxWidth: .infinity, alignment: .leading); VStack(alignment: .trailing, spacing: 5) { Text(verbatim: L10n.text(rateLabel(result.measuredRate))).font(.system(size: TypeScale.body, weight: .medium)).monospacedDigit(); Text(verbatim: L10n.text(result.speedTitle)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }; Text(verbatim: L10n.text(secondsLabel(result.firstOutput))).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).frame(width: 90, alignment: .trailing) }.padding(16).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10)).help(L10n.text(result.chip))
+                        HStack(spacing: 20) { VStack(alignment: .leading, spacing: 7) { Text(result.target.modelName).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1); Text(verbatim: L10n.text("\(result.target.engineName) \(result.target.engineVersion) · \(result.requestedTokens) tokens · \(result.date.formatted(date: .abbreviated, time: .shortened))")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }.frame(maxWidth: .infinity, alignment: .leading); VStack(alignment: .trailing, spacing: 5) { Text(verbatim: L10n.text(rateLabel(result.measuredRate))).font(.system(size: TypeScale.body, weight: .medium)).monospacedDigit(); Text(verbatim: L10n.text(result.speedTitle)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }; Text(verbatim: L10n.text(secondsLabel(result.firstOutput))).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).frame(width: 90, alignment: .trailing); Button { store.removeBenchmark(result) } label: { Image(systemName: "trash") }.buttonStyle(PlainAction()).help(L10n.text("删除这条记录")).accessibilityLabel(L10n.text("删除这条记录")).disabled(performance.running) }.padding(16).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10)).help(L10n.text(result.chip))
                     }
                 }
+                Divider()
+                GatewayRequestsView(store: store)
             }.padding(30)
         }
     }

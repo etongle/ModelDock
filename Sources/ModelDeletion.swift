@@ -114,11 +114,15 @@ extension AppStore {
             defer { modelFiles.deletingID = nil }
             do {
                 await services.refresh()
+                var cleanup = RemovalCleanup()
+                // 确认弹窗附加的清理清单：服务配置与 pi/OpenCode 登记随模型一起移除。
+                func cleanupNote() -> String { cleanup.summary.isEmpty ? "" : "\n\n" + L10n.text("同时移除：") + "\n" + cleanup.summary }
                 if model.format == "Ollama" {
                     let target = try await OllamaModelManagement.target(model, services: services)
                     try await OllamaModelManagement.ensureUnloaded(target, services: services)
+                    cleanup = removalCleanup(model: model, removedPath: model.path)
                     let alert = NSAlert(); alert.messageText = L10n.text("从 Ollama 删除 \(model.name)？")
-                    alert.informativeText = L10n.text("仅处理此模型，由 Ollama 管理登记文件和层文件。其他模型及其共享层保留。\n此操作不会移至废纸篓；恢复需要重新下载或导入。")
+                    alert.informativeText = L10n.text("仅处理此模型，由 Ollama 管理登记文件和层文件。其他模型及其共享层保留。\n此操作不会移至废纸篓；恢复需要重新下载或导入。") + cleanupNote()
                     alert.alertStyle = .warning; alert.addButton(withTitle: L10n.text("删除模型")); alert.addButton(withTitle: L10n.text("取消")); alert.buttons[1].keyEquivalent = "\r"; alert.buttons[0].keyEquivalent = ""
                     guard alert.runModal() == .alertFirstButtonReturn else { return }
                     await services.refresh(); try await OllamaModelManagement.delete(target, services: services)
@@ -132,8 +136,9 @@ extension AppStore {
                     }
                     try checkUse()
                     guard let identity = FileIdentity.read(path.path) else { throw LaunchError.message("模型文件已移动或删除，请重新扫描") }
+                    cleanup = removalCleanup(model: model, removedPath: path.path)
                     let alert = NSAlert(); alert.messageText = L10n.text("将 \(model.name) 移至废纸篓？")
-                    alert.informativeText = L10n.text("\(path.path)\n\n其他模型及共享的配套文件保留。可以从废纸篓恢复。服务配置会保留。")
+                    alert.informativeText = L10n.text("\(path.path)\n\n其他模型及共享的配套文件保留。可以从废纸篓恢复。") + cleanupNote()
                     alert.alertStyle = .warning; alert.addButton(withTitle: L10n.text("移至废纸篓")); alert.addButton(withTitle: L10n.text("取消")); alert.buttons[1].keyEquivalent = "\r"; alert.buttons[0].keyEquivalent = ""
                     guard alert.runModal() == .alertFirstButtonReturn else { return }
                     await services.refresh()
@@ -141,6 +146,9 @@ extension AppStore {
                     try checkUse()
                     _ = try await Task.detached { try FileManager.default.trashItem(at: path, resultingItemURL: nil) }.value
                 }
+                // 模型已删除；残留清理失败只提示，不影响删除结果。
+                let failures = applyRemovalCleanup(cleanup)
+                if !failures.isEmpty { message = L10n.text("模型已删除，部分相关配置未能移除：") + failures.joined(separator: "；") }
                 scan()
             } catch { message = error.localizedDescription }
         }

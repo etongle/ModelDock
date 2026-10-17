@@ -25,7 +25,7 @@ struct CommandLaunchView: View {
                             Text(command.modelName).font(.system(size: TypeScale.body, weight: .medium)).textSelection(.enabled)
                             Text(verbatim: L10n.text("端口 \(command.port) · 上下文 \(command.context) · \(command.mode.title)")).font(.system(size: TypeScale.body))
                             if command.downloadsModel { Text(verbatim: L10n.text("Splash 会验证模型，必要时下载目标权重、草稿和视觉组件。第一次启动可能较久，可在模型服务中查看准备日志。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
-                            DisclosureGroup("实际启动参数") { Text(verbatim: L10n.text(([command.plan.executable] + command.plan.arguments).map(ServiceCommand.quote).joined(separator: " "))).font(.system(size: TypeScale.caption, design: .monospaced)).textSelection(.enabled).padding(.top, 8) }
+                            DisclosureGroup("实际启动参数") { Text(verbatim: L10n.text(([command.plan.executable] + command.plan.arguments).map(ServiceCommand.quote).joined(separator: " "))).font(.system(size: TypeScale.caption, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8) }
                         }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Theme.selection, in: RoundedRectangle(cornerRadius: 12))
                     case .failure: EmptyView()
                     }

@@ -47,6 +47,16 @@ enum DocumentationScreens {
                 try await Task.sleep(nanoseconds: 450_000_000)
                 try app.capture(language.rawValue + "-" + [AppTab.engines: "engines", .models: "models", .services: "services", .downloads: "downloads", .monitor: "resources"][tab]!, folder: folder)
             }
+            // 试聊弹窗：演示消息，不发起真实请求。
+            store.tab = .services
+            var chatTarget = ConnectionTarget(id: "demo-chat", engineName: "MLX", engineID: "mlx", model: "mlx-community/Qwen3.8-27B-4bit", port: 8083, pid: 1, birth: 1, context: 32768)
+            chatTarget.capabilities = ModelCapabilities(inputs: ["text", "image"])
+            let chat = ChatSession(targets: [chatTarget])
+            chat.messages = [.init(role: "user", text: language == .chinese ? "用一句话介绍你自己。" : "Introduce yourself in one sentence."),
+                .init(role: "assistant", text: language == .chinese ? "我是运行在你 Mac 本地的 **Qwen3.8 27B** 模型，可以离线回答问题、写代码和分析图片。" : "I am **Qwen3.8 27B**, running locally on your Mac to answer questions, write code and read images offline.", reasoning: "The user wants a short self-introduction.", stats: L10n.text("首字 0.38 秒") + " · 31.6 tok/s · 42 tokens")]
+            store.chat = chat
+            try await Task.sleep(nanoseconds: 600_000_000); try app.capture(language.rawValue + "-chat-preview", folder: folder)
+            store.chat = nil; try await Task.sleep(nanoseconds: 400_000_000)
             store.tab = .downloads; store.downloads.selectedTaskID = job.id
             try await Task.sleep(nanoseconds: 350_000_000); try app.capture(language.rawValue + "-download-files", folder: folder)
             app.showSettings(); try await Task.sleep(nanoseconds: 300_000_000)

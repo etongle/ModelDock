@@ -7,6 +7,16 @@ struct ConnectionEntry: View {
     var port: Int
     var available: Bool { store.connectionTargets.contains { $0.port == port } }
     var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+        card
+        let stale = store.staleRegistrations.registrations.count
+        if stale > 0 {
+            Button { store.removeStaleRegistrations() } label: { Label(L10n.text("清理 \(stale) 个失效的接入登记"), systemImage: "trash") }
+                .buttonStyle(PlainAction()).help(L10n.text("这些 pi/OpenCode 登记对应的模型或服务配置已被删除，已无法使用"))
+        }
+        }.task(id: port) { store.refreshStaleRegistrations() }
+    }
+    var card: some View {
         HStack(spacing: 16) {
             Image(systemName: "arrow.up.forward.app").font(.system(size: 23)).foregroundStyle(Theme.linkColor)
                 .frame(width: 48, height: 48).background(Theme.selection, in: RoundedRectangle(cornerRadius: 12))

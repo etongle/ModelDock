@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Loopback OpenAI gateway. Model payloads are forwarded, never logged."""
+"""OpenAI gateway (loopback by default, LAN when enabled). Model payloads are forwarded, never logged;
+only request metadata (time, model alias, path, status, duration, token counts) is recorded."""
 import argparse
 import ctypes
 import hmac
@@ -19,6 +20,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--config', required=True)
 parser.add_argument('--identity-lib', required=True)
 parser.add_argument('--port', required=True, type=int)
+parser.add_argument('--host', default='127.0.0.1', choices=['127.0.0.1', '0.0.0.0'])
 args = parser.parse_args()
 identity = ctypes.CDLL(args.identity_lib)
 identity.mm_process_start_time.argtypes = [ctypes.c_int]
@@ -35,6 +37,72 @@ slots = threading.BoundedSemaphore(16)
 stats_lock = threading.Lock()
 stats = {'requests': 0, 'active': 0, 'failed': 0, 'total_ms': 0.0}
 started = time.time()
+state_dir = os.path.dirname(os.path.abspath(args.config))
+log_path = os.path.join(state_dir, 'requests.jsonl')
+activity_path = os.path.join(state_dir, 'activity.json')
+wake_dir = os.path.join(state_dir, 'wake')
+log_lock = threading.Lock()
+activity = {}
+usage_pattern = {key: re.compile(rb'"' + key.encode() + rb'"\s*:\s*(\d+)') for key in ['prompt_tokens', 'completion_tokens']}
+
+def record(alias, path, status, began, client, tail=b''):
+    # Metadata only: the request and response bodies are never written.
+    entry = {'time': time.time(), 'model': alias, 'path': path, 'status': status,
+             'ms': round((time.monotonic() - began) * 1000), 'client': client}
+    for key, pattern in usage_pattern.items():
+        found = pattern.findall(tail)
+        if found:
+            entry[key] = int(found[-1])
+    line = (json.dumps(entry, ensure_ascii=False) + '\n').encode('utf-8')
+    with log_lock:
+        try:
+            if os.path.exists(log_path) and os.path.getsize(log_path) > 4 * 1024 * 1024:
+                with open(log_path, 'rb') as file:
+                    file.seek(-2 * 1024 * 1024, os.SEEK_END); kept = file.read()
+                kept = kept[kept.find(b'\n') + 1:]
+                with open(log_path + '.tmp', 'wb') as file:
+                    file.write(kept)
+                os.replace(log_path + '.tmp', log_path)
+            with open(log_path, 'ab') as file:
+                file.write(line)
+        except OSError:
+            pass
+
+def touch(source):
+    # Last request time per backend service, read by the app for idle shutdown.
+    if not source:
+        return
+    with log_lock:
+        activity[source] = time.time()
+        try:
+            with open(activity_path + '.tmp', 'w', encoding='utf-8') as file:
+                json.dump(activity, file)
+            os.replace(activity_path + '.tmp', activity_path)
+        except OSError:
+            pass
+
+def wake(alias):
+    # Ask the app to start a service stopped for idleness, then wait until its route is live again.
+    config = configuration()
+    route = next((r for r in config['routes'] if r['alias'] == alias), None)
+    if not route or not route.get('sleeping'):
+        return route
+    name = re.sub(r'[^A-Za-z0-9_-]', '_', route.get('sourceID', ''))[:128]
+    try:
+        os.makedirs(wake_dir, exist_ok=True)
+        with open(os.path.join(wake_dir, name), 'w', encoding='utf-8') as file:
+            file.write(str(time.time()))
+    except OSError:
+        return None
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        time.sleep(1)
+        config = configuration()
+        route = next((r for r in config['routes'] if r['alias'] == alias), None)
+        if route and not route.get('sleeping') and pinned(route):
+            return route
+    return None
+
 allowed = {'/v1/chat/completions', '/v1/completions', '/v1/embeddings', '/v1/responses',
            '/v1/audio/transcriptions', '/v1/audio/translations', '/v1/audio/speech',
            '/v1/images/generations', '/v1/images/edits'}
@@ -118,9 +186,6 @@ class Gateway(BaseHTTPRequestHandler):
         self.wfile.write(data)
         self.close_connection = True
 
-    def error(self, code, message, kind='gateway_error'):
-        self.json_response(code, {'error': {'message': message, 'type': kind, 'code': kind}})
-
     def authenticated(self, config):
         key = self.headers.get('Authorization', '')
         expected = 'Bearer ' + config['apiKey']
@@ -140,7 +205,7 @@ class Gateway(BaseHTTPRequestHandler):
                     value = dict(stats)
                 value['uptime'] = time.time() - started
                 self.json_response(200, value); return
-            routes = [r for r in config['routes'] if r.get('enabled', True) and pinned(r)]
+            routes = [r for r in config['routes'] if r.get('enabled', True) and (r.get('sleeping') or pinned(r))]
             def model(route):
                 return {'id': route['alias'], 'object': 'model', 'created': int(started),
                         'owned_by': 'model-manager', 'name': route['name'],
@@ -160,8 +225,14 @@ class Gateway(BaseHTTPRequestHandler):
         except Exception:
             self.error(503, '网关配置或服务暂不可用。')
 
+    def error(self, code, message, kind='gateway_error'):
+        self.status_code = code
+        self.json_response(code, {'error': {'message': message, 'type': kind, 'code': kind}})
+
     def do_POST(self):
         acquired, upstream, began, headers_sent = False, None, time.monotonic(), False
+        self.status_code, alias, tail, source = 0, None, b'', None
+        client = 'local' if self.client_address[0] in ('127.0.0.1', '::1') else 'lan'
         try:
             self.connection.settimeout(30)
             config = configuration()
@@ -208,6 +279,12 @@ class Gateway(BaseHTTPRequestHandler):
             route = next((r for r in config['routes'] if r['alias'] == alias and r.get('enabled', True)), None)
             if not route:
                 self.error(404, '模型未注册到网关。', 'model_not_found'); return
+            if route.get('sleeping'):
+                route = wake(alias)
+                if not route:
+                    self.error(503, '模型服务因空闲已停止，唤醒超时或未能启动，请查看模型服务。', 'backend_unavailable'); return
+            source = route.get('sourceID')
+            touch(source)
             if not pinned(route):
                 self.error(503, '原模型服务已停止或端口归属已改变。', 'backend_unavailable'); return
             if not needed.issubset(set(route['inputs'])):
@@ -231,6 +308,7 @@ class Gateway(BaseHTTPRequestHandler):
                 upstream = opener.open(request, timeout=300)
             except urllib.error.HTTPError as error:
                 upstream = error
+            self.status_code = upstream.status
             self.send_response(upstream.status)
             for name in ['Content-Type', 'Retry-After', 'X-Request-ID']:
                 if upstream.headers.get(name):
@@ -245,6 +323,7 @@ class Gateway(BaseHTTPRequestHandler):
                     break
                 self.wfile.write(format(len(chunk), 'x').encode() + b'\r\n' + chunk + b'\r\n')
                 self.wfile.flush()
+                tail = (tail + chunk)[-65536:]
             self.wfile.write(b'0\r\n\r\n'); self.wfile.flush()
             self.close_connection = True
             if upstream.status >= 400:
@@ -266,8 +345,10 @@ class Gateway(BaseHTTPRequestHandler):
                 with stats_lock:
                     stats['active'] -= 1; stats['total_ms'] += (time.monotonic() - began) * 1000
                 slots.release()
+            touch(source)
+            record(alias, urllib.parse.urlsplit(self.path).path, self.status_code or 502, began, client, tail)
 
-server = ThreadingHTTPServer(('127.0.0.1', args.port), Gateway)
+server = ThreadingHTTPServer((args.host, args.port), Gateway)
 server.daemon_threads = True
 signal.signal(signal.SIGTERM, lambda *_: threading.Thread(target=server.shutdown, daemon=True).start())
 server.serve_forever(poll_interval=0.2)

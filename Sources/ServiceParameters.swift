@@ -176,7 +176,10 @@ struct ServiceParametersView: View {
         let status = services.status(spec)
         let kind = engine?.kind
         VStack(alignment: .leading, spacing: 14) {
-            Text(verbatim: L10n.text("服务参数")).font(.system(size: TypeScale.body, weight: .semibold))
+            HStack {
+                Text(verbatim: L10n.text("服务参数")).font(.system(size: TypeScale.body, weight: .semibold)); Spacer()
+                if spec.commandText == nil, let engine, engine.kind != .lmstudio { ServicePresetMenu(store: store, engine: engine, draft: draft).disabled(busy) }
+            }
             if spec.commandText != nil {
                 // Command-launched services keep the user's full command as the single source of truth.
                 Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 10) {
@@ -199,6 +202,9 @@ struct ServiceParametersView: View {
                         GridRow { Text(verbatim: L10n.text("常驻模型")); Stepper("最多常驻 \(draft.maximumLoadedModels) 个模型", value: $draft.maximumLoadedModels, in: 1...16) }
                     }
                 }.font(.system(size: TypeScale.body))
+                if let kind, [.llama, .prism, .mlx, .splash].contains(kind), let model = store.models.first(where: { $0.id == spec.modelID }) {
+                    MemoryEstimateView(store: store, model: model, context: draft.context, reclaimable: spec.pid == nil ? 0 : MemoryEstimate.make(model: model, context: spec.context)?.total ?? 0)
+                }
                 if let kind, ServiceExtraArguments.supported(kind) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(verbatim: L10n.text("附加启动参数")).font(.system(size: TypeScale.body))
@@ -224,6 +230,8 @@ struct ServiceParametersView: View {
                 if let notice = draft.notice { Text(verbatim: L10n.text(notice)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
                 if let error = draft.error { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
             }
+            Divider()
+            ServiceBehaviorView(store: store, services: services, spec: spec)
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Theme.selection.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
         .onChange(of: ServiceParameters(spec)) { _, _ in if store.relaunchingServiceID != spec.id { draft.reset(spec) } }

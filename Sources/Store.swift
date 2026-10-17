@@ -57,6 +57,16 @@ final class AppStore: ObservableObject {
     @Published var serviceEngineFilter = ""
     @Published var preparingInstall = false
     @Published var relaunchingServiceID: String?
+    @Published var chat: ChatSession?
+    @Published var servicePresets: [ServicePreset] = []
+    let modelSearch = ModelSearchController()
+    let loginItem = LoginItemController()
+    /// 由应用启动流程设置；首次扫描完成后启动标记为“随 App 启动”的服务。
+    var autoStartOnLaunch = false
+    var idleTimer: Timer?
+    /// 服务最近一次 CPU 明显占用的时间，用于空闲判断。
+    var idleBusy: [String: Double] = [:]
+    @Published var staleRegistrations = ClientRegistrationCleanup.Plan()
     @Published var maintenanceEngineID: String?
     @Published var unloadingModel: String?
     @Published var message: String?
@@ -245,6 +255,7 @@ final class AppStore: ObservableObject {
             await services.refresh()
             captureServiceComponents()
             synchronizeGateway()
+            if firstScan && autoStartOnLaunch { autoStartOnLaunch = false; autoStartServices() }
             if scanAgain { scanAgain = false; scan() }
         }
     }
@@ -283,7 +294,8 @@ final class AppStore: ObservableObject {
         do { let spec = try services.start(engine: engine, model: selectedModel, port: selectedPort, context: context, maximumLoadedModels: maximumLoadedModels, inputMode: inputMode, projectorPath: projectorPath); selectedServiceID = spec.id }
         catch { message = error.localizedDescription }
     }
-    func stop(_ spec: ServiceSpec) { do { try services.stop(spec) } catch { message = error.localizedDescription } }
+    // 手动停止的服务不再由网关唤醒。
+    func stop(_ spec: ServiceSpec) { do { try services.stop(spec); services.updateBehavior(spec.id, sleeping: false) } catch { message = error.localizedDescription } }
     func showService(_ spec: ServiceSpec) { gatewaySelected = false; if !serviceEngineFilter.isEmpty && serviceEngineFilter != spec.engineID { serviceEngineFilter = "" }; selectedServiceID = spec.id; selectedExternal = nil; tab = .services }
     func configureService(_ spec: ServiceSpec) {
         if let command = spec.commandText, let engine = engines.first(where: { $0.id == spec.engineID }) { prepareCommand(engine: engine, text: command); return }
@@ -299,13 +311,14 @@ final class AppStore: ObservableObject {
     @Published var serviceRemoval: ServiceSpec?
     func removeServiceConfiguration(_ spec: ServiceSpec) {
         let index = services.records.firstIndex { $0.id == spec.id } ?? 0
-        do {
-            try services.removeConfiguration(spec)
-            if selectedServiceID == spec.id {
-                selectedServiceID = services.records.isEmpty ? nil : services.records[min(index, services.records.count - 1)].id
-            }
-            selectVisibleService()
-        } catch { message = error.localizedDescription }
+        // 连同该服务在 pi/OpenCode 中的接入登记一起移除，避免客户端里留下无法使用的模型。
+        let failures = applyRemovalCleanup(removalCleanup(service: spec))
+        if services.records.contains(where: { $0.id == spec.id }) { message = failures.joined(separator: "；"); return }
+        if selectedServiceID == spec.id {
+            selectedServiceID = services.records.isEmpty ? nil : services.records[min(index, services.records.count - 1)].id
+        }
+        selectVisibleService()
+        if !failures.isEmpty { message = L10n.text("服务配置已删除，部分相关配置未能移除：") + failures.joined(separator: "；") }
     }
     func copy(_ value: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(value, forType: .string) }
     func reveal(_ path: String) { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
@@ -400,10 +413,11 @@ final class AppStore: ObservableObject {
                     try await Task.detached { try FileManager.default.trashItem(at: URL(fileURLWithPath: item.path), resultingItemURL: nil) }.value
                 }
                 if removeConfigurations && plan.mode == .uninstall {
-                    for spec in services.records.filter({ $0.engineID == plan.engine.id }) {
-                        try services.removeConfiguration(spec)
-                        if UUID(uuidString: spec.id) != nil, FileManager.default.fileExists(atPath: services.logURL(spec.id).path) { try FileManager.default.trashItem(at: services.logURL(spec.id), resultingItemURL: nil) }
-                    }
+                    // 服务配置、日志、网关偏好以及 pi/OpenCode 中指向此引擎的模型登记。
+                    let cleanup = removalCleanup(engineID: plan.engine.id)
+                    if !cleanup.clients.registrations.isEmpty { maintenanceLog += "移除客户端登记：\(cleanup.clients.registrations.map { "\($0.client.title) · \($0.model)" }.joined(separator: "、"))\n" }
+                    let failures = applyRemovalCleanup(cleanup)
+                    guard failures.isEmpty else { throw LaunchError.message(failures.joined(separator: "；")) }
                 }
                 maintenanceLog += "\n处理完成。废纸篓中的文件可恢复；清空废纸篓后释放空间。"
             } catch { maintenanceLog += "\n已暂停：\(error.localizedDescription)\n已处理的项目列在上方，可在废纸篓中查看。" }

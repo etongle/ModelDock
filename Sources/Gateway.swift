@@ -32,6 +32,8 @@ struct GatewaySettings: Codable {
     var apiKey = UUID().uuidString.replacingOccurrences(of: "-", with: "") + UUID().uuidString.replacingOccurrences(of: "-", with: "")
     var endpoints: [GatewayEndpoint] = []
     var preferences: [String: GatewayPreference] = [:]
+    /// 局域网共享：网关监听所有网卡，请求仍须携带网关密钥。默认关闭。
+    var lanEnabled: Bool? = nil
 }
 struct GatewayProcess: Codable { var pid: Int32; var birth: UInt64; var port: Int }
 struct GatewayRoute: Codable, Identifiable, Hashable {
@@ -54,6 +56,8 @@ struct GatewayRoute: Codable, Identifiable, Hashable {
     var enabled: Bool
     var mode: InputMode
     var revision: String
+    /// 服务因空闲已停止；网关收到请求时通知 App 唤醒。
+    var sleeping: Bool? = nil
 }
 struct GatewayConfiguration: Codable {
     var schema = 1
@@ -120,6 +124,8 @@ final class GatewayController: ObservableObject {
     private var output: FileHandle?
     private var polling = false
     private var lastConfiguration: Data?
+    /// 本机服务最近一次的路由，服务休眠后据此保留路由。按路由 ID 保存。
+    private lazy var sleepingCache: [String: GatewayRoute] = (try? Data(contentsOf: root.appendingPathComponent("sleeping-routes.json"))).flatMap { try? JSONDecoder().decode([String: GatewayRoute].self, from: $0) } ?? [:]
     var settingsURL: URL { root.appendingPathComponent("settings.json") }
     var configurationURL: URL { root.appendingPathComponent("runtime.json") }
     var processURL: URL { root.appendingPathComponent("process.json") }
@@ -155,6 +161,20 @@ final class GatewayController: ObservableObject {
             let hash = digest("\(identifier)|\(target.endpoint)|\(target.pid)|\(target.birth)|\(preference.mode.rawValue)|\(capabilities.inputs.joined(separator: ","))|\(target.remoteRevision ?? "")")
             values.append(.init(id: identifier, sourceID: source, name: "\(target.engineName) · \(rawName)", engineID: target.engineID, model: target.model, endpoint: target.endpoint, apiKey: target.apiKey ?? "", alias: alias, inputs: capabilities.applying(preference.mode).inputs, outputs: capabilities.outputs, capabilities: capabilities, context: target.context, pid: target.pid > 0 ? target.pid : nil, birth: target.birth > 0 ? target.birth : nil, remote: target.isRemote, available: true, enabled: preference.enabled, mode: preference.mode, revision: hash))
         }
+        // 休眠服务：沿用最近一次的路由（别名不变），标记 sleeping，供网关唤醒。
+        var cache = sleepingCache
+        for route in values where !route.remote { cache[route.id] = route }
+        let sleeping = Set(services.records.filter { $0.sleeping == true && $0.pid == nil }.map(\.id))
+        cache = cache.filter { _, route in sleeping.contains(route.sourceID) || values.contains { $0.id == route.id } }
+        for (id, var route) in cache where sleeping.contains(route.sourceID) && !values.contains(where: { $0.id == id }) {
+            route.sleeping = true; route.available = false; route.pid = nil; route.birth = nil
+            values.append(route)
+        }
+        if cache != sleepingCache {
+            sleepingCache = cache
+            try? ConnectionFiles.privateDirectory(root)
+            if let data = try? JSONEncoder().encode(cache) { try? ConnectionFiles.write(data, to: root.appendingPathComponent("sleeping-routes.json")) }
+        }
         routes = values.sorted { $0.alias.localizedStandardCompare($1.alias) == .orderedAscending }
         do {
             let data = try JSONEncoder().encode(GatewayConfiguration(instance: settings.instance, apiKey: settings.apiKey, routes: routes))
@@ -184,7 +204,7 @@ final class GatewayController: ObservableObject {
             if !FileManager.default.fileExists(atPath: log.path) { FileManager.default.createFile(atPath: log.path, contents: nil) }
             let handle = try FileHandle(forWritingTo: log); try handle.seekToEnd()
             let task = Process(); task.executableURL = Bundle.main.executableURL
-            task.arguments = ["--child-exec", python, "-I", "-B", "-u", resources.appendingPathComponent("gateway.py").path, "--config", configurationURL.path, "--identity-lib", resources.appendingPathComponent("ProcessIdentity.dylib").path, "--port", String(port)]
+            task.arguments = ["--child-exec", python, "-I", "-B", "-u", resources.appendingPathComponent("gateway.py").path, "--config", configurationURL.path, "--identity-lib", resources.appendingPathComponent("ProcessIdentity.dylib").path, "--port", String(port), "--host", settings.lanEnabled == true ? "0.0.0.0" : "127.0.0.1"]
             task.standardOutput = handle; task.standardError = handle; task.standardInput = FileHandle.nullDevice
             var environment = ProcessInfo.processInfo.environment; environment["PYTHONDONTWRITEBYTECODE"] = "1"; task.environment = environment
             try task.run(); child = task; output = handle

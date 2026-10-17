@@ -22,6 +22,8 @@ final class DownloadController: ObservableObject {
     @Published var token = ""
     @Published var destination = Scanner.defaultRoot.path
     @Published var listing: RemoteListing?
+    /// 任务详情文件明细的搜索词。
+    @Published var fileSearch = ""
     @Published var selected = Set<String>()
     @Published var resolving = false
     @Published var message: String?
