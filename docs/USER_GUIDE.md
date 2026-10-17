@@ -14,7 +14,7 @@ Current packages use an ad-hoc signature and have not been Apple-notarized. If a
 
 English is the default on first launch, including on non-English systems. Click the **globe/language button at the top right of the main window**, then choose **English**, **简体中文**, **Français**, **Português**, or **Follow system**. In a narrow window, the button shows the globe and a language abbreviation such as **EN**. You can also open **ModelDock → Settings…** (⌘,) to change **Interface language**. The interface changes immediately and the choice is saved.
 
-Settings has three pages: **General**, **Appearance**, and **App updates**. Under **Appearance**, choose **Follow system**, **Light**, or **Dark**; the main window and menu-bar panel switch immediately. To give the details more room, drag the divider between the sidebar and the details (double-click it to restore the automatic width), or click the sidebar button at the right of a sidebar's title (or press ⌃⌘S) to collapse it; a slim rail keeps the button to bring it back. Both choices are remembered.
+Settings has four pages: **General**, **Appearance**, **App updates**, and **Downloads**. Under **Appearance**, choose **Follow system**, **Light**, or **Dark**; the main window and menu-bar panel switch immediately. To give the details more room, drag the divider between the sidebar and the details (double-click it to restore the automatic width), or click the sidebar button at the right of a sidebar's title (or press ⌃⌘S) to collapse it; a slim rail keeps the button to bring it back. Both choices are remembered.
 
 ![Interface language and close behavior](assets/images/en-settings.png)
 
@@ -35,6 +35,12 @@ The public packages currently use ad-hoc signing; automatic updating does not ma
 Open **Engines** and select an installed engine. An engine card can be selected anywhere in its area, including whitespace. **Global engine settings** controls which engines appear in normal lists; individual engine settings contain supported defaults and options. Each engine page is split into **Overview**, **Service instances**, **Configuration**, and **Maintenance**.
 
 ![Engine and multimodal launch configuration](assets/images/en-engines.png)
+
+Model cards in the engine configuration and **Model Files** show instance counts for that exact local model version, with running, stopped and transitional/error states. Click the count to open **Engines → Service instances**, filtered to that model. If the model has instances under several engines, choose the engine from the count menu. **Show all instances** clears the filter. A stopped instance is a saved service configuration; deleting it reduces the count and keeps the model files.
+
+![Model instance counts in engine configuration](assets/images/en-model-instances.png)
+
+![Click through to the model's filtered engine instances](assets/images/en-model-instance-navigation.png)
 
 - Use **Check for updates** to inspect versions. Desktop applications and command-line components are listed separately; their version numbers are independent. **Up to date** means no update is needed from the selected source. **Update available** identifies an older component.
 - Updating an engine stops the services ModelDock started with it, installs the update, then restarts them with their saved settings. If the update fails they restart on the installed version. Services of other engines are not touched; a process started outside ModelDock or an open desktop app must still be closed first.
@@ -88,7 +94,17 @@ Click a task's **View files** action. The detail lists each file's status, downl
 
 A tick in the repository's selection list means **selected for download**, not **already downloaded**. Completion is shown in task details after the relevant checks.
 
-Downloads process one file at a time. **Pause** on a file preserves its partial data and lets other files proceed; **Download first** prioritizes a different file. Resume the paused file, or resume all paused files, when ready. Closing the main window leaves downloads running; quitting the app pauses them.
+**New download (+)** opens a clean import page without changing running tasks. Select **Download at once** in the download sidebar, or **Settings → Downloads**, to choose 1–8 simultaneous model tasks (default: 2). Extra tasks wait in a queue and start automatically; tasks sharing a destination folder run in sequence. Reducing the limit lets already running tasks finish.
+
+![Concurrent download settings](assets/images/en-download-settings.png)
+
+Each task shows progress, download speed and estimated time remaining. The estimate uses recent transferred bytes and may change with network speed. Size-unknown tasks wait for a size; connecting or verifying files show their actual stage. If individual files are paused, the estimate covers the active files only.
+
+For GitHub, paste a repository URL, a `tree` subfolder, a `blob`/raw file URL, or a Release page/asset URL. Repository downloads are pinned to a commit; Git LFS pointers are resolved to model data. Select the required model and configuration files. Scripts and repository code are not executed. A bare `owner/repo` still means Hugging Face.
+
+![A new import starts with an empty form while existing downloads continue](assets/images/en-fresh-import.png)
+
+Each model downloads one file at a time. **Pause** on a file preserves its partial data and lets other files proceed; **Download first** prioritizes a different file. Resume the paused file, or resume all paused files, when ready. Closing the main window leaves downloads running; quitting the app pauses them.
 
 ### Delete a task or clean partial files
 

@@ -127,10 +127,7 @@ extension AppStore {
                     let source = URL(fileURLWithPath: model.path).resolvingSymlinksInPath()
                     @MainActor func checkUse() throws {
                         if self.strata.uses(source.path) || self.strata.uses(path.path) { throw LaunchError.message("此模型位置正在准备 Strata 配套组件，请等待操作完成。") }
-                        if let active = self.downloads.jobs.first(where: { $0.id == self.downloads.activeID }) {
-                            let folder = URL(fileURLWithPath: active.root).appendingPathComponent(active.folder).path
-                            guard !EngineMaintenance.contains(path.path, folder) && !EngineMaintenance.contains(folder, path.path) else { throw LaunchError.message("此模型目录正在下载，请先暂停对应下载任务") }
-                        }
+                        if self.downloads.hasWriter(affecting: path.path) { throw LaunchError.message("此模型目录正在下载，请先暂停对应下载任务") }
                         guard !ModelFileSafety.used(model, removal: path, services: self.services.records, external: self.services.external, models: self.models) else { throw LaunchError.message("此模型文件正在被服务使用，请先停止使用它的服务") }
                     }
                     try checkUse()

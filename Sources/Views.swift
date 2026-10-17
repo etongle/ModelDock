@@ -450,9 +450,7 @@ struct EngineWorkspace: View {
                     else if store.compatibleModels.isEmpty { EmptyMessage(symbol: "cube", title: store.engine.kind == .ollama ? "还没有 Ollama 格式的模型" : "没有兼容的本地模型", detail: store.engine.kind == .ollama ? "可以先启动 Ollama 模型管理服务。" : "在“模型文件”中添加模型目录，或选择其他引擎。") }
                     else {
                         VStack(spacing: 10) { ForEach(store.compatibleModels) { model in
-                                Button { store.selectModel(model) } label: {
-                                    HStack(spacing: 12) { Image(systemName: model.kind == .embedding ? "text.magnifyingglass" : "cube").font(.system(size: 20)).foregroundStyle(Theme.muted).frame(width: 40, height: 40).background(Theme.line, in: RoundedRectangle(cornerRadius: 9)); VStack(alignment: .leading, spacing: 5) { Text(model.name).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1); Text(verbatim: L10n.text("\(model.format) · \(sizeLabel(model.bytes)) · \(model.verification)")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(1); ModelCapabilityBadge(capabilities: store.modelCapabilities(model)) }; Spacer(); Image(systemName: store.selectedModel?.id == model.id ? "checkmark.circle.fill" : "circle").foregroundStyle(store.selectedModel?.id == model.id ? Theme.linkColor : Color.secondary) }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(store.selectedModel?.id == model.id ? Theme.selection : Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
-                                }.buttonStyle(.plain).help(L10n.text(model.path))
+                            EngineModelCard(store: store, model: model)
                         } }
                     }
                     case .maintenance:
@@ -466,7 +464,7 @@ struct EngineWorkspace: View {
                     }
                     }
                 }.padding(30)
-            }.frame(maxWidth: .infinity)
+            }.id(store.engineID + store.engineSection.rawValue + (store.engineInstanceFilter?.model.id ?? "")).frame(maxWidth: .infinity)
         }
     }
     @ViewBuilder func engineRow(_ engine: Engine) -> some View {
@@ -600,6 +598,7 @@ struct ModelWorkspace: View {
                                     HStack(spacing: 6) { UsageBadge(model: model); ModelCapabilityBadge(capabilities: store.modelCapabilities(model), compact: true) }
                                     VStack(alignment: .leading, spacing: 4) { UsageBadge(model: model); ModelCapabilityBadge(capabilities: store.modelCapabilities(model), compact: true) }
                                 }
+                                if model.kind == .language || model.kind == .embedding || store.modelInstanceCounts(model).total > 0 { ModelInstancesLink(store: store, model: model, compact: true) }
                             }
                             Spacer(minLength: 0)
                         }.padding(.vertical, 4).tag(Optional(model.id)).listRowSeparator(.hidden).help(L10n.text(model.path))
@@ -624,6 +623,7 @@ struct ModelWorkspace: View {
                         ModelCapabilityBadge(capabilities: store.modelCapabilities(model), prefix: "模型输入 · ")
                         Text(verbatim: L10n.text(store.modelCapabilities(model).source)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                         StateLabel(title: model.verification, color: model.complete ? .green : .orange)
+                        if model.kind == .language || model.kind == .embedding || store.modelInstanceCounts(model).total > 0 { ModelInstancesLink(store: store, model: model) }
                         Divider()
                         if model.kind == .draft { DraftModelInfo(store: store, model: model) }
                         else {

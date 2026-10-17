@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         if !passiveTesting && !capturing && !CommandLine.arguments.contains("--documentation-ui") {
             store.appUpdates.installBlocker = { [weak self] in
                 guard let self else { return "应用正在退出" }
-                if self.store.maintaining || self.store.installation.running || self.store.multiModel?.running == true || self.store.strata.busy || self.store.downloads.activeID != nil || self.store.repairingFile != nil || self.store.preparingInstall || self.store.preparingMaintenance { return "请等待引擎操作、模型准备或下载完成后安装应用更新。" }
+                if self.store.maintaining || self.store.installation.running || self.store.multiModel?.running == true || self.store.strata.busy || self.store.downloads.hasPendingWork || self.store.repairingFile != nil || self.store.preparingInstall || self.store.preparingMaintenance { return "请等待引擎操作、模型准备或下载完成后安装应用更新。" }
                 if self.window.attachedSheet != nil || self.store.commandDraft != nil || self.store.associationDraft != nil || self.store.engineConfigurationDraft != nil || self.store.modelUpdate != nil { return "请先完成或关闭当前配置窗口，再安装应用更新。" }
                 return nil
             }
@@ -76,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             store.appUpdates.begin()
             if CommandLine.arguments.contains("--start-hidden") { hideMainWindow() }
         }
-        if !CommandLine.arguments.contains("--documentation-ui") { store.services.beginMonitoring(); store.scan(); store.beginResourceMonitoring() }
+        if !CommandLine.arguments.contains("--documentation-ui") && !CommandLine.arguments.contains("--download-queue-ui") { store.services.beginMonitoring(); store.scan(); store.beginResourceMonitoring() }
         // Notifications only in normal runs: tests and captures must never trigger the permission prompt.
         if !passiveTesting, argumentValue("--capture-dir") == nil, !CommandLine.arguments.contains("--documentation-ui") { store.beginNotifications() }
         if let task = argumentValue("--resume-download-job"), UUID(uuidString: task) != nil, store.downloads.jobs.contains(where: { $0.id == task }) {
@@ -98,7 +98,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             }
         }
         if store.gateway.settings.enabled && !passiveTesting { store.gateway.start(store: store) }
-        if CommandLine.arguments.contains("--documentation-ui") {
+        if CommandLine.arguments.contains("--download-queue-ui") {
+            Task { do {
+                guard let path = argumentValue("--capture-dir") else { throw LaunchError.message("Capture directory required") }
+                let folder = URL(fileURLWithPath: path); try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try await DownloadQueueScreens.run(self, folder: folder)
+            } catch { fputs("DOWNLOAD UI CAPTURE FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }
+        } else if CommandLine.arguments.contains("--documentation-ui") {
             Task { do { try await DocumentationScreens.run(self) } catch { fputs("DOCUMENTATION CAPTURE FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }
         } else if CommandLine.arguments.contains("--popover-checks") {
             Task { do { try await PopoverChecks.run(self) } catch { fputs("POPOVER CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }
@@ -219,7 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             showingExitConfirmation = false
             guard response == .alertFirstButtonReturn else { return .terminateCancel }
         }
-        if store.downloads.activeID != nil { store.downloads.pause(); store.downloads.save() }
+        if store.downloads.hasPendingWork { store.downloads.pauseAll(); store.downloads.save() }
         return .terminateNow
     }
     func makeMenu() {
@@ -627,6 +633,9 @@ enum Entry {
         if args.contains("--version-checks") { Task { do { try await EngineVersionChecks.run(); exit(0) } catch { fputs("VERSION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--connection-checks") { Task { do { try await ConnectionChecks.run(); exit(0) } catch { fputs("CONNECTION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--gateway-checks") { Task { do { try await GatewayChecks.run(); exit(0) } catch { fputs("GATEWAY CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--github-download-network-checks") { Task { do { try await DownloadQueueChecks.network(); exit(0) } catch { fputs("GITHUB DOWNLOAD CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--model-instance-checks") { Task { do { try await ModelInstanceChecks.run(); exit(0) } catch { fputs("MODEL INSTANCE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--download-queue-checks") { Task { do { try await DownloadQueueChecks.run(); exit(0) } catch { fputs("DOWNLOAD QUEUE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--download-task-checks") { Task { do { try await DownloadTaskChecks.run(); exit(0) } catch { fputs("DOWNLOAD TASK CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--startup-checks") { Task { do { try await StartupChecks.run(); exit(0) } catch { fputs("STARTUP CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--model-update-checks") { Task { do { try await ModelUpdateChecks.run(); exit(0) } catch { fputs("MODEL UPDATE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }

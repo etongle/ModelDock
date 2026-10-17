@@ -120,7 +120,7 @@ struct ModelUpdateView: View {
                 Button(L10n.text("关闭")) { store.modelUpdate = nil }.buttonStyle(SecondaryButton()).disabled(draft.updating).keyboardShortcut(.cancelAction)
                 Spacer()
                 if draft.model.format == "Ollama" { Button(L10n.text("更新此模型")) { draft.ollamaUpdate(store: store) }.buttonStyle(AccentButton()).disabled(draft.updating || store.maintaining) }
-                else { Button { draft.download(store: store) } label: { Label(L10n.text("下载模型版本"), systemImage: "arrow.down.circle") }.buttonStyle(AccentButton()).disabled(draft.selectedFiles.isEmpty || draft.checking || store.downloads.activeID != nil || store.maintaining).accessibilityIdentifier("download-model-version") }
+                else { Button { draft.download(store: store) } label: { Label(L10n.text("下载模型版本"), systemImage: "arrow.down.circle") }.buttonStyle(AccentButton()).disabled(draft.selectedFiles.isEmpty || draft.checking || store.maintaining).accessibilityIdentifier("download-model-version") }
             }
         }.padding(26).frame(width: 710, height: 705).background(Theme.background).interactiveDismissDisabled(draft.updating)
     }

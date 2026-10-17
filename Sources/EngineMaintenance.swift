@@ -196,7 +196,7 @@ enum EngineMaintenance {
         items.filter { child in !items.contains { parent in parent.path != child.path && contains(parent.path, child.path) } }
     }
     static func downloadBlockers(_ items: [RemovalItem], jobs: [ModelDownload]) -> [String] {
-        jobs.filter { $0.state == .downloading }.compactMap { job in
+        jobs.filter { $0.state == .downloading || $0.state == .queued }.compactMap { job in
             let locations = [URL(fileURLWithPath: job.root).appendingPathComponent(job.folder).resolvingSymlinksInPath().path] + (job.repairTarget.map { [URL(fileURLWithPath: $0).resolvingSymlinksInPath().path] } ?? [])
             guard let item = items.first(where: { item in
                 let path = URL(fileURLWithPath: item.path).resolvingSymlinksInPath().path

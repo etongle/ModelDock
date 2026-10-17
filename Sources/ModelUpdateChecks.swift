@@ -39,9 +39,10 @@ enum ModelUpdateChecks {
         var nested = model; nested.path = old.appendingPathComponent("quant/model-Q8_0.gguf").path; nested.companion = old.appendingPathComponent("quant/mmproj.gguf").path
         let nestedListing = RemoteListing(site: .huggingface, repository: "fixture-update/demo", revision: "new", files: ["quant/model-Q8_0.gguf", "quant/mmproj.gguf", "other/model-Q8_0.gguf"].map { RemoteFile(path: $0, url: URL(string: "https://huggingface.co/fixture-update/demo/resolve/new/" + $0)!, bytes: 1) })
         try ConnectionChecks.require(ModelOrigin.selectedFiles(model: nested, listing: nestedListing) == ["quant/model-Q8_0.gguf", "quant/mmproj.gguf"], "Nested repository paths mixed different models")
-        URLProtocol.registerClass(ModelUpdateHTTPFixture.self)
-        defer { URLProtocol.unregisterClass(ModelUpdateHTTPFixture.self) }
+        CatalogHTTP.testProtocolClasses = [ModelUpdateHTTPFixture.self]
         store.downloads.transferProtocolClasses = [ModelUpdateHTTPFixture.self]
+        URLProtocol.registerClass(ModelUpdateHTTPFixture.self)
+        defer { CatalogHTTP.testProtocolClasses = nil; store.downloads.transferProtocolClasses = nil; URLProtocol.unregisterClass(ModelUpdateHTTPFixture.self) }
         let update = ModelUpdateDraft(model: model); store.modelUpdate = update
         update.check()
         for _ in 0..<100 { if !update.checking { break }; try await Task.sleep(nanoseconds: 30_000_000) }
@@ -61,7 +62,11 @@ enum ModelUpdateChecks {
         try ConnectionChecks.require(receipt.revision == ModelUpdateHTTPFixture.revision && receipt.files.count == 2, "Imported revision receipt was lost")
         for _ in 0..<100 { if !store.scanning { break }; try await Task.sleep(nanoseconds: 30_000_000) }
         let scan = Scanner.scan(extraRoots: [root.appendingPathComponent("models").path])
-        try ConnectionChecks.require(scan.models.contains { $0.path == weight.path } && scan.models.contains { $0.path == newFolder.appendingPathComponent("model-Q8_0.gguf").path && $0.origin?.revision == ModelUpdateHTTPFixture.revision }, "New and old versions were not separately discoverable")
+        let scanEncoder = JSONEncoder(); scanEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try scanEncoder.encode(scan).write(to: root.appendingPathComponent("scanned-inventory.json"))
+        // macOS can enumerate /tmp through its /private/tmp alias. Compare physical files.
+        guard let oldIdentity = FileIdentity.read(weight.path), let newIdentity = FileIdentity.read(newFolder.appendingPathComponent("model-Q8_0.gguf").path) else { throw LaunchError.message("Fixture model files missing") }
+        try ConnectionChecks.require(scan.models.contains { FileIdentity.read($0.path) == oldIdentity } && scan.models.contains { FileIdentity.read($0.path) == newIdentity && $0.origin?.revision == ModelUpdateHTTPFixture.revision }, "New and old versions were not separately discoverable")
 
         let fixture = URL(fileURLWithPath: fm.currentDirectoryPath + "/Tests/update_service_fixture.py")
         let launcher = root.appendingPathComponent("llama-server")

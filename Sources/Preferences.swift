@@ -47,7 +47,7 @@ struct PreferencesView: View {
             // Paged Settings keeps every page short as options grow (a single long form overflowed). A segmented
             // control is used instead of TabView, whose tab strip does not render in offscreen captures.
             Picker(L10n.text("设置"), selection: $store.settingsTab) {
-                Text(verbatim: L10n.text("通用")).tag(0); Text(verbatim: L10n.text("外观")).tag(1); Text(verbatim: L10n.text("应用更新")).tag(2)
+                Text(verbatim: L10n.text("通用")).tag(0); Text(verbatim: L10n.text("外观")).tag(1); Text(verbatim: L10n.text("应用更新")).tag(2); Text(verbatim: L10n.text("下载")).tag(3)
             }.pickerStyle(.segmented).labelsHidden().fixedSize().padding(.top, 16).accessibilityIdentifier("settings-pages")
             Group {
                 switch store.settingsTab {
@@ -71,6 +71,8 @@ struct PreferencesView: View {
                         AppUpdateSettings(updates: store.appUpdates).id(store.language.rawValue)
                     }
                 }.formStyle(.grouped)
+                case 3:
+                DownloadSettingsView(downloads: store.downloads)
                 default:
                 Form {
                     Section(L10n.text("界面语言")) {

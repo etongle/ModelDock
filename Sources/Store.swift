@@ -15,6 +15,7 @@ final class AppStore: ObservableObject {
     @Published var scanning = false
     @Published var tab: AppTab = .services
     @Published var engineSection: EngineSection = .overview
+    @Published var engineInstanceFilter: ModelInstanceFilter?
     /// One launch sheet for every entry point (engine, model, service); the store already holds its selections.
     @Published var showLaunch = false
     /// Run log follows new output by default; off keeps the reading position.
@@ -159,7 +160,7 @@ final class AppStore: ObservableObject {
             guard let self, let target = job.repairTarget else { throw LaunchError.message("修复目标已变化") }
             let model = self.models.first { $0.id == job.repairModelID } ?? LocalModel(id: job.repairModelID ?? target, name: job.repository, format: "", path: target, kind: .language, bytes: 0, complete: false, verification: "", repository: job.repository, missingFiles: [], removalPath: target)
             guard !ModelFileSafety.used(model, removal: URL(fileURLWithPath: target), services: self.services.records, external: self.services.external, models: self.models) else { throw LaunchError.message("修复文件已下载，但原文件正在使用。停止相关服务后继续此任务即可应用修复。") }
-            guard !self.downloads.jobs.contains(where: { $0.id != job.id && $0.state == .downloading && EngineMaintenance.contains($0.root + "/" + $0.folder, target) }) else { throw LaunchError.message("原目录正在下载，修复文件保留；原任务结束后继续修复") }
+            guard !self.downloads.jobs.contains(where: { $0.id != job.id && self.downloads.isScheduled($0.id) && DownloadController.overlaps($0.root + "/" + $0.folder, target) }) else { throw LaunchError.message("原目录正在下载，修复文件保留；原任务结束后继续修复") }
             try ModelFileRepair.publish(job); self.downloads.notice = "单文件修复完成，其他模型文件保持原状。"; self.scan()
         }
     }
@@ -248,6 +249,7 @@ final class AppStore: ObservableObject {
         }
     }
     func chooseEngine(_ id: String) {
+        engineInstanceFilter = nil
         engineID = id
         inputMode = engine.launchSettings?.inputMode ?? .automatic; projectorPath = ""
         context = engine.launchSettings?.context ?? (engine.kind == .strata ? 32768 : 8192); maximumLoadedModels = engine.launchSettings?.maximumLoadedModels ?? 3

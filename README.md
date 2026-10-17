@@ -16,8 +16,8 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 ## What you can do
 
 - **Manage engines:** inspect installations, check component versions, install or update supported distributions, enable or hide engines, and review uninstall or residual-file cleanup plans.
-- **Manage models:** import local GGUF/Safetensors directories, inspect file completeness and compatibility, repair individual files, keep model revisions side by side, and choose a version for a future launch.
-- **Control downloads:** resolve a Hugging Face `owner/repo` or a full URL, use ModelScope repositories or supported direct file links, resume tasks, inspect each file's progress, pause a file, or prioritize another file.
+- **Manage models:** import local GGUF/Safetensors directories, inspect file completeness and compatibility, repair individual files, keep model revisions side by side, and choose a version for a future launch. See running/stopped instance counts for each model and jump to its engine instance list.
+- **Control downloads:** resolve a Hugging Face `owner/repo` or a full URL, use ModelScope or GitHub repositories, GitHub Release assets, or supported direct file links. Download up to 8 models concurrently (2 by default), see per-task and per-file progress, speed and estimated time remaining, and pause or prioritize individual files.
 - **Run services:** configure ports, context windows, text or multimodal input, and supported runtime options; manage several independent instances; see startup stages and associated draft/vision components.
 - **Connect clients:** register models with pi or OpenCode while preserving existing settings. Choose a direct endpoint or the OpenAI-compatible gateway; add remote compatible APIs to the same gateway.
 - **Stay in the menu bar:** monitor CPU, memory, disk usage, download progress, and measured model performance. Closing the main window keeps the app running by default; clicking outside the menu-bar panel dismisses it.

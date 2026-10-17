@@ -21,8 +21,8 @@ extension AppStore {
 struct EngineServicesView: View {
     @ObservedObject var store: AppStore
     @ObservedObject var services: ServiceController
-    private var records: [ServiceSpec] { store.engineServices(store.engineID) }
-    private var external: [ObservedService] { store.externalEngineServices(store.engineID) }
+    private var records: [ServiceSpec] { store.visibleEngineServices(store.engineID) }
+    private var external: [ObservedService] { store.visibleExternalEngineServices(store.engineID) }
     private var running: Int { records.filter { services.status($0) == .running }.count + external.filter(\.ready).count }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -30,6 +30,13 @@ struct EngineServicesView: View {
                 Text(verbatim: L10n.text("服务实例")).font(.system(size: TypeScale.section, weight: .semibold))
                 Spacer()
                 Text(verbatim: L10n.text("\(records.count + external.count) 个服务 · \(running) 个运行中")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
+            }
+            if let filter = store.engineInstanceFilter, filter.engineID == store.engineID {
+                HStack {
+                    Label(filter.model.name, systemImage: "line.3.horizontal.decrease.circle").font(.system(size: TypeScale.body)).lineLimit(2)
+                    Spacer()
+                    Button(L10n.text("显示全部实例")) { store.engineInstanceFilter = nil }.buttonStyle(.bordered).accessibilityIdentifier("show-all-engine-instances")
+                }.foregroundStyle(Theme.muted)
             }
             if records.isEmpty && external.isEmpty {
                 Text(verbatim: L10n.text("暂无服务。在下方选择模型和端口即可启动。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.vertical, 6)

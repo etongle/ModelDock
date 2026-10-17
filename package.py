@@ -37,7 +37,11 @@ Apple Silicon (M-series) Macs · macOS 14 or later.
 5. Settings → App updates checks official GitHub Releases daily and can
    automatically download, verify and install newer versions. Model files,
    settings and existing model service processes are preserved.
-6. Close the main window to keep downloads/monitoring running. Use the
+6. Downloads & Import supports Hugging Face, ModelScope, GitHub repositories,
+   individual files and Release assets. Download 2 models at once by default;
+   change the limit (1–8) in the sidebar or Settings → Downloads. The + button
+   opens a clean import form. Task/file progress includes time remaining.
+7. Close the main window to keep downloads/monitoring running. Use the
    menu-bar icon to reopen it; clicking outside its panel dismisses it.
 
 This distribution is ad-hoc signed and is not Apple-notarized. If a trusted
