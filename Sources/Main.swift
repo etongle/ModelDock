@@ -622,6 +622,7 @@ enum Entry {
         }
         if args.contains("--self-test") { selfTest(); return }
         if args.contains("--strata-checks") { Task { do { try await StrataChecks.run(); exit(0) } catch { fputs("STRATA CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--image-model-checks") { do { try ImageModelChecks.run(); exit(0) } catch { fputs("IMAGE MODEL CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--notification-checks") { do { try NotificationChecks.run() } catch { fputs("NOTIFICATION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--localization-checks") { do { try LocalizationChecks.run() } catch { fputs("LOCALIZATION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--live-context-checks") || argumentValue("--repair-connection-context") != nil {
@@ -637,6 +638,7 @@ enum Entry {
         if args.contains("--connection-checks") { Task { do { try await ConnectionChecks.run(); exit(0) } catch { fputs("CONNECTION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--gateway-checks") { Task { do { try await GatewayChecks.run(); exit(0) } catch { fputs("GATEWAY CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--github-download-network-checks") { Task { do { try await DownloadQueueChecks.network(); exit(0) } catch { fputs("GITHUB DOWNLOAD CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--solution-removal-checks") { Task { do { try await SolutionRemovalChecks.run(); exit(0) } catch { fputs("SOLUTION REMOVAL CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--solutions-checks") { Task { do { try await SolutionChecks.run(); exit(0) } catch { fputs("SOLUTION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--model-instance-checks") { Task { do { try await ModelInstanceChecks.run(); exit(0) } catch { fputs("MODEL INSTANCE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--download-queue-checks") { Task { do { try await DownloadQueueChecks.run(); exit(0) } catch { fputs("DOWNLOAD QUEUE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }

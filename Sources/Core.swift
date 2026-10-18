@@ -3,8 +3,8 @@ import Darwin
 
 func processStartTime(_ pid: Int32) -> UInt64 { mm_process_start_time(pid) }
 
-enum EngineKind: String, Codable { case splash, llama, prism, ollama, mlx, lmstudio, strata, audio }
-enum ModelKind: String, Codable { case language, embedding, adapter, speech, draft }
+enum EngineKind: String, Codable { case splash, llama, prism, ollama, mlx, lmstudio, strata, audio, mflux }
+enum ModelKind: String, Codable { case language, embedding, adapter, speech, draft, image }
 
 struct Engine: Identifiable, Codable, Hashable {
     var id: String { kind.rawValue }
@@ -118,7 +118,8 @@ enum Scanner {
             Engine(kind: .lmstudio, name: "LM Studio", version: lmInfo?["CFBundleShortVersionString"] as? String ?? "—", path: home.appendingPathComponent(".lmstudio").path, appPath: lmInfo == nil ? nil : "/Applications/LM Studio.app", installed: lmInfo != nil, canServe: false, installation: lmInfo == nil ? (hasLMComponents ? "仅残留组件" : "未安装") : "桌面应用", description: "模型管理与 MLX / llama.cpp 推理组件", defaultPort: 1234, symbol: "cube"),
             Engine(kind: .prism, name: "llama.cpp · Prism", version: EnginePaths.manifest(.prism)?.version ?? "本地编译版", path: prism, installed: present(prism), canServe: present(prism), installation: EnginePaths.manifest(.prism) == nil ? "本地编译工具" : "官方发行包 · 本工具管理", description: "支持 Bonsai 三值量化的 llama.cpp 引擎", defaultPort: 8080, symbol: "leaf"),
             Engine(kind: .strata, name: "Strata", version: EnginePaths.manifest(.strata)?.version ?? "—", path: EnginePaths.executable(.strata) ?? "", installed: EnginePaths.executable(.strata) != nil, canServe: EnginePaths.executable(.strata) != nil, installation: "Apple Silicon · Metal 源码编译", description: "Niko1221/Strata · Flash-Next 推理与兼容 API", defaultPort: 8095, symbol: "square.3.layers.3d"),
-            Engine(kind: .audio, name: "MLX Audio", version: EnginePaths.manifest(.audio)?.version ?? "—", path: EnginePaths.executable(.audio) ?? "", installed: EnginePaths.executable(.audio) != nil, canServe: EnginePaths.executable(.audio) != nil, installation: "独立语音运行环境", description: "Apple Silicon 语音识别与语音合成", defaultPort: 8096, symbol: "waveform")
+            Engine(kind: .audio, name: "MLX Audio", version: EnginePaths.manifest(.audio)?.version ?? "—", path: EnginePaths.executable(.audio) ?? "", installed: EnginePaths.executable(.audio) != nil, canServe: EnginePaths.executable(.audio) != nil, installation: "独立语音运行环境", description: "Apple Silicon 语音识别与语音合成", defaultPort: 8096, symbol: "waveform"),
+            Engine(kind: .mflux, name: "MFLUX", version: EnginePaths.manifest(.mflux)?.version ?? "—", path: EnginePaths.executable(.mflux) ?? "", installed: EnginePaths.executable(.mflux) != nil, canServe: EnginePaths.executable(.mflux) != nil, installation: "独立图片生成环境", description: "Apple Silicon 本地图片生成", defaultPort: 8100, symbol: "photo.badge.plus")
         ]
     }
 
@@ -188,7 +189,10 @@ enum Scanner {
             add(LocalModel(id: "splash:\(folder.path)", name: manifest["model"] as? String ?? repository?.components(separatedBy: "/").last ?? folder.lastPathComponent, format: "Splash 4-bit", path: folder.path, kind: .language, bytes: bytes, complete: missing.isEmpty, verification: "\(artifacts.count - missing.count) / \(artifacts.count) 文件齐全", repository: repository, missingFiles: missing, removalPath: deletion))
         }
 
-        for file in files where file.lastPathComponent == "model.safetensors.index.json" {
+        let imageRoots = files.filter { $0.lastPathComponent == "model_index.json" && ImageModelPolicy.isPipeline($0.deletingLastPathComponent()) }.map { $0.deletingLastPathComponent() }
+        for folder in imageRoots { if let model = ImageModelPolicy.model(folder) { add(model) } }
+        func imageComponent(_ file: URL) -> Bool { imageRoots.contains { file.path.hasPrefix($0.path + "/") } }
+        for file in files where file.lastPathComponent == "model.safetensors.index.json" && !imageComponent(file) {
             guard let index = jsonFile(file), let map = index["weight_map"] as? [String: String] else { continue }
             let folder = file.deletingLastPathComponent(); let shards = Set(map.values).sorted()
             if folder.lastPathComponent == "speech_tokenizer", let parent = jsonFile(folder.deletingLastPathComponent().appendingPathComponent("config.json")), AudioModelPolicy.task(parent) == "tts" { continue }
@@ -200,7 +204,7 @@ enum Scanner {
             add(LocalModel(id: "mlx:\(folder.path)", name: name, format: tensorFormat(folder, config), path: folder.path, kind: AudioModelPolicy.task(config) == nil ? .language : .speech, bytes: bytes, complete: missing.isEmpty, verification: missing.isEmpty ? "\(shards.count) 个分片与配置齐全" : "缺少 \(missing.count) 项文件", missingFiles: missing, removalPath: folder.path))
         }
 
-        for file in files where file.lastPathComponent == "model.safetensors" && !file.path.contains("/laya/") {
+        for file in files where file.lastPathComponent == "model.safetensors" && !file.path.contains("/laya/") && !imageComponent(file) {
             let folder = file.deletingLastPathComponent()
             if folder.lastPathComponent == "speech_tokenizer", let parent = jsonFile(folder.deletingLastPathComponent().appendingPathComponent("config.json")), AudioModelPolicy.task(parent) == "tts" { continue }
             guard !fm.fileExists(atPath: folder.appendingPathComponent("model.safetensors.index.json").path) else { continue }
@@ -308,6 +312,8 @@ struct ServiceSpec: Codable, Identifiable, Hashable {
     var idleMinutes: Int? = nil
     /// 因空闲被自动停止；经网关的请求可唤醒。手动停止或启动时清除。
     var sleeping: Bool? = nil
+    /// Persists creation history after its solution instance is detached.
+    var solutionCreated: Bool? = nil
 }
 
 struct LaunchPlan: Codable {
@@ -339,6 +345,14 @@ enum LaunchBuilder {
         var args: [String] = []; var env: [String: String] = [:]
         var executable = engine.path; var version = engine.version
         switch engine.kind {
+        case .mflux:
+            guard let model, ImageModelPolicy.recognizes(URL(fileURLWithPath: model.path)), model.complete else { throw LaunchError.message("请选择文件齐全的 Qwen-Image-2.1-Turbo 模型") }
+            args = ["--model", model.path, "--port", String(port)]
+            let python = URL(fileURLWithPath: engine.path).deletingLastPathComponent().appendingPathComponent("python3")
+            if FileManager.default.isExecutableFile(atPath: python.path), let helper = ImageModelPolicy.helper, FileManager.default.fileExists(atPath: helper) {
+                executable = python.path; args = ["-u", helper] + args
+            }
+            env = ["HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1", "HF_HUB_DISABLE_TELEMETRY": "1", "PYTHONDONTWRITEBYTECODE": "1"]
         case .audio:
             guard let model, let task = AudioModelPolicy.task(model) else { throw LaunchError.message("请选择支持的 Qwen3-ASR 或 Qwen3-TTS 模型") }
             args = ["--model", model.path, "--task", task, "--port", String(port)]

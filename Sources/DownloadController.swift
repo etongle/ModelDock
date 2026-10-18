@@ -139,8 +139,24 @@ final class DownloadController: ObservableObject {
     func hasWriter(affecting path: String) -> Bool {
         jobs.contains { isScheduled($0.id) && (Self.overlaps($0.displayLocation, path) || $0.repairTarget.map { Self.overlaps($0, path) } == true) }
     }
+    private var cleanupPaths = Set<String>()
+    func reserveCleanupPaths(_ paths: Set<String>) throws {
+        guard cleanupPaths.isEmpty, !paths.contains(where: { hasWriter(affecting: $0) }) else { throw LaunchError.message("所选目录正在下载或清理，请稍后重试") }
+        cleanupPaths = paths
+    }
+    func noteRemovedModelFiles(_ path: String) {
+        var changed = false
+        for index in jobs.indices where jobs[index].state == .complete && Self.overlaps(jobs[index].displayLocation, path) {
+            var value = (try? DownloadRecovery.reconcile(jobs[index])) ?? jobs[index]
+            value.state = .paused; value.error = "模型文件已移至废纸篓，可重新下载。"
+            jobs[index] = value; changed = true
+        }
+        if changed { save() }
+    }
+    func releaseCleanupPaths() { cleanupPaths = []; pump() }
     func queueReason(_ id: String) -> String {
         guard let job = jobs.first(where: { $0.id == id }), job.state == .queued else { return "" }
+        if cleanupPaths.contains(where: { Self.overlaps($0, job.displayLocation) }) { return "正在清理此模型目录，稍后继续" }
         return jobs.contains { isActive($0.id) && Self.overlaps($0.displayLocation, job.displayLocation) } ? "同一下载目录正在使用，完成后自动继续" : "等待下载名额，轮到后自动开始"
     }
     private func run(_ id: String, allowReplacement: Bool, credential: String? = nil) {
@@ -154,6 +170,7 @@ final class DownloadController: ObservableObject {
         while activeIDs.count < maximumConcurrentDownloads {
             guard let offset = pending.firstIndex(where: { entry in
                 guard !deletingIDs.contains(entry.id), let job = jobs.first(where: { $0.id == entry.id }) else { return false }
+                guard !cleanupPaths.contains(where: { reserved in Self.overlaps(reserved, job.displayLocation) || job.repairTarget.map { Self.overlaps(reserved, $0) } == true }) else { return false }
                 return !jobs.contains { isActive($0.id) && Self.overlaps($0.displayLocation, job.displayLocation) }
             }) else { break }
             let entry = pending.remove(at: offset)

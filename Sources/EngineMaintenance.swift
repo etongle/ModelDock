@@ -120,9 +120,9 @@ enum EngineMaintenance {
             if (try? models.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true { add(models, .residue, "只移除目录链接，原始模型保留") }
             else { preserved.append(models.path) }
             bundleNames = ["Ollama", "com.electron.ollama", "com.ollama.ollama"]
-        case .audio:
-            managed(.audio)
-            bundleNames = ["mlx-audio"]
+        case .audio, .mflux:
+            managed(engine.kind)
+            bundleNames = [engine.kind == .audio ? "mlx-audio" : "mflux"]
             notes.append("语音运行环境独立管理，模型文件默认保留。")
         case .mlx:
             managed(.mlx)

@@ -118,6 +118,9 @@ enum ModelCatalog {
     }
     static func suggested(_ listing: RemoteListing) -> Set<String> {
         if let preferred = listing.preferred { return [preferred] }
+        if listing.repository == ImageModelPolicy.repository {
+            return Set(listing.files.filter { ["model_index.json", "LICENSE"].contains($0.path) || ["transformer/", "text_encoder/", "vae/", "processor/", "scheduler/"].contains(where: $0.path.hasPrefix) }.map(\.path))
+        }
         let gguf = listing.files.filter { $0.path.hasSuffix(".gguf") && !URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("mmproj") }
         if gguf.count > 1 { return [] }
         if gguf.count == 1 { return Set(gguf.map(\.path) + listing.files.filter { $0.path.hasSuffix(".gguf") && URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("mmproj") }.map(\.path)) }

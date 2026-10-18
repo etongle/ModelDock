@@ -88,6 +88,22 @@ enum EngineServiceChecks {
         try await stopAndWait(first, store: store)
         try ConnectionChecks.require(second.pid.map { processStartTime($0) == second.processStart } == true && NetworkProbe.portOccupied(second.port), "Stopping first instance affected second")
         try ConnectionChecks.require(store.services.canRemoveConfiguration(first), "Stopped instance remained undeletable")
+        try ConnectionChecks.require(store.canStartServiceInstance(first), "Stopped saved instance cannot be started from its row")
+        // Starting a saved row must ignore the model/port currently selected in the launch form.
+        store.port = String(second.port); store.context = 65536; store.selectedModels["llama"] = "unrelated"
+        let before = Set(store.services.records.map(\.id))
+        store.startServiceInstance(first)
+        guard let resumed = store.services.records.first(where: { $0.id == first.id }) else { throw LaunchError.message("Restart lost instance identity") }
+        _ = try await store.services.waitForReady(resumed)
+        try ConnectionChecks.require(resumed.pid != nil && resumed.port == first.port && resumed.context == first.context && Set(store.services.records.map(\.id)) == before, "Saved-row start created another instance or used launch form parameters")
+        try ConnectionChecks.require(second.pid.map { processStartTime($0) == second.processStart } == true, "Restart affected another running instance")
+        try await stopAndWait(resumed, store: store)
+        // An occupied saved port is reported without creating or replacing a service.
+        var conflict = first; conflict.id = UUID().uuidString; conflict.port = second.port; conflict.pid = nil; conflict.processStart = nil
+        store.services.records.append(conflict)
+        store.startServiceInstance(conflict)
+        try ConnectionChecks.require(store.message != nil && store.services.records.first(where: { $0.id == conflict.id })?.pid == nil && second.pid.map { processStartTime($0) == second.processStart } == true, "Occupied port was not safely rejected")
+        store.services.records.removeAll { $0.id == conflict.id }; store.message = nil
         store.tab = .engines; try await capture?("engine-one-stopped")
         store.showService(first); try await capture?("service-stopped-delete")
         let log = store.services.logURL(first.id)

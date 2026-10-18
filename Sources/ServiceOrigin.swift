@@ -10,9 +10,11 @@ struct SolutionServiceUse: Identifiable {
 
 struct ServiceOrigin {
     var uses: [SolutionServiceUse]
-    var solutionCreated: Bool { uses.contains { $0.ownsConfiguration } }
+    var createdBySolution = false
+    var detached: Bool { createdBySolution && uses.isEmpty }
+    var solutionCreated: Bool { createdBySolution || uses.contains { $0.ownsConfiguration } }
     var reused: Bool { uses.contains { !$0.ownsConfiguration } }
-    var title: String { solutionCreated ? "方案服务" : "原生服务" }
+    var title: String { detached ? "独立服务（原方案创建）" : solutionCreated ? "方案服务" : "原生服务" }
     var labels: [String] { [title] + (reused ? ["方案复用"] : []) }
 }
 
@@ -25,11 +27,12 @@ struct ServiceOrigin {
                 title: SolutionCatalog.all.first { $0.id == record.solutionID }?.title ?? record.solutionID,
                 created: record.created, ownsConfiguration: references.contains { $0.ownsConfiguration })
         }
-        return ServiceOrigin(uses: uses)
+        return ServiceOrigin(uses: uses, createdBySolution: spec.solutionCreated == true)
     }
     func showSolution(_ use: SolutionServiceUse) {
         solutionTrial.reset()
         solutions.selectedID = use.solutionID
+        solutions.selectedDeploymentID = use.id
         solutions.section = .instances
         tab = .solutions
     }
@@ -59,6 +62,10 @@ struct ServiceOrigin {
         let origin = store.serviceOrigin(spec)
         VStack(alignment: .leading, spacing: 10) {
             ServiceOriginBadges(store: store, spec: spec)
+            if origin.detached {
+                Text(verbatim: L10n.text("原方案实例已移除，服务保留，可在这里独立管理。"))
+                    .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+            }
             if !origin.uses.isEmpty {
                 Text(verbatim: L10n.text("关联方案")).font(.system(size: TypeScale.callout, weight: .semibold))
                 ForEach(origin.uses) { use in

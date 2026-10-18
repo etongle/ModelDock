@@ -118,6 +118,7 @@ import CryptoKit
         try await wait { !solutions.startingIDs.contains(voiceID) }
         for _ in 0..<100 { await store.services.refresh(); if solutions.services(configured, store: store).allSatisfy({ store.services.status($0) == .running }) { break }; try await Task.sleep(nanoseconds: 50_000_000) }
         try require(solutions.services(configured, store: store).allSatisfy { store.services.status($0) == .running }, "Solution components did not become ready")
+        try await SolutionRuntimeChecks.run(store: store, deployment: configured)
         store.synchronizeGateway()
         let gatewaySolution = store.gateway.solutionRoutes.first { $0.id == voiceID.lowercased() }!
         try require(gatewaySolution.components.map(\.role) == ["asr", "translation", "tts"] && gatewaySolution.components.allSatisfy { $0.routeID != nil }, "Solution components did not bind to running routes")
@@ -152,7 +153,7 @@ import CryptoKit
         solutions.selectedID = "transcription"
         solutions.install(store: store)
         try await wait { solutions.latest?.state == .configured || solutions.latest?.state == .failed }
-        try require(solutions.latest?.state == .configured && store.downloads.jobs.count == 3 && solutions.latest?.components.first?.serviceID == asr.serviceID && solutions.latest?.components.first?.ownsConfiguration == false, "Shared model task/service was duplicated")
+        try require(solutions.latest?.state == .configured && store.downloads.jobs.count == 3 && solutions.latest?.components.first?.serviceID == asr.serviceID && solutions.latest?.components.first?.ownsConfiguration == false, "Shared model task/service was duplicated: state=\(solutions.latest?.state.rawValue ?? "nil"), jobs=\(store.downloads.jobs.count), service=\(solutions.latest?.components.first?.serviceID ?? "nil"), expected=\(asr.serviceID ?? "nil"), owns=\(solutions.latest?.components.first?.ownsConfiguration.description ?? "nil")")
         let transcription = solutions.latest!
         try require(store.gateway.solutionEndpoint(transcription) != endpoint, "Different deployments collided on a solution URL")
         let shared = store.services.records.first { $0.id == asr.serviceID }!

@@ -13,19 +13,34 @@ struct ServicePreset: Codable, Identifiable, Hashable {
 }
 
 @MainActor extension AppStore {
+    func canStartServiceInstance(_ saved: ServiceSpec) -> Bool {
+        guard let current = services.records.first(where: { $0.id == saved.id }) else { return false }
+        return current.pid == nil && services.canRemoveConfiguration(current) && !services.resourceCleanupInProgress &&
+            !appUpdates.applying && engineEnabled(current.engineID) && installation.activeEngineID != current.engineID &&
+            !(maintaining && maintenanceEngineID == current.engineID) && !(current.engineID == "strata" && strata.busy)
+    }
+    func startServiceInstance(_ saved: ServiceSpec) {
+        message = nil
+        do { let started = try startSaved(saved); selectedServiceID = started.id; synchronizeGateway() }
+        catch { message = error.localizedDescription }
+    }
     /// 按已保存的配置启动一个已停止的服务：命令启动的服务重新解析原命令，其余使用保存的参数。
     @discardableResult
     func startSaved(_ saved: ServiceSpec) throws -> ServiceSpec {
-        let spec = services.records.first { $0.id == saved.id } ?? saved
+        guard let spec = services.records.first(where: { $0.id == saved.id }) else { throw LaunchError.message("服务配置已变化，请刷新列表") }
         guard spec.pid == nil else { return spec }
+        guard !appUpdates.applying, !(spec.engineID == "strata" && strata.busy),
+              !(maintaining && maintenanceEngineID == spec.engineID), installation.activeEngineID != spec.engineID else { throw LaunchError.message("请等待当前模型准备或应用更新完成") }
+        guard engineEnabled(spec.engineID) else { throw LaunchError.message("此基座已停用，请在引擎配置中启用") }
+        guard services.canRemoveConfiguration(spec) else { throw LaunchError.message("服务状态正在更新，请稍后重试") }
         guard let engine = engines.first(where: { $0.id == spec.engineID }) else { throw LaunchError.message("未找到引擎") }
         if let text = spec.commandText {
-            return try services.start(command: ServiceCommand.parse(text, engine: engine, models: models))
+            return try services.start(command: ServiceCommand.parse(text, engine: engine, models: models), configurationID: spec.id)
         }
         let model = models.first { $0.id == spec.modelID || $0.path == spec.modelPath }
         guard model != nil || engine.kind == .ollama else { throw LaunchError.message("未找到服务使用的模型文件。") }
         return try services.start(engine: engine, model: model, port: spec.port, context: spec.context, maximumLoadedModels: spec.maximumLoadedModels ?? 3,
-                                  inputMode: spec.inputMode ?? .automatic, projectorPath: spec.projectorPath, extraArguments: spec.extraArguments)
+                                  inputMode: spec.inputMode ?? .automatic, projectorPath: spec.projectorPath, extraArguments: spec.extraArguments, configurationID: spec.id)
     }
 
     /// 应用启动后启动标记为“随 App 启动”的服务；端口被占用或已在运行的跳过，失败汇总提示。

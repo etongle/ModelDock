@@ -22,6 +22,16 @@ import uuid
 
 REPOSITORY = 'https://github.com/Niko1221/Strata.git'
 VARIANTS = ('Q2_0', 'IQ3_XXS', 'IQ3_S', 'UD-Q4_K_XL', 'UD-Q5_K_XL', 'UD-Q6_K_XL')
+SC117_REPO = 'SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF'
+SC117_REVISION = 'eec4e10a2c29b440a2ae85591fa11569ce752963'
+SC117_VARIANTS = ('SC117-Q2_0', 'SC117-IQ3_S')
+
+
+def custom_shards(variant):
+    if variant not in SC117_VARIANTS:
+        raise ValueError('Unknown custom Strata variant')
+    quant = variant.removeprefix('SC117-')
+    return [f'Qwen3.8-Flash-Next-GSQ-RCO-abliterated-{quant}-{i:05d}-of-00002.gguf' for i in (1, 2)]
 
 
 def emit(stage, message):
@@ -216,6 +226,12 @@ def catalogue(args):
         variants.append({'name': name, 'repository': match[1], 'revision': match[2],
                          'files': [match[3] + filename for filename in mac.model_shard_names(name)],
                          'downloadGB': setup_module.MODELS[name]['download_gb']})
+    for name in SC117_VARIANTS:
+        quant = name.removeprefix('SC117-')
+        variants.append({'name': name, 'repository': SC117_REPO, 'revision': SC117_REVISION,
+                         'files': [quant + '/' + file for file in custom_shards(name)],
+                         'componentFiles': ['mtp-q2_0.gguf', 'strata/rt/draft_vocab.bin', 'mmproj-Qwen3.8-Flash-Next-BF16.gguf'],
+                         'downloadGB': 68.619 if quant == 'Q2_0' else 85.661})
     print(json.dumps({'variants': variants}))
 
 
@@ -236,6 +252,28 @@ def prepare(args):
     else:
         data.mkdir(parents=True)
         atomic_json(marker, request)
+    custom = args.model in SC117_VARIANTS
+    if custom:
+        # Preserve the derivative's original filenames and rebuild its own offsets.
+        # Never pass it through an original-Qwen pack found in a shared cache.
+        root = gguf.parent
+        auxiliaries = [('mtp-q2_0.gguf', data / 'mtp/mtp-q2_0.gguf'),
+                       ('strata/rt/draft_vocab.bin', data / 'mtp/rt/draft_vocab.bin')]
+        if args.vision == 'yes':
+            auxiliaries.append(('mmproj-Qwen3.8-Flash-Next-BF16.gguf', data / 'models/mmproj-Qwen3.8-Flash-Next-BF16.gguf'))
+        for name in custom_shards(args.model):
+            if not (gguf / name).is_file() or (gguf / name).stat().st_size < 16:
+                raise ValueError('Download both original SC117 shards before preparation')
+        for name, destination in auxiliaries:
+            source = root / name
+            if not source.is_file() or source.stat().st_size < 16:
+                raise ValueError('Download the matching SC117 component first: ' + name)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if not destination.exists():
+                try:
+                    os.link(source, destination)
+                except OSError:
+                    shutil.copyfile(source, destination)
     python = runtime / '.venv/bin/python'
     emit('preparing', args.model + '; tokenizer, MTP and vision use the official setup')
     # Configs are written inside the immutable runtime by upstream. Redirect only
@@ -245,18 +283,31 @@ sys.path.insert(0, sys.argv[1])
 import setup as S
 import metal.setup_mac as M
 root = pathlib.Path(sys.argv[2])
+variant = sys.argv[3]
+argv = sys.argv[4:]
+custom = variant.startswith('SC117-')
+if custom:
+    quant = variant.removeprefix('SC117-')
+    names = [f'Qwen3.8-Flash-Next-GSQ-RCO-abliterated-{quant}-{i:05d}-of-00002.gguf' for i in (1, 2)]
+    M.model_shard_names = lambda model: names
+    S.FAMILIES['qwen'] = dict(S.FAMILIES['qwen'], hf='https://huggingface.co/SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF/resolve/eec4e10a2c29b440a2ae85591fa11569ce752963/{q}/', title='SC117 Flash-Next')
+    # Restrict pack and draft discovery to this immutable assembly.
+    S.find_in = lambda roots, relative: (root / relative) if (root / relative).exists() else None
+    argv[argv.index('--model') + 1] = quant
 original = S.write_config
 def write(path, cfg):
     if cfg.get('backend') == 'metal':
+        if custom:
+            cfg['model_name'] = 'SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF'
         cfg['log'] = str(root / 'engine.log')
         (root / 'strata.json').write_text(json.dumps(cfg, indent=2))
     else:
         original(path, cfg)
 S.write_config = write
 S.write_run_script = lambda *a, **k: root / 'strata.json'
-raise SystemExit(M.main(sys.argv[3:]))
+raise SystemExit(M.main(argv))
 '''
-    command = [python, '-u', '-c', adapter, str(runtime), str(data), '--yes', '--setup', '--no-start',
+    command = [python, '-u', '-c', adapter, str(runtime), str(data), args.model, '--yes', '--setup', '--no-start',
                '--no-browser', '--model', args.model, '--context', str(args.context),
                '--port', '8095', '--host', '127.0.0.1', '--vision', args.vision,
                '--data-dir', str(data), '--gguf-dir', str(gguf)]
@@ -351,7 +402,7 @@ def main():
     task.add_argument('--runtime', required=True)
     task = sub.add_parser('prepare')
     task.add_argument('--runtime', required=True)
-    task.add_argument('--model', choices=VARIANTS, required=True)
+    task.add_argument('--model', choices=VARIANTS + SC117_VARIANTS, required=True)
     task.add_argument('--data-dir', required=True)
     task.add_argument('--gguf-dir', required=True)
     task.add_argument('--vision', choices=('yes', 'no'), default='no')

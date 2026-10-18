@@ -98,6 +98,7 @@ extension LocalModel {
 struct StrataVariant: Decodable, Identifiable {
     var id: String { name }
     var name: String; var repository: String; var revision: String; var files: [String]; var downloadGB: Double
+    var componentFiles: [String]? = nil
 }
 struct StrataVariants: Decodable { var variants: [StrataVariant] }
 
@@ -184,10 +185,11 @@ final class StrataPreparationProcess: @unchecked Sendable {
             do {
                 let address = "https://huggingface.co/" + selection.repository + "/tree/" + selection.revision
                 let listing = try await ModelCatalog.listing(address, token: store.downloads.token)
-                guard Set(selection.files).isSubset(of: Set(listing.files.map(\.path))) else { throw LaunchError.message("官方模型版本缺少所需分片，请重新检查 Strata 版本。") }
+                let required = selection.files + (selection.componentFiles ?? [])
+                guard Set(required).isSubset(of: Set(listing.files.map(\.path))) else { throw LaunchError.message("官方模型版本缺少所需分片，请重新检查 Strata 版本。") }
                 store.downloads.beginImport()
                 store.downloads.listing = listing; store.downloads.address = address
-                store.downloads.selected = Set(selection.files); store.downloads.selectedTaskID = nil
+                store.downloads.selected = Set(required); store.downloads.selectedTaskID = nil
                 if !folder.isEmpty { store.downloads.destination = folder }
                 store.tab = .downloads
                 store.downloads.notice = "已选择 Strata 主权重和 n-gram 文件；完成后回到 Strata 准备配套组件。"

@@ -5,6 +5,7 @@ import AppKit
 extension Engine {
     var modalityGuide: (summary: String, activation: String, url: String) {
         switch kind {
+        case .mflux: return ("MFLUX 在 Apple Silicon 上生成图片。", "使用完整的 Qwen-Image-2.1-Turbo，默认 8 步、1024 像素。下载完成后离线加载主模型、文本编码器和 VAE。", "https://github.com/mflux-community/mflux/blob/main/src/mflux/models/qwen21/README.md")
         case .audio: return ("语音识别与语音合成使用独立的 MLX Audio 服务。", "Qwen3-ASR 接受音频并返回文字；Qwen3-TTS 接受文字并生成音频，Base 音色需要参考录音。", "https://github.com/Blaizzy/mlx-audio")
         case .strata: return ("Apple Silicon Metal 引擎，准备 Flash-Next 主模型与匹配组件后启动。", "准备时勾选图片输入组件；启动时可选择纯文本或多模态。MTP 使用此模型的配套草稿，Mac 服务一次处理一个请求，多客户端排队。", "https://github.com/Niko1221/Strata/blob/main/docs/MAC.md")
         case .splash: return ("新版 Splash 支持匹配模型的图片和 PDF；旧 packed 模型仅支持文本。", "新版默认加载兼容视觉组件；纯文本使用 --language-only。当前旧 packed 模型不能通过开关增加视觉能力。", "https://github.com/incoai/splash/blob/main/DEVELOPMENT.md#vision")
@@ -22,7 +23,7 @@ struct ModelCapabilityBadge: View {
     /// List rows use the same size as UsageBadge.
     var compact = false
     var body: some View {
-        Label(L10n.text(prefix + capabilities.badgeTitle), systemImage: capabilities.known && capabilities.supportsMedia ? "photo.on.rectangle" : "text.alignleft")
+        Label(L10n.text(prefix + capabilities.badgeTitle), systemImage: capabilities.outputs == ["image"] ? "photo.badge.plus" : capabilities.known && capabilities.supportsMedia ? "photo.on.rectangle" : "text.alignleft")
             .font(.system(size: compact ? TypeScale.caption : TypeScale.callout, weight: .medium)).foregroundStyle(Theme.muted)
             .padding(.horizontal, compact ? 6 : 8).padding(.vertical, compact ? 3 : 5).background(Theme.line, in: RoundedRectangle(cornerRadius: compact ? 5 : 7))
             .help(L10n.text(capabilities.source)).accessibilityLabel(L10n.text(prefix + capabilities.badgeTitle + "。" + capabilities.source))

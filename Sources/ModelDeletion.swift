@@ -72,16 +72,22 @@ enum ModelFileSafety {
               !["hub", "hf-cache", "models", "cache", "ollama", "lmstudio", "manifests", "blobs"].contains(path.lastPathComponent) else { throw LaunchError.message("这个位置包含多个模型，请选择具体模型文件") }
         return path
     }
-    static func used(_ model: LocalModel, removal: URL, services: [ServiceSpec], external: [ObservedService], models: [LocalModel] = []) -> Bool {
+    static func used(_ model: LocalModel, removal: URL, services: [ServiceSpec], external: [ObservedService], models: [LocalModel] = [], includingStopped: Bool = false) -> Bool {
         let resolved = removal.resolvingSymlinksInPath().path
         return services.contains { spec in
-            guard spec.pid != nil else { return false }
+            guard includingStopped || spec.pid != nil else { return false }
             if spec.engineID == "strata", let files = jsonFile(URL(fileURLWithPath: spec.modelPath).appendingPathComponent("modeldock-strata.json"))?["files"] as? [String: [String: Any]],
                files.values.compactMap({ $0["path"] as? String }).contains(where: {
                    let path = URL(fileURLWithPath: $0).resolvingSymlinksInPath().path
                    return EngineMaintenance.contains(resolved, path) || EngineMaintenance.contains(path, resolved)
                }) { return true }
-            for path in ([spec.draftModelPath, spec.projectorPath].compactMap({ $0 }) + (spec.componentSnapshot?.entries.compactMap(\.path) ?? [])) where path.hasPrefix("/") {
+            // Older GGUF snapshots used the containing folder for an embedded tokenizer.
+            // It belongs to the GGUF file, not to every sibling model in that folder.
+            let capturedPaths = spec.componentSnapshot?.entries.compactMap { entry -> String? in
+                if entry.id == "tokenizer", ["llama", "prism"].contains(spec.engineID), spec.modelPath.lowercased().hasSuffix(".gguf") { return spec.modelPath }
+                return entry.path
+            } ?? []
+            for path in ([spec.draftModelPath, spec.projectorPath].compactMap({ $0 }) + capturedPaths) where path.hasPrefix("/") {
                 let component = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
                 if EngineMaintenance.contains(resolved, component) || EngineMaintenance.contains(component, resolved) { return true }
             }
@@ -130,6 +136,7 @@ extension AppStore {
                     let path = try ModelFileSafety.removalURL(model, models: models, roots: inventory?.roots ?? [])
                     let source = URL(fileURLWithPath: model.path).resolvingSymlinksInPath()
                     @MainActor func checkUse() throws {
+                        if self.solutions.deployments.contains(where: { $0.components.contains { $0.modelID == model.id || $0.modelPath.map { DownloadController.overlaps($0, path.path) } == true } }) { throw LaunchError.message("方案实例仍引用此模型，请先移除关联或更换模型") }
                         if self.strata.uses(source.path) || self.strata.uses(path.path) { throw LaunchError.message("此模型位置正在准备 Strata 配套组件，请等待操作完成。") }
                         if self.downloads.hasWriter(affecting: path.path) { throw LaunchError.message("此模型目录正在下载，请先暂停对应下载任务") }
                         guard !ModelFileSafety.used(model, removal: path, services: self.services.records, external: self.services.external, models: self.models) else { throw LaunchError.message("此模型文件正在被服务使用，请先停止使用它的服务") }

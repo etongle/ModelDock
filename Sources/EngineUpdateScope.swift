@@ -43,7 +43,7 @@ extension AppStore {
     /// Stops this engine's managed services, installs the update, rescans, then restarts the same services on the new version.
     /// A failed update restarts them on the version that is still installed.
     func performInstall(_ plan: EngineInstallPlan) {
-        guard !preparingInstall && !installation.running else { return }
+        guard !services.resourceCleanupInProgress, !preparingInstall && !installation.running else { return }
         preparingInstall = true
         Task {
             await services.refresh()

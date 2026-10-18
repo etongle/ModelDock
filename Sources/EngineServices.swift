@@ -71,7 +71,7 @@ struct EngineServicesView: View {
             .accessibilityIdentifier("engine-service-\(spec.id)")
     }
     private func metadata(_ spec: ServiceSpec) -> some View {
-        Text(verbatim: L10n.text("端口 \(spec.port) · 上下文 \(spec.context.formatted()) tokens" + (spec.engineVersion.map { " · v\($0)" } ?? "")))
+        Text(verbatim: (spec.engineID == "mflux" ? L10n.text("生成图片") + " · " + String(spec.port) : L10n.text("端口 \(spec.port) · 上下文 \(spec.context.formatted()) tokens")) + (spec.engineVersion.map { " · v\($0)" } ?? ""))
             .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: true, vertical: false)
     }
     private func actions(_ spec: ServiceSpec) -> some View {
@@ -80,6 +80,10 @@ struct EngineServicesView: View {
             if spec.pid != nil {
                 Button { store.stop(spec) } label: { Label(L10n.text("停止"), systemImage: "stop.fill") }.buttonStyle(.bordered).disabled(services.status(spec) == .stopping).accessibilityIdentifier("stop-engine-service-\(spec.id)")
             } else {
+                Button { store.startServiceInstance(spec) } label: { Label(L10n.text("启动"), systemImage: "play.fill") }
+                    .buttonStyle(AccentButton()).disabled(!store.canStartServiceInstance(spec))
+                    .help(L10n.text("按此实例保存的配置启动"))
+                    .accessibilityIdentifier("start-engine-service-\(spec.id)")
                 Button(L10n.text("配置")) { store.configureService(spec) }.buttonStyle(.bordered)
                 Button(role: .destructive) { store.removeServiceConfiguration(spec) } label: { Label(L10n.text("删除"), systemImage: "trash") }.buttonStyle(.bordered).disabled(!services.canRemoveConfiguration(spec)).help(L10n.text("删除服务配置，保留模型文件和运行日志")).accessibilityIdentifier("delete-engine-service-\(spec.id)")
             }

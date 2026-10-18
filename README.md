@@ -38,6 +38,7 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 | LM Studio | GGUF / MLX, depending on its runtime | Models are loaded through the application or its supported CLI |
 | llama.cpp · Prism | Compatible GGUF | Options and architecture support depend on the local build |
 | Strata · Niko1221 | Prepared Flash-Next GGUF / Metal assemblies | Experimental Apple Silicon source installation on macOS 15+; matched MTP and optional images; local or external API |
+| MFLUX (development preview) | Complete Qwen-Image-2.1-Turbo pipeline | Offline text-to-image API; 8-step progress, cancellation and PNG export; full-model validation pending |
 
 A format label does not guarantee that every engine can run every architecture. ModelDock checks local files and launch constraints; the runtime validates the actual architecture and auxiliary components.
 
@@ -51,6 +52,8 @@ A format label does not guarantee that every engine can run every architecture. 
 6. Open **Services → One-click integration** to register it with pi or OpenCode, or copy its API endpoint.
 7. For translation, open **Solutions → Configuration**, choose languages and component models, then **Install and start**. Use **Edit configuration** for an existing deployment.
 
+In the local development build, each solution instance has its own expandable card, configuration, readiness, gateway endpoint and actions. Click anywhere in the card header to expand or collapse it. Deletion removes only the instance and its gateway URL by default. Separate, unchecked options let you stop and delete exclusive service configurations, move a selected model version to Trash, or uninstall engine programs. Shared resources are protected by references from other instances, saved services (including stopped services), companion models, and downloads. Retained services stay independently manageable; other model versions and shared caches are kept. A running process is only marked solution-ready after model and audio-protocol checks. Stopped service cards in Engines and service detail pages have a **Start** button that restores that instance’s saved configuration and port. The parameter editor checks port conflicts before changing or restarting a service. **Use free port** fills the draft without saving it; **View occupying service** opens the existing listener. Apply the new port explicitly with Save & Start or Save & Restart.
+
 ![Multilingual translation configuration](docs/assets/images/en-solutions.png)
 
 English is the first-launch default. Click the **globe/language button at the top right** to choose English, Chinese, French, Portuguese, or system language. You can also open **Settings → Interface language** with **⌘,**. Changes apply immediately.
@@ -60,6 +63,10 @@ Read the [illustrated user guide](docs/USER_GUIDE.md) for download management, d
 **Settings → App updates** controls daily GitHub checks and automatic installation. **ModelDock → Check for app updates…** checks immediately. Updates wait for downloads, engine operations and model preparation to finish.
 
 For Strata, compile its official Metal source build from **Engines**, download a supported Flash-Next quantization, then **Prepare model and components** before starting a service. Ordinary Qwen 27B weights or Splash DFlash drafts are not interchangeable with Strata's Flash-Next/MTP assembly. This integration was verified with an actual Metal/vision build and isolated API fixtures; full Flash-Next inference has not been tested in this release.
+
+**Local development preview, not included in 0.10.2:** SC117 Flash-Next variants have separate model-pack preparation and managed downloads for MTP/vision components. Their original shard names are preserved and their packs never reuse original-Qwen offsets. Swift MLX is not part of this work.
+
+For image generation, install **MFLUX** in Engines, open **Configuration → Download or view image model**, and download the complete pinned `Qwen/Qwen-Image-2.1-Turbo` snapshot (about 32.45 GB). Its transformer, text encoder, VAE, processor and sampling configuration are one model entry. Start it on a free port, then open **Services → Generate image**. The default is 8 steps at 1024×1024; progress shows prompt encoding, denoising and image decoding. Save PNG or copy an `/v1/images/generations` example. The unified gateway exposes image output without offering this model to coding clients. This is text-to-image generation, separate from Strata image understanding; image editing is not implemented in this preview. Protocol/fixture checks do not establish real-model generation quality, speed or memory use.
 
 The speech pipeline was verified with real local Qwen3-ASR, Qwen3.8 and Qwen3-TTS models using a synthetic English recording, French/Portuguese translation and reference-voice WAV output. Native checks cover configuration editing, stable URLs, reused-service startup and ordered subtitle requests. Physical microphone capture still requires a user-granted permission and device test; latency depends on hardware and models.
 

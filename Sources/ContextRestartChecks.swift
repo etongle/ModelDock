@@ -65,6 +65,7 @@ enum ContextRestartChecks {
             let failed = try await edit(edited, context: 65536, extra: "--threads 8")
             guard let restored = store.services.records.first(where: { $0.id == other.id }) else { throw LaunchError.message("Restored service missing") }
             try ConnectionChecks.require(failed.error?.contains("已按原参数重新启动") == true && restored.pid != nil && restored.context == 16384 && restored.extraArguments == ["--threads", "4"] && store.services.status(restored) == .running, "Failed parameter edit did not roll back")
+            try await ServiceParameterPortChecks.run(root: root, engine: engine, model: model, occupying: restored)
             for spec in store.services.records where spec.pid != nil { try store.services.stop(spec) }
             for _ in 0..<40 { await store.services.refresh(); if ports.allSatisfy({ !NetworkProbe.portOccupied($0) }) { break }; try await Task.sleep(nanoseconds: 250_000_000) }
             try ConnectionChecks.require(ports.allSatisfy({ !NetworkProbe.portOccupied($0) }), "Fixture services not cleaned up")

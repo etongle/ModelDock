@@ -47,7 +47,7 @@ extension AppStore {
     }
     func downloadedModels(_ job: ModelDownload) -> [LocalModel] {
         let folder = URL(fileURLWithPath: job.root).appendingPathComponent(job.folder).standardizedFileURL.path
-        return models.filter { ($0.kind == .language || $0.kind == .speech) && $0.complete && ($0.path == folder || $0.path.hasPrefix(folder + "/")) }
+        return models.filter { [.language, .speech, .image].contains($0.kind) && $0.complete && ($0.path == folder || $0.path.hasPrefix(folder + "/")) }
     }
     func showDownloadedModel(_ job: ModelDownload) {
         if let model = downloadedModels(job).first { showModelFile(model); return }

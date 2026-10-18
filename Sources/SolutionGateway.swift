@@ -38,6 +38,7 @@ extension SolutionRole {
                       let spec = services.records.first(where: { $0.id == component.serviceID && $0.engineID == component.engineID && $0.modelID == component.modelID }),
                       let path = component.modelPath else { return .init(role: role.gatewayModel) }
                 let model = local.first { $0.id == component.modelID && ModelInstancePolicy.samePath($0.path, path) }
+                if role == .text, let model, TranslationLanguages.modelIssue(model) != nil { return .init(role: role.gatewayModel) }
                 let paths = [path] + (model.map(ModelInstancePolicy.paths) ?? [])
                 guard paths.contains(where: { ModelInstancePolicy.samePath(spec.modelPath, $0) }) else { return .init(role: role.gatewayModel) }
                 let candidates = routes.filter { $0.sourceID == spec.id }
@@ -68,17 +69,17 @@ extension SolutionRole {
     // Audio services belong in the gateway without being treated as chat benchmarks or coding assistants.
     var gatewaySourceTargets: [ConnectionTarget] {
         let audio = services.records.compactMap { spec -> ConnectionTarget? in
-            guard spec.engineID == "audio", engineEnabled(spec.engineID), services.status(spec) == .running,
+            guard ["audio", "mflux"].contains(spec.engineID), engineEnabled(spec.engineID), services.status(spec) == .running,
                   let pid = spec.pid, let birth = spec.processStart, birth > 0 else { return nil }
             let names = services.reportedModels[spec.port] ?? []
             guard names.count == 1, let name = names.first, ConnectionFiles.validModel(name) else { return nil }
-            var target = ConnectionTarget(id: spec.id + ":" + name, engineName: "MLX Audio", engineID: spec.engineID, model: name, port: spec.port, pid: pid, birth: birth, context: nil)
+            var target = ConnectionTarget(id: spec.id + ":" + name, engineName: spec.engineID == "mflux" ? "MFLUX" : "MLX Audio", engineID: spec.engineID, model: name, port: spec.port, pid: pid, birth: birth, context: nil)
             target.sourceID = spec.id
             var capability = services.modelCapabilities[spec.port]?[name] ?? ModelCapabilities()
             if !capability.known, let model = models.first(where: { $0.id == spec.modelID }) { capability = ModalityPolicy.local(model) }
             target.capabilities = capability.applying(spec.inputMode ?? .automatic)
             return target
         }
-        return directConnectionTargets + audio
+        return directConnectionTargets + audio + configuredGatewayTargets.filter { !($0.capabilities?.outputs ?? ["text"]).contains("text") }
     }
 }

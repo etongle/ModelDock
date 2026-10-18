@@ -307,7 +307,8 @@ extension AppStore {
             return target
         }
     }
-    var configuredConnectionTargets: [ConnectionTarget] {
+    var configuredConnectionTargets: [ConnectionTarget] { configuredGatewayTargets.filter { ($0.capabilities?.outputs ?? ["text"]).contains("text") && ($0.capabilities?.inputs ?? ["text"]).contains("text") } }
+    var configuredGatewayTargets: [ConnectionTarget] {
         gateway.settings.endpoints.flatMap { entry in entry.models.map { model in
             var target = ConnectionTarget(id: "remote:\(entry.id):\(model.id)", engineName: entry.name, engineID: entry.engineID ?? "remote", model: model.id, port: URL(string: entry.url)?.port ?? (entry.url.hasPrefix("https") ? 443 : 80), pid: entry.pid ?? 0, birth: entry.birth ?? 0, context: model.capabilities.context ?? entry.context)
             target.endpointOverride = entry.url; target.apiKey = entry.apiKey.isEmpty ? nil : entry.apiKey; target.capabilities = model.capabilities; target.sourceID = "remote:\(entry.id)"; target.remoteRevision = entry.revision; target.registration = gateway.settingsURL.path

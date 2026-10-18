@@ -58,6 +58,7 @@ final class AppStore: ObservableObject {
     @Published var preparingInstall = false
     @Published var relaunchingServiceID: String?
     @Published var chat: ChatSession?
+    var imageSessions: [String: ImageGenerationSession] = [:]
     @Published var servicePresets: [ServicePreset] = []
     let modelSearch = ModelSearchController()
     let loginItem = LoginItemController()
@@ -243,10 +244,10 @@ final class AppStore: ObservableObject {
     var currentStatus: ServiceStatus { currentService.map { services.status($0) } ?? .stopped }
     var occupiedExternally: Bool { parsedPort.map { candidate in services.external.contains { $0.port == candidate } } ?? false }
     var portConflict: String? { parsedPort.flatMap { services.portConflict($0, excluding: currentService?.id) } }
-    var canStart: Bool { engineEnabled(engineID) && !scanning && !(engineID == "strata" && strata.busy) && !(maintaining && maintenanceEngineID == engineID) && installation.activeEngineID != engineID && engine.canServe && parsedPort != nil && (selectedModel != nil || engine.kind == .ollama) && portConflict == nil && currentService?.pid == nil && (inputMode != .multimodal || ModalityPolicy.nativeMultimodalReason(engine: engine, model: selectedModel, projector: projectorPath) == nil) }
+    var canStart: Bool { !services.resourceCleanupInProgress && engineEnabled(engineID) && !scanning && !(engineID == "strata" && strata.busy) && !(maintaining && maintenanceEngineID == engineID) && installation.activeEngineID != engineID && engine.canServe && parsedPort != nil && (selectedModel != nil || engine.kind == .ollama) && portConflict == nil && currentService?.pid == nil && (inputMode != .multimodal || ModalityPolicy.nativeMultimodalReason(engine: engine, model: selectedModel, projector: projectorPath) == nil) }
     var filteredModels: [LocalModel] {
         models.filter { model in
-            modelMatchesEngineFilter(model) && (modelFilter == "全部" || (modelFilter == "主模型" ? model.kind == .language : model.kind != .language)) && (search.isEmpty || (model.name + model.format + model.path).localizedCaseInsensitiveContains(search))
+            modelMatchesEngineFilter(model) && (modelFilter == "全部" || (modelFilter == "主模型" ? [.language, .image].contains(model.kind) : ![.language, .image].contains(model.kind))) && (search.isEmpty || (model.name + model.format + model.path).localizedCaseInsensitiveContains(search))
         }
     }
     func selectVisibleFile() { if !filteredModels.contains(where: { $0.id == selectedFileID }) { selectedFileID = filteredModels.first?.id } }
@@ -295,6 +296,9 @@ final class AppStore: ObservableObject {
     }
     func showPortOwner() {
         guard let candidate = parsedPort else { return }
+        showPortOwner(candidate)
+    }
+    func showPortOwner(_ candidate: Int) {
         gatewaySelected = false
         serviceEngineFilter = ""
         if let external = services.external.first(where: { $0.port == candidate }) { selectedExternal = external.port }
@@ -359,6 +363,7 @@ final class AppStore: ObservableObject {
 
     func maintenanceBlockers(_ plan: MaintenancePlan, selectedIDs: Set<String>? = nil, includeDownloads: Bool = true) -> [String] {
         var blockers = plan.blockers
+        if plan.mode == .uninstall && solutions.deployments.contains(where: { $0.components.contains { $0.engineID == plan.engine.id } }) { blockers.append("方案实例仍引用此基座，请先移除关联或更换基座") }
         let chosen = plan.items.filter { selectedIDs?.contains($0.id) ?? $0.selectedByDefault }
         if plan.engine.kind == .strata && strata.busy { blockers.append("请等待 Strata 模型准备操作完成。") }
         if includeDownloads { blockers += EngineMaintenance.downloadBlockers(chosen, jobs: downloads.jobs) }

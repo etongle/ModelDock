@@ -85,7 +85,11 @@ struct SolutionLocalChoice: Identifiable {
     @Published var editingID: String?
     @Published var selectedDeploymentID: String?
     @Published var startingIDs = Set<String>()
+    @Published var removingIDs = Set<String>()
     @Published var audioVersions: [String: Int] = [:]
+    var audioProcessStarts: [String: UInt64] = [:]
+    var cleanupEnginePlanner: ((Engine, Inventory) async -> MaintenancePlan)?
+    var cleanupTrash: ((URL) async throws -> Void)?
     var startOperations: [String: Task<Void, Never>] = [:]
     var autoStartRequests = Set<String>()
     let directory: URL
@@ -158,7 +162,7 @@ struct SolutionLocalChoice: Identifiable {
     }
     func install(store: AppStore, launchWhenReady: Bool = false) {
         guard store.inventory != nil, !store.scanning else { message = "正在扫描模型文件…"; return }
-        guard preparingID == nil, !store.installation.running, !store.maintaining else { message = "请等待当前引擎操作完成"; return }
+        guard preparingID == nil, removingIDs.isEmpty, !store.installation.running, !store.maintaining else { message = "请等待当前引擎操作完成"; return }
         let definition = definition, draft = draft
         if editingID == nil, let existing = deployments.last(where: { $0.solutionID == definition.id && $0.draft == draft && $0.state != .configured && usesCurrentRecommendations($0) }) {
             if launchWhenReady { autoStartRequests.insert(existing.id) }
@@ -177,7 +181,7 @@ struct SolutionLocalChoice: Identifiable {
         } catch { message = error.localizedDescription }
     }
     func retry(_ id: String, store: AppStore) {
-        guard preparingID == nil, !store.installation.running, !store.maintaining, let index = deployments.firstIndex(where: { $0.id == id }), deployments[index].state != .configured else { return }
+        guard preparingID == nil, removingIDs.isEmpty, !store.installation.running, !store.maintaining, let index = deployments.firstIndex(where: { $0.id == id }), deployments[index].state != .configured else { return }
         deployments[index].state = .preparing; deployments[index].error = nil
         perform(id, store: store)
     }
@@ -313,7 +317,7 @@ struct SolutionLocalChoice: Identifiable {
             let port = try EnginePortPolicy.available(engine: engine, base: engine.defaultPort, count: 1, occupied: { candidate in store.services.records.contains { $0.port == candidate } || NetworkProbe.portOccupied(candidate) })[0]
             let mode: InputMode = component.role == .vision ? .multimodal : [.asr, .tts].contains(component.role) ? .automatic : .text
             let launch = try LaunchBuilder.plan(engine: engine, model: model, port: port, context: 8192, inputMode: mode)
-            let spec = ServiceSpec(engineID: engine.id, modelID: model.id, modelName: model.name, modelPath: model.path, port: port, engineVersion: launch.engineVersion, engineExecutable: launch.executable, inputMode: mode, projectorPath: model.companion)
+            let spec = ServiceSpec(engineID: engine.id, modelID: model.id, modelName: model.name, modelPath: model.path, port: port, engineVersion: launch.engineVersion, engineExecutable: launch.executable, inputMode: mode, projectorPath: model.companion, solutionCreated: true)
             try store.services.registerConfiguration(spec)
             update(id) { record in if let index = record.components.firstIndex(where: { $0.id == component.id }) { record.components[index].serviceID = spec.id; record.components[index].modelID = model.id; record.components[index].modelPath = model.path; record.components[index].ownsConfiguration = true } }
         }
@@ -350,10 +354,14 @@ struct SolutionLocalChoice: Identifiable {
             do { try store.services.stop(spec) } catch { message = error.localizedDescription }
         }
     }
-    func remove(_ id: String, store: AppStore) {
+    func remove(_ id: String, store: AppStore, serviceIDs: Set<String> = []) {
         guard let deployment = deployments.first(where: { $0.id == id }), preparingID != id, !startingIDs.contains(id) else { return }
+        let before = deployments
         let ownedConfigurations = Set(deployment.components.filter(\.ownsConfiguration).compactMap(\.serviceID))
-        guard !services(deployment, store: store).contains(where: { spec in ownedConfigurations.contains(spec.id) && spec.pid != nil && !deployments.contains(where: { $0.id != id && $0.components.contains { $0.serviceID == spec.id } }) }) else { message = "请先停止方案实例，再移除方案配置"; return }
+        let eligible = Set(removalItems(deployment, store: store).filter { $0.action == .remove }.map(\.id))
+        guard serviceIDs.isSubset(of: eligible), services(deployment, store: store).filter({ serviceIDs.contains($0.id) }).allSatisfy({ store.services.canRemoveConfiguration($0) }) else { message = "清理范围已变化，所选服务仍在使用或被共享，请重新确认"; return }
+        do { try store.services.preserveSolutionOrigins(ownedConfigurations) }
+        catch { message = error.localizedDescription; return }
         // Ownership follows shared references so an orphaned runtime/task never becomes unmanageable.
         for process in deployment.processes {
             if let other = deployments.firstIndex(where: { $0.id != id && $0.components.contains { $0.serviceID == process.serviceID } }), !deployments[other].processes.contains(where: { $0.serviceID == process.serviceID }) { deployments[other].processes.append(process) }
@@ -369,10 +377,15 @@ struct SolutionLocalChoice: Identifiable {
                let other = deployments.firstIndex(where: { $0.id != id && $0.components.contains { $0.downloadID == downloadID } }),
                let index = deployments[other].components.firstIndex(where: { $0.downloadID == downloadID }) { deployments[other].components[index].ownsDownload = true }
         }
-        for component in deployment.components where component.ownsConfiguration {
+        for component in deployment.components where component.ownsConfiguration && component.serviceID.map(serviceIDs.contains) == true {
             guard let serviceID = component.serviceID, !deployments.contains(where: { $0.id != id && $0.components.contains { $0.serviceID == serviceID } }), let spec = store.services.records.first(where: { $0.id == serviceID }) else { continue }
-            do { try store.services.removeConfiguration(spec) } catch { message = error.localizedDescription; return }
+            let failures = store.applyRemovalCleanup(store.removalCleanup(service: spec))
+            if !failures.isEmpty { deployments = before; message = failures.joined(separator: "\n"); return }
         }
-        deployments.removeAll { $0.id == id }; save()
+        deployments.removeAll { $0.id == id }
+        guard save() else { deployments = before; return }
+        if selectedDeploymentID == id { selectedDeploymentID = deployments.last(where: { $0.solutionID == deployment.solutionID })?.id }
+        if editingID == id { editingID = nil }
+        store.synchronizeGateway()
     }
 }

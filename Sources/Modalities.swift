@@ -16,7 +16,7 @@ struct ModelCapabilities: Codable, Hashable {
     var context: Int?
     var supportsMedia: Bool { inputs.contains { $0 != "text" } }
     var title: String { ["text", "image", "audio", "video", "file"].filter(inputs.contains).map { ["text": "文本", "image": "图片", "audio": "音频", "video": "视频", "file": "文件"][$0]! }.joined(separator: " / ") }
-    var badgeTitle: String { known ? (supportsMedia ? title : L10n.text("仅文本")) : (supportsMedia ? title + " · 待确认" : "能力待核实") }
+    var badgeTitle: String { outputs == ["image"] ? "文本 → 图片" : known ? (supportsMedia ? title : L10n.text("仅文本")) : (supportsMedia ? title + " · 待确认" : "能力待核实") }
     func applying(_ mode: InputMode) -> ModelCapabilities {
         var value = self
         if mode == .text { value.inputs = ["text"]; value.known = true; value.source = "纯文本设置" }
@@ -53,6 +53,7 @@ enum ModalityPolicy {
     }
     static func nativeMultimodalReason(engine: Engine, model: LocalModel?, projector: String?) -> String? {
         switch engine.kind {
+        case .mflux: return "此入口从文字生成图片，请使用自动模式。"
         case .audio: return "语音能力由具体识别或合成模型决定，请使用自动模式。"
         case .strata:
             guard let prepared = model?.preparedForStrata(.multimodal), prepared.complete else { return "请先准备包含匹配视觉编码器和投影的 Strata 模型，再开启多模态。" }
@@ -75,6 +76,7 @@ enum ModalityPolicy {
     }
     static func local(_ model: LocalModel) -> ModelCapabilities {
         var result = ModelCapabilities()
+        if model.kind == .image { return .init(inputs: ["text"], outputs: ["image"], known: true, source: "Qwen Image 2.1 图片生成组件") }
         if let task = AudioModelPolicy.task(model) { result.inputs = task == "asr" ? ["audio"] : AudioModelPolicy.supportsReference(model) ? ["text", "audio"] : ["text"]; result.outputs = task == "asr" ? ["text"] : ["audio"]; result.known = true; result.source = "MLX Audio 模型配置"; return result }
         if let path = model.strataConfig, let config = jsonFile(URL(fileURLWithPath: path)) {
             result.inputs = config["vision"] == nil ? ["text"] : ["text", "image"]; result.known = true; result.source = "Strata 已准备组件"; return result
@@ -121,7 +123,7 @@ struct InputModeView: View {
             }
             HStack {
                 Text(verbatim: L10n.text("本次启动模式")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
-                if store.engine.independentModels && store.engine.kind != .audio {
+                if store.engine.independentModels && ![.audio, .mflux].contains(store.engine.kind) {
                     Picker(L10n.text("本次启动模式"), selection: $store.inputMode) {
                         Text(verbatim: L10n.text(InputMode.automatic.title)).tag(InputMode.automatic)
                         Text(verbatim: L10n.text(InputMode.text.title)).tag(InputMode.text)

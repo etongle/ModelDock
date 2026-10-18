@@ -19,6 +19,7 @@ struct ModelCompatibility {
 extension Engine {
     var modelRule: String {
         switch kind {
+        case .mflux: return "Qwen-Image-2.1-Turbo · 图片生成"
         case .audio: return "Qwen3-ASR / Qwen3-TTS · MLX 语音组件"
         case .strata: return "Flash-Next · Metal 主模型与配套组件"
         case .splash: return SplashRuntime.current(self)?.supportsPacked == false ? "新版上游模型 · packed 使用匹配旧组件" : "Splash 专属封装"
@@ -44,6 +45,7 @@ extension LocalModel {
         return nil
     }
     var usageTitle: String {
+        if kind == .image { return "图片生成 · MFLUX" }
         if kind == .draft { return "草稿加速组件 · 不能单独运行" }
         if kind == .adapter { return "附属适配器 · 不能单独运行" }
         switch exclusiveEngine {
@@ -58,6 +60,7 @@ extension LocalModel {
         }
     }
     var usageExplanation: String {
+        if kind == .image { return "图片生成模型需要完整的主权重、文本编码器、VAE 和处理配置，使用 MFLUX；不能交给聊天模型引擎加载。" }
         if kind == .draft { return "DFlash2 与匹配的主模型配合做推测解码，使用主模型 tokenizer；不能作为聊天服务或普通 MLX-LM 模型单独加载。" }
         if kind == .adapter { return "适配器需要匹配原始基座和加载方式，不能作为独立主模型启动。" }
         switch exclusiveEngine {
@@ -72,6 +75,8 @@ extension LocalModel {
         }
     }
     func compatibility(with engine: Engine) -> ModelCompatibility {
+        if engine.kind == .mflux { return .init(level: kind == .image && ImageModelPolicy.recognizes(URL(fileURLWithPath: path)) ? (complete ? .direct : .incomplete) : .unsupported, reason: "MFLUX 加载完整的 Qwen-Image-2.1-Turbo 图片生成组件。") }
+        if kind == .image || architecture == "qwen_image21" { return .init(level: .unsupported, reason: "此模型用于生成图片，需要图片生成引擎。") }
         if engine.kind == .audio { return .init(level: AudioModelPolicy.task(self) == nil ? .unsupported : complete ? .direct : .incomplete, reason: "语音模型由 MLX Audio 加载；识别与合成能力分别标记。") }
         if AudioModelPolicy.task(self) != nil { return .init(level: .unsupported, reason: "此语音模型需要 MLX Audio，不能作为聊天模型加载。") }
         if kind == .draft { return .init(level: .unsupported, reason: "草稿模型应在主模型的引擎配置中选择，不单独启动服务。") }

@@ -144,7 +144,7 @@ struct EngineModelCard: View {
         HStack(spacing: 14) {
             Button { store.selectModel(model) } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: model.kind == .embedding ? "text.magnifyingglass" : "cube").font(.system(size: 20)).foregroundStyle(Theme.muted).frame(width: 40, height: 40).background(Theme.line, in: RoundedRectangle(cornerRadius: 9))
+                    Image(systemName: model.kind == .image ? "photo.badge.plus" : model.kind == .embedding ? "text.magnifyingglass" : "cube").font(.system(size: 20)).foregroundStyle(Theme.muted).frame(width: 40, height: 40).background(Theme.line, in: RoundedRectangle(cornerRadius: 9))
                     VStack(alignment: .leading, spacing: 5) {
                         Text(model.name).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1)
                         Text(verbatim: L10n.text("\(model.format) · \(sizeLabel(model.bytes)) · \(model.verification)")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(1)

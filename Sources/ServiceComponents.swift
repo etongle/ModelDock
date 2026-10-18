@@ -69,7 +69,7 @@ enum ServiceComponentEvidence {
         let projector = spec.projectorPath ?? argument("--mmproj")
         let visionPath = projector ?? (files["vision/config.json"]?["path"] as? String).map { URL(fileURLWithPath: $0).deletingLastPathComponent().path } ?? (mediaEnabled ? primary?.folder : nil)
         entries.append(.init(id: "vision", title: projector == nil ? "视觉组件" : "视觉投影", name: mediaEnabled ? (projector.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "随主模型加载 · 图片" + (capabilities.inputs.contains("file") ? " / 文件" : "")) : textOnly ? "本次按纯文本启动" : "当前服务未确认图片能力", path: visionPath, state: mediaEnabled ? (visionConfirmed ? "已启用" : "已配置") : textOnly || capabilities.known ? "未启用" : "待确认", confirmed: visionConfirmed || textOnly))
-        let tokenizerPath = (files["tokenizer/tokenizer.json"]?["path"] as? String).map { URL(fileURLWithPath: $0).deletingLastPathComponent().path } ?? primary?.folder
+        let tokenizerPath = (files["tokenizer/tokenizer.json"]?["path"] as? String).map { URL(fileURLWithPath: $0).deletingLastPathComponent().path } ?? (["llama", "prism"].contains(spec.engineID) ? primary?.path : primary?.folder)
         if tokenizerPath != nil {
             entries.append(.init(id: "tokenizer", title: "Tokenizer", name: ["llama", "prism"].contains(spec.engineID) ? "使用主模型内置 tokenizer" : "由主模型提供，草稿共用", path: tokenizerPath, state: "主模型提供", confirmed: true))
         }

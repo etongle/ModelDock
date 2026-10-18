@@ -6,6 +6,9 @@ from pathlib import Path
 import tempfile
 import unittest
 import subprocess
+import sys
+from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('modeldock_strata', ROOT / 'Resources/strata.py')
@@ -14,6 +17,48 @@ spec.loader.exec_module(adapter)
 
 
 class StrataAdapterChecks(unittest.TestCase):
+    def test_sc117_preparation_keeps_filenames_and_rebuilds_private_pack(self):
+        runtime = self.root / 'custom-runtime'
+        (runtime / 'metal').mkdir(parents=True)
+        (runtime / '.venv/bin').mkdir(parents=True)
+        (runtime / '.venv/bin/python').symlink_to(sys.executable)
+        (runtime / 'setup.py').write_text("FAMILIES={'qwen':{'hf':'original/{q}/','title':'original'}}\ndef write_config(*args): raise AssertionError('Unredirected config')\n")
+        (runtime / 'metal/setup_mac.py').write_text('''import pathlib
+import setup as S
+def model_shard_names(model): return ['WRONG-ORIGINAL.gguf']
+def main(argv):
+    def arg(name): return argv[argv.index(name)+1]
+    root=pathlib.Path(arg('--data-dir')); gguf=pathlib.Path(arg('--gguf-dir'))
+    assert arg('--model') == 'Q2_0'
+    assert 'SC117/' in S.FAMILIES['qwen']['hf']
+    assert S.find_in([pathlib.Path('/shared-old-pack')], 'packs/q2_0') is None
+    names=model_shard_names('Q2_0')
+    assert all('GSQ-RCO-abliterated' in name for name in names)
+    assert all((gguf/name).is_file() for name in names)
+    pack=root/'packs/q2_0'; (pack/'tokenizer').mkdir(parents=True)
+    (pack/'native_experts.txt').write_text('new-custom-offsets')
+    (pack/'tokenizer/vocab.json').write_text('{}')
+    cfg={'backend':'metal','args':['--native',str(gguf/names[0]),'--ple-gguf',str(gguf/names[1]),'--pack',str(pack),'--mtp',str(root/'mtp/rt')], 'tokenizer':str(pack/'tokenizer')}
+    S.write_config(root/'wrong.json',cfg)
+    return 0
+''')
+        (runtime.parent / 'modeldock-runtime.json').write_text(json.dumps({'revision': 'fixture-source'}))
+        snapshot = self.root / 'SC117-snapshot'; gguf = snapshot / 'Q2_0'; gguf.mkdir(parents=True)
+        for name in adapter.custom_shards('SC117-Q2_0'):
+            (gguf / name).write_bytes(b'GGUF' + b'x' * 32)
+        for name in ['mtp-q2_0.gguf', 'strata/rt/draft_vocab.bin']:
+            item = snapshot / name; item.parent.mkdir(parents=True, exist_ok=True); item.write_bytes(b'fixture' * 8)
+        target = self.root / 'custom-assembly'
+        args = SimpleNamespace(runtime=str(runtime), data_dir=str(target), gguf_dir=str(gguf), model='SC117-Q2_0', vision='no', context=8192)
+        with patch.object(adapter, 'preflight'):
+            adapter.prepare(args)
+        cfg = json.loads((target / 'strata.json').read_text())
+        self.assertEqual(cfg['model_name'], adapter.SC117_REPO)
+        self.assertEqual(Path(adapter.option(cfg['args'], '--native')).parent, gguf)
+        self.assertTrue(Path(adapter.option(cfg['args'], '--pack')).is_relative_to(target))
+        self.assertEqual((target / 'packs/q2_0/native_experts.txt').read_text(), 'new-custom-offsets')
+        self.assertEqual(json.loads((target / 'modeldock-strata.json').read_text())['model'], 'SC117-Q2_0')
+
     def test_portable_environment_survives_app_replacement(self):
         portable = ROOT / 'build/ModelDock.app/Contents/Resources/PythonRuntime'
         if not (portable / 'bin/python3').exists():

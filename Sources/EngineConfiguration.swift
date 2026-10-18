@@ -109,7 +109,7 @@ final class EngineConfigurationDraft: ObservableObject, Identifiable {
                 VStack(alignment: .leading, spacing: 16) {
                     Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 16) {
                         GridRow { Text(verbatim: L10n.text("默认端口")); TextField(L10n.text("1024–65535"), text: $draft.port).textFieldStyle(.roundedBorder).frame(width: 150) }
-                        if draft.engine.kind != .audio {
+                        if ![.audio, .mflux].contains(draft.engine.kind) {
                             GridRow { Text(verbatim: L10n.text("默认上下文")); Picker(L10n.text("默认上下文"), selection: $draft.context) { ForEach([2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144], id: \.self) { Text(verbatim: L10n.text($0.formatted() + " tokens")).tag($0) } }.labelsHidden() }
                             GridRow { Text(verbatim: L10n.text("默认输入模式")); Picker(L10n.text("默认输入模式"), selection: $draft.inputMode) { ForEach(InputMode.allCases) { Text(verbatim: L10n.text($0.title)).tag($0) } }.labelsHidden() }
                         }

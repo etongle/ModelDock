@@ -158,7 +158,11 @@ final class ServiceController: ObservableObject {
         if let spec = records.first(where: { $0.port == port && $0.pid != nil && $0.id != id }) {
             return "端口 \(port) 已由 \(PortIdentity.name(spec.engineID)) 使用（\(status(spec).title)）"
         }
-        if let id, records.contains(where: { $0.id == id && $0.pid != nil }), statuses[id] != .conflicted { return nil }
+        // Only this configuration's own verified listener can be excluded. A
+        // running service on another port cannot exempt the requested port.
+        if let id, let own = records.first(where: { $0.id == id && $0.port == port && $0.pid != nil }),
+           let listening = listeners[port], !listening.isEmpty,
+           listening.allSatisfy({ $0.belongs(to: own) }) { return nil }
         return NetworkProbe.portOccupied(port) ? "端口 \(port) 已被其他进程占用" : nil
     }
     func logURL(_ id: String) -> URL { stateDirectory.appendingPathComponent("logs/\(id).log") }
@@ -179,11 +183,21 @@ final class ServiceController: ObservableObject {
     }
     /// Save a stopped configuration without starting or touching any model process.
     func registerConfiguration(_ spec: ServiceSpec) throws {
+        guard !resourceCleanupInProgress else { throw LaunchError.message("正在清理所选资源，请稍后修改服务") }
         guard UUID(uuidString: spec.id) != nil, spec.pid == nil, !records.contains(where: { $0.id == spec.id || $0.port == spec.port }), (1024...65535).contains(spec.port) else { throw LaunchError.message("服务配置或端口已变化，请重试") }
         try FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
         try JSONEncoder().encode(records + [spec]).write(to: stateDirectory.appendingPathComponent("services.json"), options: .atomic)
         records.append(spec)
     }
+    func preserveSolutionOrigins(_ ids: Set<String>) throws {
+        var next = records
+        for index in next.indices where ids.contains(next[index].id) { next[index].solutionCreated = true }
+        guard next != records else { return }
+        try JSONEncoder().encode(next).write(to: stateDirectory.appendingPathComponent("services.json"), options: .atomic)
+        records = next
+    }
+
+    @Published var resourceCleanupInProgress = false
     func captureComponents(_ value: ServiceComponentSnapshot, spec: ServiceSpec) {
         guard let index = records.firstIndex(where: { $0.id == spec.id && $0.pid == spec.pid && $0.processStart == spec.processStart && $0.startedAt == spec.startedAt }), records[index].componentSnapshot != value else { return }
         if let old = records[index].componentSnapshot, !old.entries.contains(where: { $0.id == "draft" && !$0.confirmed }) { return }
@@ -201,10 +215,11 @@ final class ServiceController: ObservableObject {
 
     @discardableResult
     // `extraArguments == nil` keeps the flags already saved on the matching configuration.
-    func start(engine: Engine, model: LocalModel?, port: Int, context: Int, maximumLoadedModels: Int = 3, inputMode: InputMode = .automatic, projectorPath: String? = nil, extraArguments: [String]? = nil) throws -> ServiceSpec {
+    func start(engine: Engine, model: LocalModel?, port: Int, context: Int, maximumLoadedModels: Int = 3, inputMode: InputMode = .automatic, projectorPath: String? = nil, extraArguments: [String]? = nil, configurationID: String? = nil) throws -> ServiceSpec {
         var plan = try LaunchBuilder.plan(engine: engine, model: model, port: port, context: context, maximumLoadedModels: maximumLoadedModels, inputMode: inputMode, projectorPath: projectorPath)
         guard !portReserved(port), !NetworkProbe.portOccupied(port) else { throw LaunchError.message((portConflict(port) ?? "端口 \(port) 已被占用") + "，请使用空闲端口") }
-        var spec = record(engineID: engine.id, modelID: model?.id, port: port) ?? ServiceSpec(engineID: engine.id, modelID: model?.id ?? "", modelName: model?.name ?? "Ollama 服务", modelPath: model?.path ?? "", port: port)
+        let saved = try savedConfiguration(configurationID, engineID: engine.id, port: port)
+        var spec = saved ?? record(engineID: engine.id, modelID: model?.id, port: port) ?? ServiceSpec(engineID: engine.id, modelID: model?.id ?? "", modelName: model?.name ?? "Ollama 服务", modelPath: model?.path ?? "", port: port)
         guard spec.pid == nil else { throw LaunchError.message("这个服务已经启动，请先停止再重新配置") }
         let extras = extraArguments ?? spec.extraArguments ?? []
         try ServiceExtraArguments.validate(extras, engine: engine)
@@ -220,9 +235,10 @@ final class ServiceController: ObservableObject {
     }
 
     @discardableResult
-    func start(command: CommandLaunch) throws -> ServiceSpec {
+    func start(command: CommandLaunch, configurationID: String? = nil) throws -> ServiceSpec {
         guard !portReserved(command.port), !NetworkProbe.portOccupied(command.port) else { throw LaunchError.message((portConflict(command.port) ?? "端口已占用") + "，请修改命令中的端口") }
-        var spec = record(engineID: command.engine.id, modelID: command.modelID, port: command.port) ?? ServiceSpec(engineID: command.engine.id, modelID: command.modelID, modelName: command.modelName, modelPath: command.modelPath, port: command.port)
+        let saved = try savedConfiguration(configurationID, engineID: command.engine.id, port: command.port)
+        var spec = saved ?? record(engineID: command.engine.id, modelID: command.modelID, port: command.port) ?? ServiceSpec(engineID: command.engine.id, modelID: command.modelID, modelName: command.modelName, modelPath: command.modelPath, port: command.port)
         guard spec.pid == nil else { throw LaunchError.message("服务仍在运行，请先停止") }
         spec.modelID = command.modelID; spec.modelName = command.modelName; spec.modelPath = command.modelPath
         spec.context = command.context; spec.inputMode = command.mode; spec.projectorPath = command.projector
@@ -231,7 +247,15 @@ final class ServiceController: ObservableObject {
         return try startPlan(spec: spec, plan: command.plan, engine: command.engine)
     }
 
+    private func savedConfiguration(_ id: String?, engineID: String, port: Int) throws -> ServiceSpec? {
+        guard let id else { return nil }
+        guard let spec = records.first(where: { $0.id == id && $0.engineID == engineID && $0.port == port }),
+              spec.pid == nil, canRemoveConfiguration(spec) else { throw LaunchError.message("服务配置已变化，请刷新列表") }
+        return spec
+    }
+
     private func startPlan(spec original: ServiceSpec, plan: LaunchPlan, engine: Engine) throws -> ServiceSpec {
+        guard !resourceCleanupInProgress else { throw LaunchError.message("正在清理所选资源，请稍后启动服务") }
         var spec = original
         spec.launchArguments = plan.arguments
         spec.componentSnapshot = nil
@@ -256,6 +280,7 @@ final class ServiceController: ObservableObject {
         process.terminationHandler = { [weak self] task in
             DispatchQueue.main.async {
                 guard let self else { return }
+                guard self.processes[id] === task else { try? output.close(); return }
                 let wasStopping = self.statuses[id] == .stopping
                 self.statuses[id] = wasStopping || task.terminationStatus == 0 ? .stopped : .failed
                 if !wasStopping && task.terminationStatus != 0 { self.errors[id] = "引擎已退出（代码 \(task.terminationStatus)），请查看日志" }
@@ -297,6 +322,7 @@ final class ServiceController: ObservableObject {
     }
 
     func updateParameters(_ id: String, _ value: ServiceParameters) throws {
+        guard !resourceCleanupInProgress else { throw LaunchError.message("正在清理所选资源，请稍后修改服务") }
         guard let index = records.firstIndex(where: { $0.id == id }) else { throw LaunchError.message("这条服务配置已删除") }
         let current = records[index]
         guard current.pid == nil, processes[id]?.isRunning != true else { throw LaunchError.message("服务仍在运行，请先停止") }

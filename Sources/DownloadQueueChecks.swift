@@ -90,6 +90,13 @@ enum DownloadQueueChecks {
         try require(controller.message == nil && controller.listing == nil && !controller.resolving && controller.address.isEmpty, "Canceled catalog request contaminated fresh import")
         try require(DownloadEstimate.seconds(remaining: 100, speed: 10) == 10 && DownloadEstimate.seconds(remaining: 1, speed: 0) == nil && DownloadEstimate.seconds(remaining: 10, speed: .nan) == nil, "ETA edge cases failed")
         checks.append("Stale resolution cancellation; ETA zero/unknown throughput and finite bounds")
+        try controller.reserveCleanupPaths([controller.destination])
+        let reserved = add("cleanup-reserved")
+        try require(controller.jobs.first { $0.id == reserved }?.state == .queued && !controller.isActive(reserved), "Cleanup reservation allowed a new writer")
+        controller.releaseCleanupPaths()
+        try await wait { !controller.hasPendingWork }
+        try require(controller.jobs.first { $0.id == reserved }?.state == .complete, "Releasing cleanup reservation did not resume queued work")
+        checks.append("Cleanup reservations prevent concurrent writers and release queued downloads")
         try await credentialChecks(root: root)
         checks.append("Queued credentials remain isolated and are never persisted; new import clears token field")
         try await githubChecks()

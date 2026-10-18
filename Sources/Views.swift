@@ -447,6 +447,7 @@ struct EngineWorkspace: View {
                     HStack(spacing: 6) { Text(verbatim: L10n.text(store.engine.modelRule)).font(.system(size: TypeScale.body, weight: .medium)); InfoTip(text: store.engine.modalityGuide.summary) }.padding(.bottom, 14)
                     HStack { Button(L10n.text("引擎配置…")) { store.prepareEngineConfiguration() }.buttonStyle(.bordered).accessibilityIdentifier("engine-configuration"); if !store.engineEnabled(store.engineID) { Text(verbatim: L10n.text("此基座已停用")).foregroundStyle(Theme.warningText) } }.padding(.bottom, 14)
                     if store.engine.kind == .strata { StrataIntegrationView(store: store).padding(.bottom, 18) }
+                    if store.engine.kind == .mflux { ImageEngineSetupView(store: store).padding(.bottom, 18) }
                     if let model = store.selectedModel { UsageBadge(model: model).padding(.bottom, 12) }
                     if store.scanning && store.inventory == nil { HStack { ProgressView().controlSize(.small); Text(verbatim: L10n.text("正在扫描模型文件…")).foregroundStyle(Theme.muted) }.frame(height: 84) }
                     else if store.compatibleModels.isEmpty { EmptyMessage(symbol: "cube", title: store.engine.kind == .ollama ? "还没有 Ollama 格式的模型" : "没有兼容的本地模型", detail: store.engine.kind == .ollama ? "可以先启动 Ollama 模型管理服务。" : "在“模型文件”中添加模型目录，或选择其他引擎。") }
@@ -586,7 +587,7 @@ struct ModelWorkspace: View {
                 List(selection: $store.selectedFileID) {
                     ForEach(store.filteredModels) { model in
                         HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: model.kind == .speech ? "waveform" : model.kind == .adapter ? "slider.horizontal.3" : model.kind == .embedding ? "text.magnifyingglass" : "cube").font(.system(size: 14)).foregroundStyle(Theme.linkColor)
+                            Image(systemName: model.kind == .image ? "photo.badge.plus" : model.kind == .speech ? "waveform" : model.kind == .adapter ? "slider.horizontal.3" : model.kind == .embedding ? "text.magnifyingglass" : "cube").font(.system(size: 14)).foregroundStyle(Theme.linkColor)
                                 .frame(width: 28, height: 28).background(Theme.linkColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(model.name).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1).truncationMode(.middle)
@@ -601,7 +602,7 @@ struct ModelWorkspace: View {
                                     HStack(spacing: 6) { UsageBadge(model: model); ModelCapabilityBadge(capabilities: store.modelCapabilities(model), compact: true) }
                                     VStack(alignment: .leading, spacing: 4) { UsageBadge(model: model); ModelCapabilityBadge(capabilities: store.modelCapabilities(model), compact: true) }
                                 }
-                                if model.kind == .language || model.kind == .embedding || AudioModelPolicy.task(model) != nil || store.modelInstanceCounts(model).total > 0 { ModelInstancesLink(store: store, model: model, compact: true) }
+                                if model.kind == .language || model.kind == .image || model.kind == .embedding || AudioModelPolicy.task(model) != nil || store.modelInstanceCounts(model).total > 0 { ModelInstancesLink(store: store, model: model, compact: true) }
                             }
                             Spacer(minLength: 0)
                         }.padding(.vertical, 4).tag(Optional(model.id)).listRowSeparator(.hidden).help(L10n.text(model.path))
@@ -626,7 +627,7 @@ struct ModelWorkspace: View {
                         ModelCapabilityBadge(capabilities: store.modelCapabilities(model), prefix: "模型输入 · ")
                         Text(verbatim: L10n.text(store.modelCapabilities(model).source)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                         StateLabel(title: model.verification, color: model.complete ? .green : .orange)
-                        if model.kind == .language || model.kind == .embedding || AudioModelPolicy.task(model) != nil || store.modelInstanceCounts(model).total > 0 { ModelInstancesLink(store: store, model: model) }
+                        if model.kind == .language || model.kind == .image || model.kind == .embedding || AudioModelPolicy.task(model) != nil || store.modelInstanceCounts(model).total > 0 { ModelInstancesLink(store: store, model: model) }
                         Divider()
                         if model.kind == .draft { DraftModelInfo(store: store, model: model) }
                         else {
@@ -743,7 +744,12 @@ struct ServiceWorkspace: View {
                         }
                         HStack(spacing: 10) {
                             if spec.pid != nil { Button { store.stop(spec) } label: { Label(L10n.text("停止服务"), systemImage: "stop.fill") }.buttonStyle(AccentButton(destructive: true)).disabled(status == .stopping) }
-                            else { Button { store.configureService(spec) } label: { Label(L10n.text("配置并启动"), systemImage: "play.fill") }.buttonStyle(AccentButton()) }
+                            else {
+                                Button { store.startServiceInstance(spec) } label: { Label(L10n.text("启动服务"), systemImage: "play.fill") }
+                                    .buttonStyle(AccentButton()).disabled(!store.canStartServiceInstance(spec))
+                                    .help(L10n.text("按此实例保存的配置启动")).accessibilityIdentifier("start-saved-service-" + spec.id)
+                                Button { store.configureService(spec) } label: { Label(L10n.text("配置并启动"), systemImage: "slider.horizontal.3") }.buttonStyle(SecondaryButton())
+                            }
                             // Only shown when usable; deletion lives at the bottom of the page, away from the primary action.
                             if status == .running {
                                 if store.directConnectionTargets.contains(where: { $0.port == spec.port }) { Button { store.openChat(port: spec.port) } label: { Label(L10n.text("试聊"), systemImage: "bubble.left.and.bubble.right") }.buttonStyle(SecondaryButton()) }
@@ -760,6 +766,8 @@ struct ServiceWorkspace: View {
                                 Text(verbatim: spec.modelPath).font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled).lineLimit(2).truncationMode(.middle)
                                 Button(role: .destructive) { store.serviceRemoval = spec } label: { Label(L10n.text("移除服务及相关接入…"), systemImage: "trash") }.buttonStyle(AccentButton(destructive: true))
                             }.frame(maxWidth: .infinity, alignment: .leading).padding(16).background(Theme.line.opacity(0.22), in: RoundedRectangle(cornerRadius: 10))
+                        } else if spec.engineID == "mflux" {
+                            if status == .running { ImageGenerationView(session: store.imageSession(spec), copy: store.copy) }
                         } else { ConnectionEntry(store: store, port: spec.port) }
                         if spec.engineID == "ollama" && status == .running { OllamaLoadedView(store: store, services: services, port: spec.port) }
                         Divider()

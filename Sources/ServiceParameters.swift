@@ -84,13 +84,28 @@ final class ServiceParameterDraft: ObservableObject {
 
 @MainActor
 extension AppStore {
+    func useFreeServicePort(_ draft: ServiceParameterDraft, spec: ServiceSpec) {
+        guard relaunchingServiceID == nil, let engine = engines.first(where: { $0.id == spec.engineID }) else { return }
+        do {
+            let requested = Int(draft.port.trimmingCharacters(in: .whitespaces)) ?? spec.port
+            let base = (1024..<65535).contains(requested) ? requested + 1 : engine.defaultPort
+            let selected = try EnginePortPolicy.available(engine: engine, base: base, count: 1) { candidate in
+                self.services.records.contains { $0.id != spec.id && $0.port == candidate } || NetworkProbe.portOccupied(candidate)
+            }[0]
+            draft.port = String(selected); draft.error = nil
+            draft.notice = "已选择空闲端口，点击“保存并启动”或“保存并重启”后生效。"
+        } catch { draft.error = error.localizedDescription }
+    }
+    func showServicePortOwner(_ port: Int) {
+        Task { await services.refresh(); showPortOwner(port) }
+    }
     /// Saves edited parameters. A running service (or `launch`) is stopped, restarted with them, and rolled back on failure.
     func saveServiceParameters(_ draft: ServiceParameterDraft, spec: ServiceSpec, launch: Bool) {
         guard relaunchingServiceID == nil else { return }
         guard let engine = engines.first(where: { $0.id == spec.engineID }) else { draft.error = "未找到此服务的引擎，请重新扫描"; return }
         guard !maintaining, installation.activeEngineID != engine.id, !(engine.kind == .strata && strata.busy), !appUpdates.applying else { draft.error = "请等待当前引擎操作完成"; return }
         draft.error = nil; draft.notice = nil
-        let current = services.records.first { $0.id == spec.id } ?? spec
+        guard let current = services.records.first(where: { $0.id == spec.id }) else { draft.error = "服务配置已变化，请刷新列表"; return }
         let model = models.first { $0.id == current.modelID || $0.path == current.modelPath }
         let value: ServiceParameters
         do {
@@ -99,7 +114,7 @@ extension AppStore {
             guard model != nil || engine.kind == .ollama else { throw LaunchError.message("未找到服务使用的模型文件。") }
             // Build the new plan before stopping anything; invalid settings fail without downtime.
             _ = try LaunchBuilder.plan(engine: engine, model: model, port: value.port, context: value.context, maximumLoadedModels: value.maximumLoadedModels, inputMode: value.inputMode, projectorPath: value.projectorPath)
-            if value.port != current.port, let conflict = services.portConflict(value.port, excluding: current.id) { throw LaunchError.message(conflict + "，请使用空闲端口") }
+            if let conflict = services.portConflict(value.port, excluding: current.id) { throw LaunchError.message(conflict + "，请使用空闲端口") }
         } catch { draft.error = error.localizedDescription; return }
         relaunchingServiceID = current.id
         draft.notice = current.pid != nil ? "正在停止服务并使用新参数重新启动…" : "正在使用新参数启动服务…"
@@ -114,8 +129,14 @@ extension AppStore {
 
     private func relaunchService(_ saved: ServiceSpec, engine: Engine, model: LocalModel?, value: ServiceParameters) async throws -> ServiceSpec {
         let previous = ServiceParameters(saved), wasRunning = saved.pid != nil
+        // Repeat preflight after a fresh probe, before saving parameters or
+        // stopping a process. A conflict here does not require any rollback.
+        await services.refresh()
+        guard let fresh = services.records.first(where: { $0.id == saved.id }),
+              fresh.pid == saved.pid, fresh.processStart == saved.processStart,
+              ServiceParameters(fresh) == previous else { throw LaunchError.message("服务配置或进程已经改变，未执行重启。") }
+        if let conflict = services.portConflict(value.port, excluding: saved.id) { throw LaunchError.message(conflict + "，请使用空闲端口") }
         if wasRunning {
-            await services.refresh()
             guard let current = services.records.first(where: { $0.id == saved.id }), current.pid == saved.pid, current.processStart == saved.processStart else {
                 throw LaunchError.message("服务进程已经改变，未执行重启。")
             }
@@ -126,7 +147,7 @@ extension AppStore {
         var replacement: ServiceSpec?
         func launch(_ parameters: ServiceParameters) throws -> ServiceSpec {
             try services.start(engine: engine, model: model, port: parameters.port, context: parameters.context, maximumLoadedModels: parameters.maximumLoadedModels,
-                               inputMode: parameters.inputMode, projectorPath: parameters.projectorPath, extraArguments: parameters.extraArguments)
+                               inputMode: parameters.inputMode, projectorPath: parameters.projectorPath, extraArguments: parameters.extraArguments, configurationID: saved.id)
         }
         // Large models can load for minutes; only an actual exit or port conflict counts as failure.
         func settle(_ spec: ServiceSpec) async throws -> ServiceSpec {
@@ -172,13 +193,14 @@ struct ServiceParametersView: View {
     var engine: Engine? { store.engines.first { $0.id == spec.engineID } }
     var contexts: [Int] { Array(Set([2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, spec.context])).sorted() }
     var busy: Bool { store.relaunchingServiceID != nil }
+    var portConflict: String? { Int(draft.port.trimmingCharacters(in: .whitespaces)).flatMap { services.portConflict($0, excluding: spec.id) } }
     var body: some View {
         let status = services.status(spec)
         let kind = engine?.kind
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text(verbatim: L10n.text("服务参数")).font(.system(size: TypeScale.body, weight: .semibold)); Spacer()
-                if spec.commandText == nil, let engine, engine.kind != .lmstudio { ServicePresetMenu(store: store, engine: engine, draft: draft).disabled(busy) }
+                if spec.commandText == nil, let engine, ![.lmstudio, .mflux].contains(engine.kind) { ServicePresetMenu(store: store, engine: engine, draft: draft).disabled(busy) }
             }
             if spec.commandText != nil {
                 // Command-launched services keep the user's full command as the single source of truth.
@@ -191,8 +213,8 @@ struct ServiceParametersView: View {
             } else {
                 Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 12) {
                     GridRow { Text(verbatim: L10n.text("端口")); TextField(L10n.text("1024–65535"), text: $draft.port).textFieldStyle(.roundedBorder).frame(width: Self.fieldWidth) }
-                    GridRow { Text(verbatim: L10n.text("上下文")); Picker(L10n.text("上下文"), selection: $draft.context) { ForEach(contexts, id: \.self) { Text(verbatim: L10n.text($0.formatted() + " tokens")).tag($0) } }.labelsHidden().fixedSize().frame(width: Self.fieldWidth, alignment: .leading) }
-                    if kind != .ollama {
+                    if kind != .mflux { GridRow { Text(verbatim: L10n.text("上下文")); Picker(L10n.text("上下文"), selection: $draft.context) { ForEach(contexts, id: \.self) { Text(verbatim: L10n.text($0.formatted() + " tokens")).tag($0) } }.labelsHidden().fixedSize().frame(width: Self.fieldWidth, alignment: .leading) } }
+                    if kind != .ollama && kind != .mflux {
                         GridRow { Text(verbatim: L10n.text("输入模式")); Picker(L10n.text("输入模式"), selection: $draft.inputMode) { ForEach(InputMode.allCases) { Text(verbatim: L10n.text($0.title)).tag($0) } }.labelsHidden().fixedSize().frame(width: Self.fieldWidth, alignment: .leading) }
                     }
                     if kind == .llama || kind == .prism {
@@ -202,6 +224,18 @@ struct ServiceParametersView: View {
                         GridRow { Text(verbatim: L10n.text("常驻模型")); Stepper("最多常驻 \(draft.maximumLoadedModels) 个模型", value: $draft.maximumLoadedModels, in: 1...16) }
                     }
                 }.font(.system(size: TypeScale.body))
+                if let conflict = portConflict, let port = Int(draft.port.trimmingCharacters(in: .whitespaces)) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(L10n.text(conflict), systemImage: "exclamationmark.triangle").foregroundStyle(Theme.warningText)
+                            .font(.system(size: TypeScale.callout)).fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 12) {
+                            Button(L10n.text("使用空闲端口")) { store.useFreeServicePort(draft, spec: spec) }.buttonStyle(.bordered).disabled(busy)
+                                .accessibilityIdentifier("service-parameters-free-port")
+                            Button(L10n.text("查看占用服务")) { store.showServicePortOwner(port) }.buttonStyle(PlainAction()).disabled(busy)
+                                .accessibilityIdentifier("service-parameters-port-owner")
+                        }
+                    }
+                }
                 if let kind, [.llama, .prism, .mlx, .splash].contains(kind), let model = store.models.first(where: { $0.id == spec.modelID }) {
                     MemoryEstimateView(store: store, model: model, context: draft.context, reclaimable: spec.pid == nil ? 0 : MemoryEstimate.make(model: model, context: spec.context)?.total ?? 0)
                 }

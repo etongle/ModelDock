@@ -31,6 +31,7 @@ import UniformTypeIdentifiers
             guard let self, let store else { return }; defer { busy = false; operation = nil }
             do {
                 if deployment.solutionID == "voice-translation" {
+                    guard store.solutions.runtime(deployment, store: store).allReady else { throw LaunchError.message("请先启动方案中的全部服务并等待就绪") }
                     guard let input, let size = try input.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0, size <= 20 * 1024 * 1024 else { throw LaunchError.message("请选择不超过 20 MiB 的音频文件") }
                     let result = try await SpeechTranslation.run(audio: Data(contentsOf: input), deployment: deployment, store: store, connection: connection, speech: true) { [weak self] value in self?.phase = value }
                     transcript = result.transcript; translation = result.translation

@@ -363,6 +363,10 @@ class Gateway(BaseHTTPRequestHandler):
                 self.error(400, '此路由的输入模式不接受这些媒体：' + ', '.join(sorted(needed)), 'unsupported_modality'); return
             if path == '/v1/audio/speech' and 'audio' not in route.get('outputs', []):
                 self.error(400, '此模型没有声明语音输出能力。', 'unsupported_modality'); return
+            if path in ('/v1/images/generations', '/v1/images/edits') and 'image' not in route.get('outputs', []):
+                self.error(400, '此模型没有声明图片生成能力。', 'unsupported_modality'); return
+            if path in ('/v1/chat/completions', '/v1/completions', '/v1/responses') and route.get('outputs') == ['image']:
+                self.error(400, '此模型用于生成图片，请使用图片接口。', 'unsupported_modality'); return
             # Verify the model still belongs to the pinned backend before forwarding payloads.
             probe = urllib.request.Request(upstream_url(route, '/v1/models'), headers=authorization(route))
             with opener.open(probe, timeout=10) as response:
@@ -379,7 +383,7 @@ class Gateway(BaseHTTPRequestHandler):
             headers['Accept'] = self.headers.get('Accept', '*/*')
             request = urllib.request.Request(upstream_url(route, path), data=body, headers=headers, method='POST')
             try:
-                upstream = opener.open(request, timeout=300)
+                upstream = opener.open(request, timeout=1800 if path.startswith('/v1/images/') else 300)
             except urllib.error.HTTPError as error:
                 upstream = error
             self.status_code = upstream.status

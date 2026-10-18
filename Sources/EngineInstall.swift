@@ -56,6 +56,10 @@ enum EngineCatalog {
     }
     static func release(_ kind: EngineKind) async throws -> EngineRelease {
         switch kind {
+        case .mflux:
+            let value = try await object("https://pypi.org/pypi/mflux/json")
+            guard let version = (value["info"] as? [String: Any])?["version"] as? String, validVersion(version), version.compare("0.23.0", options: .numeric) != .orderedAscending else { throw LaunchError.message("MFLUX 需要支持 Qwen-Image-2.1-Turbo 的 0.23.0 或更新版本") }
+            return .init(kind: kind, version: version, source: "PyPI · mflux-community/mflux", method: .python)
         case .audio:
             let value = try await object("https://pypi.org/pypi/mlx-audio/json")
             guard let version = (value["info"] as? [String: Any])?["version"] as? String, validVersion(version) else { throw LaunchError.message("MLX Audio 版本信息无效") }
@@ -126,7 +130,12 @@ enum EngineCatalog {
             notes.append("Homebrew 可能安装所需依赖；不执行自动依赖清扫。已有桌面应用可能由安装包替换。")
         case .python:
             if python == nil { blockers.append("未发现可用的 Python 运行环境，请使用包含运行环境的安装包或安装 Python 后重试。") }
-            notes.append(engine.kind == .audio ? "MLX Audio 安装到独立 Python 环境，保留已有引擎和模型。" : "MLX-LM 与 MLX-VLM 安装到本工具的独立 Python 环境；保留系统 MLX 库与旧运行环境。文本模式使用 MLX-LM，多模态模式使用 MLX-VLM。")
+            if engine.kind == .mflux {
+                notes.append("MFLUX 使用独立 Python 环境，保留 Strata 和已有模型。图片主模型、文本编码器和 VAE 通过下载任务单独管理。")
+                #if !arch(arm64)
+                blockers.append("MFLUX 本地图片生成需要 Apple Silicon Mac。")
+                #endif
+            } else { notes.append(engine.kind == .audio ? "MLX Audio 安装到独立 Python 环境，保留已有引擎和模型。" : "MLX-LM 与 MLX-VLM 安装到本工具的独立 Python 环境；保留系统 MLX 库与旧运行环境。文本模式使用 MLX-LM，多模态模式使用 MLX-VLM。") }
         case .archive:
             notes.append("下载后验证 SHA-256；新版本独立保存，验证通过后切换服务入口，保留旧版程序。")
         case .source:
@@ -151,7 +160,7 @@ enum InstallExecutor {
     static func stepCount(_ plan: EngineInstallPlan) -> Int {
         switch plan.release.method {
         case .brew: return plan.commands.count
-        case .python: return 4 + (plan.release.visionVersion == nil ? 0 : 2) + (plan.engine.kind == .audio ? 1 : 0)
+        case .python: return 4 + (plan.release.visionVersion == nil ? 0 : 2) + ([.audio, .mflux].contains(plan.engine.kind) ? 1 : 0)
         case .source: return 3
         case .archive: return 7
         }
@@ -236,11 +245,13 @@ enum InstallExecutor {
             _ = try await execute(.init(executable: python, arguments: ["-u", helper, "install", "--revision", revision, "--destination", target.path] + portable, title: "编译 Strata Metal"))
             binary = target.appendingPathComponent("modeldock-strata")
         } else if plan.release.method == .python {
-            guard [.mlx, .audio].contains(plan.engine.kind), let python = EnginePaths.python, EngineCatalog.validVersion(plan.release.version) else { throw LaunchError.message("MLX 安装信息无效") }
+            guard [.mlx, .audio, .mflux].contains(plan.engine.kind), let python = EnginePaths.python, EngineCatalog.validVersion(plan.release.version) else { throw LaunchError.message("MLX 安装信息无效") }
             let environment = directory.appendingPathComponent("venv")
             _ = try await execute(.init(executable: python, arguments: ["-m", "venv", environment.path], title: "创建独立环境"))
-            let package = plan.engine.kind == .audio ? "mlx-audio" : "mlx-lm"
-            _ = try await execute(.init(executable: environment.appendingPathComponent("bin/python3").path, arguments: ["-m", "pip", "--isolated", "install", "--disable-pip-version-check", "--index-url", "https://pypi.org/simple", "\(package)==\(plan.release.version)"], title: "安装 \(package)"))
+            let package = plan.engine.kind == .audio ? "mlx-audio" : plan.engine.kind == .mflux ? "mflux" : "mlx-lm"
+            // Pillow 13 imports Python internals absent from the supported 3.13 runtime.
+            let imageDependencies = plan.engine.kind == .mflux ? ["pillow==12.3.0"] : []
+            _ = try await execute(.init(executable: environment.appendingPathComponent("bin/python3").path, arguments: ["-m", "pip", "--isolated", "install", "--disable-pip-version-check", "--index-url", "https://pypi.org/simple", "\(package)==\(plan.release.version)"] + imageDependencies, title: "安装 \(package)"))
             if let version = plan.release.visionVersion {
                 guard EngineCatalog.validVersion(version) else { throw LaunchError.message("MLX-VLM 版本信息无效") }
                 _ = try await execute(.init(executable: environment.appendingPathComponent("bin/python3").path, arguments: ["-m", "pip", "--isolated", "install", "--disable-pip-version-check", "--index-url", "https://pypi.org/simple", "mlx-vlm==\(version)"], title: "安装 MLX-VLM"))
@@ -249,14 +260,16 @@ enum InstallExecutor {
                 let base = root.appendingPathComponent("mlx").path + "/"
                 try publish(.init(kind: .mlx, version: version, executable: String(vision.path.dropFirst(base.count)), source: plan.release.source, installedAt: Date()), root: root, record: "vision.json")
             }
-            if plan.engine.kind == .audio {
+            if [.audio, .mflux].contains(plan.engine.kind) {
                 let interpreter = environment.appendingPathComponent("bin/python3")
-                _ = try await execute(.init(executable: interpreter.path, arguments: ["-B", "-c", "from mlx_audio.stt import load; from mlx_audio.tts.utils import load_model"], title: "验证 MLX Audio"))
-                guard let helper = AudioModelPolicy.helper else { throw LaunchError.message("缺少语音服务组件") }
-                let server = environment.appendingPathComponent("audio_server.py")
+                let isImage = plan.engine.kind == .mflux
+                let imports = isImage ? "from mflux.models.common.config import ModelConfig; from mflux.models.qwen21.variants.txt2img.qwen_image_21 import QwenImage21; assert ModelConfig.qwen_image_21_turbo().model_name == 'Qwen/Qwen-Image-2.1-Turbo'" : "from mlx_audio.stt import load; from mlx_audio.tts.utils import load_model"
+                _ = try await execute(.init(executable: interpreter.path, arguments: ["-B", "-c", imports], title: isImage ? "验证 MFLUX Turbo" : "验证 MLX Audio"))
+                guard let helper = isImage ? ImageModelPolicy.helper : AudioModelPolicy.helper else { throw LaunchError.message("缺少模型服务组件") }
+                let server = environment.appendingPathComponent(isImage ? "image_server.py" : "audio_server.py")
                 try FileManager.default.copyItem(at: URL(fileURLWithPath: helper), to: server)
-                binary = environment.appendingPathComponent("bin/modeldock-audio")
-                let launch = InstallCommand(executable: interpreter.path, arguments: ["-u", server.path], title: "MLX Audio").display
+                binary = environment.appendingPathComponent(isImage ? "bin/modeldock-mflux" : "bin/modeldock-audio")
+                let launch = InstallCommand(executable: interpreter.path, arguments: ["-u", server.path], title: isImage ? "MFLUX" : "MLX Audio").display
                 try Data(("#!/bin/sh\nexec " + launch + " \"$@\"\n").utf8).write(to: binary, options: .atomic)
                 try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
             } else { binary = environment.appendingPathComponent("bin/mlx_lm.server") }
