@@ -6,6 +6,7 @@ import SwiftUI
     var deployment: SolutionDeployment
     var showName = false
     private var status: String {
+        if !store.solutions.runtime(deployment, store: store).allReady { return "等待方案组件就绪" }
         if !gateway.ready { return "网关未启动" }
         if !gateway.supportsSolutionRoutes { return "重启网关后启用方案地址" }
         return gateway.solutionReady(deployment) ? "方案接口可用" : "等待方案组件就绪"
@@ -18,7 +19,7 @@ import SwiftUI
                     if showName { Text(verbatim: deployment.created.formatted(date: .abbreviated, time: .shortened)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }
                 }
                 Spacer(minLength: 8)
-                StateLabel(title: status, color: gateway.solutionReady(deployment) ? .green : .gray)
+                StateLabel(title: status, color: gateway.solutionReady(deployment) && store.solutions.runtime(deployment, store: store).allReady ? .green : .gray)
             }
             HStack(alignment: .top, spacing: 10) {
                 Text(verbatim: gateway.solutionEndpoint(deployment)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
@@ -67,7 +68,7 @@ import SwiftUI
             Button(L10n.text("重启网关")) { gateway.restartForSolutions(store: store) }.buttonStyle(.bordered).disabled(gateway.busy || gateway.active > 0)
         }
         if showName {
-            Button(L10n.text("查看方案")) { store.solutions.selectedID = deployment.solutionID; store.solutions.section = .instances; store.tab = .solutions }.buttonStyle(PlainAction())
+            Button(L10n.text("查看方案")) { store.solutions.selectedID = SolutionCatalog.visible.contains(where: { $0.id == deployment.solutionID }) ? deployment.solutionID : "voice-translation"; store.solutions.selectedDeploymentID = deployment.id; store.solutions.section = .instances; store.tab = .solutions }.buttonStyle(PlainAction())
         } else {
             Button(L10n.text("查看统一网关")) { store.gatewaySelected = true; store.tab = .services }.buttonStyle(PlainAction())
         }

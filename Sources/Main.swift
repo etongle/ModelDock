@@ -197,6 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         makeMenu(); window?.title = L10n.text("模型管理"); settingsWindow?.title = L10n.text("设置"); updateStatusBar()
     }
     func applicationWillTerminate(_ notification: Notification) {
+        store.realtimeTranslation.cancel()
         outsideClicks.stop()
         store.strata.pause()
         store.resources.end(); store.performance.cancel()

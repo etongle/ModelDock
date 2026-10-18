@@ -33,7 +33,7 @@ extension SolutionRole {
     func synchronizeSolutions(_ deployments: [SolutionDeployment], local: [LocalModel], services: ServiceController) -> [GatewaySolution] {
         deployments.map { record in
             let definition = SolutionCatalog.all.first { $0.id == record.solutionID }
-            let components = (definition?.roles ?? record.components.map(\.role)).map { role -> GatewaySolutionComponent in
+            let components = (definition?.roles(for: record.draft) ?? record.components.map(\.role)).map { role -> GatewaySolutionComponent in
                 guard let component = record.components.first(where: { $0.role == role }),
                       let spec = services.records.first(where: { $0.id == component.serviceID && $0.engineID == component.engineID && $0.modelID == component.modelID }),
                       let path = component.modelPath else { return .init(role: role.gatewayModel) }

@@ -48,7 +48,7 @@ import CryptoKit
             def log_message(self,*args):pass
             def reply(self,data,kind='application/json'):
                 self.send_response(200);self.send_header('Content-Type',kind);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
-            def do_GET(self):self.reply(json.dumps({'data':[{'id':a.model}]}).encode())
+            def do_GET(self):self.reply(json.dumps({'helper_version':2,'loaded':True} if self.path=='/health' else {'data':[{'id':a.model}]}).encode())
             def do_POST(self):
                 self.rfile.read(int(self.headers.get('Content-Length',0)))
                 if self.path.endswith('/speech'):self.reply(b'RIFF'+b'0'*4+b'WAVE'+b'0'*36,'audio/wav')
@@ -97,6 +97,7 @@ import CryptoKit
         try require(solutions.latest?.state == .configured, solutions.latest?.error ?? "Remote solution failed")
         try require(store.downloads.selectedTaskID == "keep-my-selection", "Resuming a solution changed the open import selection")
         let configured = solutions.latest!
+        try await RealtimeTranslationChecks.editing(store: store, deployment: configured, root: root)
         let gatewayPort = try MultiModelPlanner.availablePorts(base: 29840, count: 1, occupied: NetworkProbe.portOccupied)[0]
         store.gateway.settings.port = gatewayPort; store.gateway.portText = String(gatewayPort)
         let endpoint = store.gateway.solutionEndpoint(configured)
@@ -114,6 +115,7 @@ import CryptoKit
         try require(store.models.first { $0.id == asr.modelID }?.kind == .speech && store.models.first { $0.id == tts.modelID }?.kind == .speech, "Audio models were classified as chat models")
         try require(!store.models.contains { $0.path.hasSuffix("speech_tokenizer") }, "TTS audio tokenizer became an independent model")
         solutions.start(voiceID, store: store)
+        try await wait { !solutions.startingIDs.contains(voiceID) }
         for _ in 0..<100 { await store.services.refresh(); if solutions.services(configured, store: store).allSatisfy({ store.services.status($0) == .running }) { break }; try await Task.sleep(nanoseconds: 50_000_000) }
         try require(solutions.services(configured, store: store).allSatisfy { store.services.status($0) == .running }, "Solution components did not become ready")
         store.synchronizeGateway()
@@ -142,6 +144,7 @@ import CryptoKit
         await store.gateway.poll()
         try require(store.solutionTrial.error == nil && store.solutionTrial.output != nil && store.gateway.requests == 3, "Explicit direct trial failed or used the gateway")
         try await SolutionExampleChecks.run(configured, store: store, root: root)
+        try await RealtimeTranslationChecks.pipeline(store: store, deployment: configured)
         await cleanupGateway(store)
         store.solutionTrial.connection = .gateway; store.solutionTrial.run(configured, store: store)
         try await wait { !store.solutionTrial.busy }

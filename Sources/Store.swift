@@ -93,6 +93,7 @@ final class AppStore: ObservableObject {
     let appUpdates: AppUpdateController
     let solutions: SolutionController
     let solutionTrial: SolutionTrialController
+    let realtimeTranslation = RealtimeTranslationController()
     @Published var multiModel: MultiModelDraft?
     @Published var commandDraft: CommandDraft?
     @Published var modelUpdate: ModelUpdateDraft?
@@ -161,6 +162,7 @@ final class AppStore: ObservableObject {
         }.store(in: &subscriptions)
         downloads.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
         solutionTrial.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
+        realtimeTranslation.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
         downloads.$jobs.dropFirst().sink { [weak self] _ in
             Task { @MainActor in guard let self else { return }; self.solutions.reconcile(store: self) }
         }.store(in: &subscriptions)

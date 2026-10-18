@@ -14,6 +14,7 @@ import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MAX_BODY = 32 * 1024 * 1024
+HELPER_VERSION = 2
 
 
 def fields(content_type, body):
@@ -46,6 +47,21 @@ def audio_bytes(value):
     return result
 
 
+def audio_file(folder, data, name='input'):
+    """The decoder selects supported formats by suffix; never save as .audio."""
+    if data[:4] in (b'RIFF', b'RF64') and data[8:12] == b'WAVE': suffix = '.wav'
+    elif data[:4] == b'fLaC': suffix = '.flac'
+    elif data[:4] == b'OggS': suffix = '.ogg'
+    elif data[:4] == b'FORM' and data[8:12] in (b'AIFF', b'AIFC'): suffix = '.aiff'
+    elif data[4:8] == b'ftyp': suffix = '.m4a'
+    elif data[:3] == b'ID3' or (len(data) > 1 and data[0] == 255 and data[1] & 224 == 224): suffix = '.mp3'
+    elif data[:4] == b'caff': suffix = '.caf'
+    else: raise ValueError('Unsupported audio format. Use WAV, MP3, M4A, FLAC, Ogg or AIFF.')
+    source = Path(folder) / (name + suffix)
+    source.write_bytes(data)
+    return source
+
+
 def input_modalities(backend):
     if backend.task == 'asr':
         return ['audio']
@@ -70,8 +86,7 @@ class AudioBackend:
         if not isinstance(audio, bytes):
             raise ValueError('Missing audio file')
         with tempfile.TemporaryDirectory(prefix='modeldock-asr-') as folder:
-            source = Path(folder) / 'input.audio'
-            source.write_bytes(audio)
+            source = audio_file(folder, audio)
             kwargs = {}
             if value.get('language') and value['language'] != 'auto':
                 kwargs['language'] = str(value['language'])
@@ -88,8 +103,7 @@ class AudioBackend:
             language = str(value.get('language') or 'auto').lower()
             variant = getattr(getattr(self.model, 'config', None), 'tts_model_type', 'base')
             if value.get('reference_audio'):
-                source = Path(folder) / 'reference.audio'
-                source.write_bytes(audio_bytes(value['reference_audio']))
+                source = audio_file(folder, audio_bytes(value['reference_audio']), 'reference')
                 kwargs['ref_audio'] = str(source)
                 if not isinstance(value.get('reference_text'), str) or not value['reference_text'].strip():
                     raise ValueError('Reference audio requires its transcript')
@@ -144,12 +158,12 @@ def handler(backend):
         def do_GET(self):
             if self.path == '/v1/models':
                 self.send(200, {'object': 'list', 'data': [{'id': backend.path, 'object': 'model',
-                    'owned_by': 'modeldock-audio', 'input_modalities': input_modalities(backend),
+                    'owned_by': 'modeldock-audio', 'helper_version': HELPER_VERSION, 'input_modalities': input_modalities(backend),
                     'modalities': {'input': input_modalities(backend),
                                    'output': ['text'] if backend.task == 'asr' else ['audio']},
                     'capabilities': ['transcription'] if backend.task == 'asr' else ['speech']} ]})
             elif self.path == '/health':
-                self.send(200, {'service': 'modeldock-audio', 'loaded': True, 'task': backend.task})
+                self.send(200, {'service': 'modeldock-audio', 'loaded': True, 'task': backend.task, 'helper_version': HELPER_VERSION, 'busy': lock.locked()})
             else:
                 self.error(404, 'Use /v1/models or the audio API')
         def do_POST(self):
@@ -187,6 +201,10 @@ def handler(backend):
                 self.error(500, 'Audio inference failed; see service log')
             finally:
                 lock.release()
+        def log_message(self, format, *args):
+            if args and str(args[0]).startswith(('GET /v1/models ', 'GET /health ')):
+                return
+            super().log_message(format, *args)
     return Handler
 
 

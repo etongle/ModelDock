@@ -3,6 +3,9 @@ import base64
 from http.server import ThreadingHTTPServer
 import importlib.util
 import json
+import io
+import tempfile
+import wave
 from pathlib import Path
 import threading
 from types import SimpleNamespace
@@ -28,6 +31,22 @@ class Backend:
 
 
 class AudioServerChecks(unittest.TestCase):
+    def test_real_decoder_receives_a_supported_file_extension(self):
+        source = io.BytesIO()
+        with wave.open(source, 'wb') as output:
+            output.setnchannels(1); output.setsampwidth(2); output.setframerate(16000)
+            output.writeframes(b'\0\0' * 1600)
+        def generate(path, **kwargs):
+            self.assertEqual(Path(path).suffix, '.wav')
+            with wave.open(path) as recorded: self.assertEqual(recorded.getnframes(), 1600)
+            return SimpleNamespace(text='Recognized')
+        backend = audio.AudioBackend.__new__(audio.AudioBackend)
+        backend.model = SimpleNamespace(generate=generate)
+        self.assertEqual(backend.transcribe({'file': source.getvalue()}), {'text': 'Recognized'})
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertEqual(audio.audio_file(folder, source.getvalue(), 'reference').suffix, '.wav')
+            with self.assertRaisesRegex(ValueError, 'Unsupported audio format'):
+                audio.audio_file(folder, b'not audio')
     def setUp(self):
         self.backend = Backend()
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), audio.handler(self.backend))

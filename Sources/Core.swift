@@ -342,6 +342,10 @@ enum LaunchBuilder {
         case .audio:
             guard let model, let task = AudioModelPolicy.task(model) else { throw LaunchError.message("请选择支持的 Qwen3-ASR 或 Qwen3-TTS 模型") }
             args = ["--model", model.path, "--task", task, "--port", String(port)]
+            let python = URL(fileURLWithPath: engine.path).deletingLastPathComponent().appendingPathComponent("python3")
+            if FileManager.default.isExecutableFile(atPath: python.path), let helper = AudioModelPolicy.helper, FileManager.default.fileExists(atPath: helper) {
+                executable = python.path; args = ["-u", helper] + args
+            }
             env = ["HF_HUB_OFFLINE": "1", "HF_HUB_DISABLE_PROGRESS_BARS": "0", "PYTHONDONTWRITEBYTECODE": "1"]
         case .splash:
             if let selection = model?.splashSelection, let runtime = SplashRuntime.current(engine), !runtime.supportsPacked {

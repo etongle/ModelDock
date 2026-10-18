@@ -30,6 +30,17 @@ import UniformTypeIdentifiers
         operation = Task { [weak self, weak store] in
             guard let self, let store else { return }; defer { busy = false; operation = nil }
             do {
+                if deployment.solutionID == "voice-translation" {
+                    guard let input, let size = try input.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0, size <= 20 * 1024 * 1024 else { throw LaunchError.message("请选择不超过 20 MiB 的音频文件") }
+                    let result = try await SpeechTranslation.run(audio: Data(contentsOf: input), deployment: deployment, store: store, connection: connection, speech: true) { [weak self] value in self?.phase = value }
+                    transcript = result.transcript; translation = result.translation
+                    if let audio = result.audio {
+                        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                        let file = directory.appendingPathComponent(UUID().uuidString + ".wav")
+                        try audio.write(to: file, options: .atomic); output = file
+                    }
+                    phase = "试用完成"; return
+                }
                 let transport = try SolutionTrialTransport(connection: connection, deployment: deployment, store: store)
                 @MainActor func service(_ role: SolutionRole) throws -> ServiceSpec {
                     guard let id = deployment.components.first(where: { $0.role == role })?.serviceID, let spec = store.services.records.first(where: { $0.id == id }), store.services.status(spec) == .running else { throw LaunchError.message("请先启动方案中的全部服务并等待就绪") }
@@ -48,17 +59,6 @@ import UniformTypeIdentifiers
                     let result = try await transport.request(.asr, spec: asr, path: "/v1/audio/transcriptions", body: body, type: "multipart/form-data; boundary=" + boundary, store: store)
                     guard let text = (try JSONSerialization.jsonObject(with: result) as? [String: Any])?["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw LaunchError.message("未识别到文字，请换一段清晰的语音") }
                     transcript = text
-                    if deployment.solutionID == "voice-translation" {
-                        phase = "正在翻译文字…"
-                        translation = try await chat(service(.text), role: .text, transport: transport, messages: [["role": "system", "content": "Translate the user's transcript into \(deployment.draft.language). Return only the translation, without commentary."], ["role": "user", "content": text]], store: store)
-                        phase = "正在生成参考音色配音…"
-                        let tts = try service(.tts)
-                        let bytes = try await transport.request(.tts, spec: tts, path: "/v1/audio/speech", body: try JSONSerialization.data(withJSONObject: ["model": transport.model(.tts, spec: tts, store: store), "input": translation, "language": deployment.draft.language, "reference_audio": audio.base64EncodedString(), "reference_text": text]), store: store)
-                        guard bytes.count > 44, bytes.prefix(4) == Data("RIFF".utf8), bytes.subdata(in: 8..<12) == Data("WAVE".utf8) else { throw LaunchError.message("语音服务没有返回有效的 WAV 音频") }
-                        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                        let file = directory.appendingPathComponent(UUID().uuidString + ".wav")
-                        try bytes.write(to: file, options: .atomic); output = file
-                    }
                 } else {
                     guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw LaunchError.message("请输入试用问题") }
                     phase = "正在测试模型…"

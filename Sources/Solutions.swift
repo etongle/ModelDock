@@ -10,14 +10,16 @@ struct SolutionModel: Hashable {
 }
 struct SolutionDefinition: Identifiable {
     var id: String; var title: String; var subtitle: String; var symbol: String; var roles: [SolutionRole]
+    func roles(for draft: SolutionDraft) -> [SolutionRole] { roles.filter { $0 != .tts || draft.speechOutput != false } }
 }
 enum SolutionCatalog {
     static let all: [SolutionDefinition] = [
-        .init(id: "voice-translation", title: "语音翻译与配音", subtitle: "识别 · 翻译 · 参考音色配音", symbol: "waveform", roles: [.asr, .text, .tts]),
+        .init(id: "voice-translation", title: "多语言实时翻译", subtitle: "麦克风字幕 · 音频翻译 · 可选配音", symbol: "waveform", roles: [.asr, .text, .tts]),
         .init(id: "transcription", title: "语音转写", subtitle: "音频文件转文字", symbol: "doc.text", roles: [.asr]),
         .init(id: "coding", title: "本地编程助手", subtitle: "模型服务与编程客户端接入", symbol: "chevron.left.forwardslash.chevron.right", roles: [.chat]),
         .init(id: "vision", title: "图片与文档问答", subtitle: "视觉模型与配套组件", symbol: "photo", roles: [.vision])
     ]
+    static var visible: [SolutionDefinition] { all.filter { $0.id == "voice-translation" } }
     static func model(_ role: SolutionRole, quality: SolutionQuality) -> SolutionModel {
         switch role {
         case .asr:
@@ -35,6 +37,8 @@ struct SolutionDraft: Codable, Equatable {
     /// Values are engineID + newline + exact inventory modelID; never a display-name match.
     var localChoices: [String: String] = [:]
     var destination: String?
+    var sourceLanguage: String?
+    var speechOutput: Bool?
 }
 struct SolutionComponent: Codable, Identifiable {
     var id: String { role.rawValue }
@@ -78,6 +82,12 @@ struct SolutionLocalChoice: Identifiable {
     @Published var deployments: [SolutionDeployment] = []
     @Published var preparingID: String?
     @Published var message: String?
+    @Published var editingID: String?
+    @Published var selectedDeploymentID: String?
+    @Published var startingIDs = Set<String>()
+    @Published var audioVersions: [String: Int] = [:]
+    var startOperations: [String: Task<Void, Never>] = [:]
+    var autoStartRequests = Set<String>()
     let directory: URL
     var operation: Task<Void, Never>?
     var catalogLoader: ((String, String) async throws -> RemoteListing)?
@@ -93,7 +103,10 @@ struct SolutionLocalChoice: Identifiable {
     }
     var definition: SolutionDefinition { SolutionCatalog.all.first { $0.id == selectedID } ?? SolutionCatalog.all[0] }
     var draft: SolutionDraft { drafts[selectedID] ?? .init() }
-    var latest: SolutionDeployment? { deployments.last { $0.solutionID == selectedID } }
+    var latest: SolutionDeployment? {
+        deployments.first { $0.id == selectedDeploymentID && $0.solutionID == selectedID } ?? deployments.last { $0.solutionID == selectedID }
+    }
+    var roles: [SolutionRole] { definition.roles(for: draft) }
     func usesCurrentRecommendations(_ deployment: SolutionDeployment) -> Bool {
         deployment.components.allSatisfy { SolutionRecommendations.isCurrent($0, draft: deployment.draft) }
     }
@@ -108,7 +121,8 @@ struct SolutionLocalChoice: Identifiable {
             switch role {
             case .asr: return AudioModelPolicy.task(model) == "asr"
             case .tts: return AudioModelPolicy.supportsReference(model)
-            case .text, .chat: return model.kind == .language
+            case .text: return model.kind == .language && TranslationLanguages.modelIssue(model) == nil
+            case .chat: return model.kind == .language
             case .vision: return model.kind == .language && store.modelCapabilities(model).inputs.contains("image")
             }
         }.flatMap { model in
@@ -142,18 +156,23 @@ struct SolutionLocalChoice: Identifiable {
         }
         return .init(role: role, engineID: SolutionCatalog.engine(role), repository: source.repository, revision: source.revision)
     }
-    func install(store: AppStore) {
+    func install(store: AppStore, launchWhenReady: Bool = false) {
         guard store.inventory != nil, !store.scanning else { message = "正在扫描模型文件…"; return }
         guard preparingID == nil, !store.installation.running, !store.maintaining else { message = "请等待当前引擎操作完成"; return }
         let definition = definition, draft = draft
-        if let existing = deployments.last(where: { $0.solutionID == definition.id && $0.draft == draft && $0.state != .configured && usesCurrentRecommendations($0) }) {
+        if editingID == nil, let existing = deployments.last(where: { $0.solutionID == definition.id && $0.draft == draft && $0.state != .configured && usesCurrentRecommendations($0) }) {
+            if launchWhenReady { autoStartRequests.insert(existing.id) }
             retry(existing.id, store: store); return
         }
         do {
-            let components = try definition.roles.map { try selection($0, draft: draft, store: store) }
+            guard TranslationLanguages.targets.contains(draft.language) else { throw LaunchError.message("请选择支持的目标语言") }
+            let components = try definition.roles(for: draft).map { try selection($0, draft: draft, store: store) }
             guard components.allSatisfy({ store.engineEnabled($0.engineID) }) else { throw LaunchError.message("方案需要的基座已禁用，请在全局引擎设置中启用") }
+            if let editingID { try replaceConfiguration(editingID, components: components, draft: draft, store: store, launchWhenReady: launchWhenReady); return }
             var deployment = SolutionDeployment(solutionID: definition.id, draft: draft); deployment.components = components
             deployments.append(deployment); guard save() else { deployments.removeLast(); return }
+            selectedDeploymentID = deployment.id
+            if launchWhenReady { autoStartRequests.insert(deployment.id) }
             perform(deployment.id, store: store)
         } catch { message = error.localizedDescription }
     }
@@ -162,10 +181,10 @@ struct SolutionLocalChoice: Identifiable {
         deployments[index].state = .preparing; deployments[index].error = nil
         perform(id, store: store)
     }
-    private func update(_ id: String, _ body: (inout SolutionDeployment) -> Void) {
+    func update(_ id: String, _ body: (inout SolutionDeployment) -> Void) {
         guard let index = deployments.firstIndex(where: { $0.id == id }) else { return }; body(&deployments[index]); save()
     }
-    private func perform(_ id: String, store: AppStore) {
+    func perform(_ id: String, store: AppStore) {
         preparingID = id
         operation = Task { [weak self, weak store] in
             guard let self, let store else { return }
@@ -266,15 +285,16 @@ struct SolutionLocalChoice: Identifiable {
                     update(deployment.id) { $0.stage = "正在配置方案服务…"; $0.progress = .init(phase: .configuration, total: $0.components.count) }
                     try configure(deployment.id, store: store)
                     update(deployment.id) { $0.state = .configured; $0.stage = "安装完成，服务尚未启动"; $0.error = nil; $0.progress?.completed = $0.components.count }
+                    if autoStartRequests.remove(deployment.id) != nil { start(deployment.id, store: store) }
                 } catch { update(deployment.id) { $0.state = .failed; $0.error = error.localizedDescription; $0.stage = "文件或服务配置需要处理" } }
             }
         }
     }
-    private func configure(_ id: String, store: AppStore) throws {
+    func configure(_ id: String, store: AppStore) throws {
         guard let deployment = deployments.first(where: { $0.id == id }) else { return }
         for (offset, component) in deployment.components.enumerated() {
             update(id) { $0.progress?.completed = offset; $0.progress?.detail = component.role.rawValue }
-            if let existing = component.serviceID, store.services.records.contains(where: { $0.id == existing }) { continue }
+            if let existing = component.serviceID, store.services.records.contains(where: { $0.id == existing && $0.engineID == component.engineID && $0.modelID == component.modelID }) { continue }
             guard let engine = store.engines.first(where: { $0.id == component.engineID }), engine.canServe, store.engineEnabled(engine.id) else { throw LaunchError.message("基座尚未安装完成或已禁用") }
             let model: LocalModel
             if let path = component.modelPath, let local = store.models.first(where: { $0.id == component.modelID && ModelInstancePolicy.samePath($0.path, path) }), local.complete { model = local }
@@ -286,8 +306,9 @@ struct SolutionLocalChoice: Identifiable {
                 if !store.models.contains(where: { $0.id == local.id }) { store.inventory?.models.append(local) }
             }
             guard model.compatibility(with: engine).level == .direct else { throw LaunchError.message("模型与方案选择的基座不匹配") }
-            if let running = store.modelServices(model, engineID: engine.id).first(where: { store.services.status($0) == .running }) {
-                update(id) { record in if let index = record.components.firstIndex(where: { $0.id == component.id }) { record.components[index].serviceID = running.id; record.components[index].modelID = model.id; record.components[index].modelPath = model.path } }; continue
+            let existing = store.modelServices(model, engineID: engine.id).sorted { (store.services.status($0) == .running ? 0 : 1) < (store.services.status($1) == .running ? 0 : 1) }.first
+            if let existing {
+                update(id) { record in if let index = record.components.firstIndex(where: { $0.id == component.id }) { record.components[index].serviceID = existing.id; record.components[index].modelID = model.id; record.components[index].modelPath = model.path } }; continue
             }
             let port = try EnginePortPolicy.available(engine: engine, base: engine.defaultPort, count: 1, occupied: { candidate in store.services.records.contains { $0.port == candidate } || NetworkProbe.portOccupied(candidate) })[0]
             let mode: InputMode = component.role == .vision ? .multimodal : [.asr, .tts].contains(component.role) ? .automatic : .text
@@ -300,6 +321,7 @@ struct SolutionLocalChoice: Identifiable {
     func pause(_ id: String, store: AppStore) {
         guard let deployment = deployments.first(where: { $0.id == id }), deployment.state != .installing else { return }
         if preparingID == id { operation?.cancel() }
+        autoStartRequests.remove(id)
         for component in deployment.components where component.ownsDownload {
             guard let task = component.downloadID, !deployments.contains(where: { $0.id != id && $0.state == .downloading && $0.components.contains { $0.downloadID == task } }) else { continue }
             store.downloads.pause(task)
@@ -319,21 +341,8 @@ struct SolutionLocalChoice: Identifiable {
         guard let task = tasks.first(where: { store.downloads.isActive($0.id) }) ?? tasks.first(where: { $0.state != .complete }) ?? tasks.first else { return }
         store.downloads.showTask(task.id); store.tab = .downloads
     }
-    func start(_ id: String, store: AppStore) {
-        guard let deployment = deployments.first(where: { $0.id == id && $0.state == .configured }) else { return }
-        do {
-            for component in deployment.components {
-                guard let serviceID = component.serviceID, let spec = store.services.records.first(where: { $0.id == serviceID }), let model = store.models.first(where: { $0.id == spec.modelID }), var engine = store.engines.first(where: { $0.id == spec.engineID }) else { throw LaunchError.message("方案模型或服务配置已变化，请修复方案") }
-                if spec.pid != nil { continue }
-                // A borrowed stopped configuration is not started or claimed by this solution.
-                guard component.ownsConfiguration else { throw LaunchError.message("复用服务已停止，请先在运行引擎中启动该服务") }
-                if let executable = spec.engineExecutable { if component.role == .vision && engine.kind == .mlx { engine.visionPath = executable } else { engine.path = executable }; engine.version = spec.engineVersion ?? engine.version }
-                let started = try store.services.start(engine: engine, model: model, port: spec.port, context: spec.context, inputMode: spec.inputMode ?? .automatic, projectorPath: spec.projectorPath)
-                if let pid = started.pid, let birth = started.processStart { update(id) { $0.processes.removeAll { $0.serviceID == started.id }; $0.processes.append(.init(serviceID: started.id, pid: pid, birth: birth)) } }
-            }
-        } catch { update(id) { $0.error = error.localizedDescription } }
-    }
     func stop(_ id: String, store: AppStore) {
+        startOperations[id]?.cancel(); startOperations[id] = nil; startingIDs.remove(id); autoStartRequests.remove(id)
         guard let deployment = deployments.first(where: { $0.id == id }) else { return }
         for owned in deployment.processes {
             guard let spec = store.services.records.first(where: { $0.id == owned.serviceID && $0.pid == owned.pid && $0.processStart == owned.birth }) else { continue }
@@ -342,10 +351,13 @@ struct SolutionLocalChoice: Identifiable {
         }
     }
     func remove(_ id: String, store: AppStore) {
-        guard let deployment = deployments.first(where: { $0.id == id }), preparingID != id else { return }
+        guard let deployment = deployments.first(where: { $0.id == id }), preparingID != id, !startingIDs.contains(id) else { return }
         let ownedConfigurations = Set(deployment.components.filter(\.ownsConfiguration).compactMap(\.serviceID))
         guard !services(deployment, store: store).contains(where: { spec in ownedConfigurations.contains(spec.id) && spec.pid != nil && !deployments.contains(where: { $0.id != id && $0.components.contains { $0.serviceID == spec.id } }) }) else { message = "请先停止方案实例，再移除方案配置"; return }
         // Ownership follows shared references so an orphaned runtime/task never becomes unmanageable.
+        for process in deployment.processes {
+            if let other = deployments.firstIndex(where: { $0.id != id && $0.components.contains { $0.serviceID == process.serviceID } }), !deployments[other].processes.contains(where: { $0.serviceID == process.serviceID }) { deployments[other].processes.append(process) }
+        }
         for component in deployment.components {
             if component.ownsConfiguration, let serviceID = component.serviceID,
                let other = deployments.firstIndex(where: { $0.id != id && $0.components.contains { $0.serviceID == serviceID } }),

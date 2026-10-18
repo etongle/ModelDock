@@ -14,7 +14,7 @@ import AppKit
                     SidebarHeader(title: "解决方案") { SidebarToggleButton(store: store) }
                     TextField(L10n.text("搜索方案"), text: $controller.search).textFieldStyle(.roundedBorder).accessibilityIdentifier("solution-search")
                     List(selection: Binding(get: { controller.selectedID as String? }, set: { if let id = $0 { controller.selectedID = id; controller.section = .configuration; store.solutionTrial.reset() } })) {
-                        ForEach(SolutionCatalog.all.filter { controller.search.isEmpty || L10n.text($0.title).localizedCaseInsensitiveContains(controller.search) || L10n.text($0.subtitle).localizedCaseInsensitiveContains(controller.search) }) { item in
+                        ForEach(SolutionCatalog.visible.filter { controller.search.isEmpty || L10n.text($0.title).localizedCaseInsensitiveContains(controller.search) || L10n.text($0.subtitle).localizedCaseInsensitiveContains(controller.search) }) { item in
                             HStack(spacing: 10) {
                                 Image(systemName: item.symbol).font(.system(size: 20)).foregroundStyle(Theme.muted).frame(width: 40, height: 40).background(Theme.line, in: RoundedRectangle(cornerRadius: 9))
                                 VStack(alignment: .leading, spacing: 5) {
@@ -51,6 +51,8 @@ import AppKit
             }
             }
         }.accessibilityIdentifier("solution-workspace")
+            .onAppear { if !SolutionCatalog.visible.contains(where: { $0.id == controller.selectedID }) { controller.selectedID = "voice-translation" } }
+            .task(id: store.services.records.map { $0.id + String($0.pid ?? 0) + store.services.status($0).rawValue }.joined()) { await controller.refreshAudioProtocols(store: store) }
             .alert(L10n.text("移除方案配置"), isPresented: Binding(get: { ui.removal != nil }, set: { if !$0 { ui.removal = nil } })) {
                 Button(L10n.text("移除"), role: .destructive) { if let record = ui.removal { controller.remove(record.id, store: store) }; ui.removal = nil }
                 Button(L10n.text("取消"), role: .cancel) { ui.removal = nil }
@@ -67,20 +69,67 @@ import AppKit
         }.padding(.vertical, 8)
     }
     private func status(_ id: String) -> String {
-        guard let record = controller.deployments.last(where: { $0.solutionID == id }) else { return "待安装" }
+        guard let record = (id == controller.selectedID ? controller.latest : controller.deployments.last { $0.solutionID == id }) else { return "待安装" }
+        if record.state == .configured { return controller.runtime(record, store: store).title }
         let progress = store.solutionProgress(record)
         if progress.phase == .models, progress.fraction != nil { return L10n.text(record.stage) + " · " + progress.percentage }
         return record.stage
     }
     private var configuration: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if let record = controller.latest, record.draft == controller.draft {
-                if controller.usesCurrentRecommendations(record) { deploymentProgress(record) }
-                else {
-                    Text(verbatim: L10n.text("已有方案使用旧推荐，可按当前推荐新建配置。原方案可在实例中查看和使用。"))
-                        .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+        Group {
+            if let record = controller.latest, controller.editingID == nil {
+                VStack(alignment: .leading, spacing: 18) {
+                    if record.state == .configured { SolutionRuntimeCard(store: store, controller: controller, record: record) }
+                    else { deploymentProgress(record) }
+                    HStack {
+                        Text(verbatim: L10n.text("当前方案配置")).font(.system(size: TypeScale.section, weight: .semibold))
+                        Spacer()
+                        Button(L10n.text("编辑配置")) { controller.edit(record.id, store: store) }.buttonStyle(.bordered).disabled(controller.preparingID != nil || controller.startingIDs.contains(record.id))
+                    }
+                    Text(verbatim: L10n.text("目标语言") + " · " + TranslationLanguages.title(record.draft.language)).font(.system(size: TypeScale.body))
+                    ForEach(record.components) { component in
+                        HStack(spacing: 12) {
+                            Image(systemName: component.role == .text ? "text.bubble" : "waveform").foregroundStyle(Theme.muted).frame(width: 32)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(verbatim: L10n.text(component.role.rawValue)).font(.system(size: TypeScale.body, weight: .medium))
+                                Text(verbatim: component.repository).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).textSelection(.enabled)
+                            }
+                            Spacer(minLength: 4)
+                            if let spec = store.services.records.first(where: { $0.id == component.serviceID }) { Button(L10n.text("查看详情")) { store.showService(spec) }.buttonStyle(PlainAction()) }
+                        }.padding(12).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    if record.state == .configured { SolutionGatewayCard(store: store, gateway: store.gateway, deployment: record) }
                 }
+            } else { configurationEditor }
+        }
+    }
+    private var configurationEditor: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if controller.editingID != nil {
+                HStack {
+                    Text(verbatim: L10n.text("正在编辑方案配置")).font(.system(size: TypeScale.body, weight: .semibold))
+                    Spacer()
+                    Button(L10n.text("取消编辑")) { controller.editingID = nil; controller.message = nil }.buttonStyle(.bordered)
+                }
+                Text(verbatim: L10n.text("保存后更新此方案的接入地址配置；已有运行服务继续保留。"))
+                    .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
+            HStack {
+                Text(verbatim: L10n.text("输入语言")).foregroundStyle(Theme.muted)
+                Picker(L10n.text("输入语言"), selection: Binding(get: { controller.draft.sourceLanguage ?? "auto" }, set: { var draft = controller.draft; draft.sourceLanguage = $0 == "auto" ? nil : $0; controller.setDraft(draft) })) {
+                    Text(verbatim: L10n.text("自动检测")).tag("auto")
+                    ForEach(TranslationLanguages.targets, id: \.self) { Text(TranslationLanguages.title($0)).tag($0) }
+                }.labelsHidden().frame(width: 170)
+                Spacer()
+            }
+            HStack {
+                Text(verbatim: L10n.text("目标语言")).foregroundStyle(Theme.muted)
+                Picker(L10n.text("目标语言"), selection: Binding(get: { controller.draft.language }, set: { var draft = controller.draft; draft.language = $0; controller.setDraft(draft) })) {
+                    ForEach(TranslationLanguages.targets, id: \.self) { Text(TranslationLanguages.title($0)).tag($0) }
+                }.labelsHidden().frame(width: 170)
+                Spacer()
+            }
+            Toggle(L10n.text("启用译文配音"), isOn: Binding(get: { controller.draft.speechOutput != false }, set: { var draft = controller.draft; draft.speechOutput = $0; controller.setDraft(draft) })).toggleStyle(.switch)
             HStack {
                 Text(verbatim: L10n.text("配套模型与引擎")).font(.system(size: TypeScale.section, weight: .semibold))
                 Spacer()
@@ -90,24 +139,17 @@ import AppKit
                 }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: 220).disabled(controller.preparingID != nil).accessibilityIdentifier("solution-quality")
                 }
             }
-            if controller.definition.roles.contains(where: SolutionRecommendations.usesBaseline) {
+            if controller.roles.contains(where: SolutionRecommendations.usesBaseline) {
                 Text(verbatim: L10n.text("默认以 Qwen3.8-27B 为基准，优先复用本地匹配模型；轻量模型需手动选择。"))
                     .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
             VStack(spacing: 0) {
-                ForEach(controller.definition.roles, id: \.rawValue) { role in
+                ForEach(controller.roles, id: \.rawValue) { role in
                     componentRow(role)
-                    if role != controller.definition.roles.last { Divider().padding(.leading, 64) }
+                    if role != controller.roles.last { Divider().padding(.leading, 64) }
                 }
             }.background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
-            if controller.definition.roles.contains(.tts) {
-                HStack {
-                    Text(verbatim: L10n.text("目标语言")).foregroundStyle(Theme.muted)
-                    Picker(L10n.text("目标语言"), selection: Binding(get: { controller.draft.language }, set: { var draft = controller.draft; draft.language = $0; controller.setDraft(draft) })) {
-                        ForEach(["English", "Chinese", "French", "Portuguese"], id: \.self) { value in Text(["English": "English", "Chinese": "中文", "French": "Français", "Portuguese": "Português"][value] ?? value).tag(value) }
-                    }.labelsHidden().frame(width: 170)
-                    Spacer()
-                }.font(.system(size: TypeScale.body))
+            if controller.roles.contains(.tts) {
                 Text(verbatim: L10n.text("配音使用输入音频的参考音色；试用时需提供清晰的单人录音。"))
                     .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
@@ -190,9 +232,27 @@ import AppKit
         SolutionInstallationCard(store: store, controller: controller, record: record)
     }
     private var actionBar: some View {
+        Group {
+            if let record = controller.latest, controller.editingID == nil {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(verbatim: record.state == .configured ? controller.runtime(record, store: store).title : L10n.text(record.stage)).font(.system(size: TypeScale.body, weight: .medium))
+                        Text(verbatim: L10n.text("复用服务会一并启动；按组件检查就绪状态。" )).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                    }
+                    Spacer(minLength: 4)
+                    if controller.startingIDs.contains(record.id) { ProgressView().controlSize(.small) }
+                    Button(L10n.text(record.state == .configured ? "检查并启动方案" : "继续准备并启动")) {
+                        if record.state == .configured { controller.start(record.id, store: store) }
+                        else { controller.edit(record.id, store: store); controller.install(store: store, launchWhenReady: true) }
+                    }.buttonStyle(AccentButton()).disabled(controller.preparingID != nil || controller.startingIDs.contains(record.id) || store.scanning)
+                }
+            } else { editorActionBar }
+        }
+    }
+    private var editorActionBar: some View {
         let record = controller.latest
         let current = record.map(controller.usesCurrentRecommendations) ?? true
-        let configured = current && record?.state == .configured && record?.draft == controller.draft
+        let configured = controller.editingID == nil && current && record?.state == .configured && record?.draft == controller.draft
         let installing = current && record?.draft == controller.draft && record.map { [.preparing, .installing, .downloading].contains($0.state) } == true
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -205,7 +265,8 @@ import AppKit
                 if configured, let record {
                     Button { controller.start(record.id, store: store) } label: { Label(L10n.text("启动方案"), systemImage: "play.fill") }.buttonStyle(AccentButton()).disabled(controller.services(record, store: store).allSatisfy { $0.pid != nil })
                 } else {
-                    Button { controller.install(store: store) } label: { Label(L10n.text(!current ? "按当前推荐新建配置" : installing ? "安装进行中" : record?.draft == controller.draft && (record.map { [.paused, .failed].contains($0.state) } ?? false) ? "继续安装" : "一键安装并配置"), systemImage: "arrow.down.circle") }.buttonStyle(AccentButton()).disabled(store.scanning || controller.preparingID != nil || (current && record?.draft == controller.draft && record?.state == .downloading)).accessibilityIdentifier("install-solution")
+                    if controller.editingID != nil { Button(L10n.text("保存配置")) { controller.install(store: store) }.buttonStyle(.bordered).disabled(store.scanning || controller.preparingID != nil) }
+                    Button { controller.install(store: store, launchWhenReady: true) } label: { Label(L10n.text(controller.editingID != nil ? "保存并启动" : "安装并启动"), systemImage: "play.fill") }.buttonStyle(AccentButton()).disabled(store.scanning || controller.preparingID != nil).accessibilityIdentifier("install-solution")
                 }
             }
             if configured { Button(L10n.text("查看实例与试用")) { controller.section = .instances }.buttonStyle(PlainAction()) }
@@ -213,17 +274,27 @@ import AppKit
     }
     private var overview: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(verbatim: L10n.text(controller.definition.id == "voice-translation" ? "选择音频文件，识别原文、翻译内容，再使用输入音频的参考音色朗读译文。" : controller.definition.id == "vision" ? "安装视觉模型，处理图片和文档截图；媒体能力由模型与运行组件共同决定。" : controller.definition.subtitle)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: L10n.text("使用麦克风逐段识别和翻译，显示实时字幕；也可以翻译音频文件。速度取决于本机模型和语音长度。" )).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             Text(verbatim: L10n.text("方案会固定模型版本，检查配套文件，安装缺少的基座，并配置独立端口。"))
                 .font(.system(size: TypeScale.body)).fixedSize(horizontal: false, vertical: true)
             Button(L10n.text("配置方案")) { controller.section = .configuration }.buttonStyle(.bordered)
-            if let record = controller.latest, record.state == .configured { SolutionTrialView(store: store, trial: store.solutionTrial, deployment: record) }
+            if let record = controller.latest, record.state == .configured {
+                SolutionRuntimeCard(store: store, controller: controller, record: record)
+                RealtimeTranslationView(store: store, controller: store.realtimeTranslation, deployment: record)
+                DisclosureGroup(L10n.text("音频文件翻译")) { SolutionTrialView(store: store, trial: store.solutionTrial, deployment: record).padding(.top, 12) }
+            }
         }
     }
     private var instances: some View {
         VStack(alignment: .leading, spacing: 18) {
             ForEach(controller.deployments.filter { $0.solutionID == controller.selectedID }.reversed()) { record in
-                Text(verbatim: record.created.formatted(date: .abbreviated, time: .shortened)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                HStack {
+                    Text(verbatim: record.created.formatted(date: .abbreviated, time: .shortened)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                    Spacer()
+                    Button(L10n.text("编辑配置")) { controller.edit(record.id, store: store) }.buttonStyle(.bordered).disabled(controller.startingIDs.contains(record.id) || controller.preparingID != nil)
+                    Button(L10n.text("使用此配置")) { controller.selectedDeploymentID = record.id; controller.section = .overview }.buttonStyle(.bordered)
+                }
+                SolutionRuntimeCard(store: store, controller: controller, record: record)
                 SolutionGatewayCard(store: store, gateway: store.gateway, deployment: record)
                 ForEach(controller.services(record, store: store)) { spec in
                     VStack(alignment: .leading, spacing: 12) {
@@ -265,6 +336,28 @@ import AppKit
                     if record.state == .failed || record.state == .paused { Button(L10n.text("继续安装")) { controller.retry(record.id, store: store) }.buttonStyle(.bordered) }
                     Button(L10n.text("移除方案配置"), role: .destructive) { ui.removal = record }.buttonStyle(.bordered).disabled(controller.preparingID == record.id || controller.services(record, store: store).contains { spec in spec.pid != nil && record.components.contains { $0.serviceID == spec.id && $0.ownsConfiguration } && !controller.deployments.contains { $0.id != record.id && $0.components.contains { $0.serviceID == spec.id } } })
                 }.padding(12).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+            }
+            let historical = controller.deployments.filter { record in !SolutionCatalog.visible.contains { $0.id == record.solutionID } }
+            if !historical.isEmpty {
+                DisclosureGroup(L10n.text("已隐藏方案的历史配置")) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(verbatim: L10n.text("旧方案暂不提供新建入口；已有服务和模型保留，可单独管理。"))
+                            .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                        ForEach(historical) { record in
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack {
+                                    Text(verbatim: L10n.text(SolutionCatalog.all.first { $0.id == record.solutionID }?.title ?? record.solutionID)).font(.system(size: TypeScale.body, weight: .medium))
+                                    Spacer()
+                                    Button(L10n.text("移除方案配置"), role: .destructive) { ui.removal = record }.buttonStyle(.bordered)
+                                }
+                                ForEach(controller.services(record, store: store)) { spec in
+                                    HStack { Text(verbatim: spec.modelName).lineLimit(1); Spacer(); Button(L10n.text("查看详情")) { store.showService(spec) }.buttonStyle(PlainAction()) }
+                                        .font(.system(size: TypeScale.callout))
+                                }
+                            }.padding(12).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+                        }
+                    }.padding(.top, 12)
+                }
             }
         }
     }

@@ -13,7 +13,7 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 
 *Illustrated interface. Speed figures are historical single runs on M4 Max; quantization and cache differ. Documentation screenshots use demonstration data.*
 
-**New in 0.10.1:** [Solutions](docs/USER_GUIDE.md#solutions) show installation stages and completed engine steps. Model downloads open their task in Downloads & Import; the solution retains component summaries and task links.
+**New in 0.10.2:** [Multilingual live translation](docs/USER_GUIDE.md#solutions) combines microphone captions, editable model/language settings and optional translated speech. Solution startup checks every component, including stopped reused services. Other recipe creation entries are temporarily hidden.
 
 ## What you can do
 
@@ -58,7 +58,7 @@ Read the [illustrated user guide](docs/USER_GUIDE.md) for download management, d
 
 For Strata, compile its official Metal source build from **Engines**, download a supported Flash-Next quantization, then **Prepare model and components** before starting a service. Ordinary Qwen 27B weights or Splash DFlash drafts are not interchangeable with Strata's Flash-Next/MTP assembly. This integration was verified with an actual Metal/vision build and isolated API fixtures; full Flash-Next inference has not been tested in this release.
 
-Solutions and MLX Audio integration were verified with isolated HTTP fixtures and native application checks. Full speech-model inference has not been tested in this release.
+The speech pipeline was verified with real local Qwen3-ASR, Qwen3.8 and Qwen3-TTS models using a synthetic English recording, French/Portuguese translation and reference-voice WAV output. Native checks cover configuration editing, stable URLs, reused-service startup and ordered subtitle requests. Physical microphone capture still requires a user-granted permission and device test; latency depends on hardware and models.
 
 ## Build from source
 

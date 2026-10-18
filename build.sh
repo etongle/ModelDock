@@ -17,7 +17,7 @@ fi
 /usr/bin/clang -target "$MM_TARGET" -dynamiclib Sources/ProcessIdentity.c -lproc -Wl,-install_name,@loader_path/ProcessIdentity.dylib -o "$APP_PATH/Contents/Resources/ProcessIdentity.dylib"
 /usr/bin/codesign --force --sign - "$APP_PATH/Contents/Resources/ProcessIdentity.dylib"
 /usr/bin/clang -target "$MM_TARGET" -c Sources/ProcessIdentity.c -o "$PWD/build/ProcessIdentity.o"
-/usr/bin/swiftc -target "$MM_TARGET" -file-prefix-map "$PWD=/ModelManager" -swift-version 5 -O -parse-as-library -import-objc-header Sources/ProcessIdentity.h -module-cache-path "$PWD/build/ModuleCache" Sources/*.swift "$PWD/build/ProcessIdentity.o" -lproc -framework AppKit -framework SwiftUI -o "$APP_PATH/Contents/MacOS/ModelManager"
+/usr/bin/swiftc -target "$MM_TARGET" -file-prefix-map "$PWD=/ModelManager" -swift-version 5 -O -parse-as-library -import-objc-header Sources/ProcessIdentity.h -module-cache-path "$PWD/build/ModuleCache" Sources/*.swift "$PWD/build/ProcessIdentity.o" -lproc -framework AppKit -framework SwiftUI -framework AVFoundation -o "$APP_PATH/Contents/MacOS/ModelManager"
 if [ -n "${MM_PYTHON_RUNTIME_DIR:-}" ]; then
   test -x "$MM_PYTHON_RUNTIME_DIR/bin/python3"
   /usr/bin/ditto "$MM_PYTHON_RUNTIME_DIR" "$APP_PATH/Contents/Resources/PythonRuntime"
@@ -34,12 +34,13 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>ModelManager</string>
 <key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.10.1</string>
-<key>CFBundleVersion</key><string>37</string>
+<key>CFBundleShortVersionString</key><string>0.10.2</string>
+<key>CFBundleVersion</key><string>38</string>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string><string>fr</string><string>pt</string></array>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>NSMicrophoneUsageDescription</key><string>ModelDock uses your microphone for local speech recognition and translation. Microphone audio is sent only to your local model services.</string>
 </dict></plist>
 PLIST
 /usr/bin/codesign --force --sign - "$APP_PATH"
