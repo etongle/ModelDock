@@ -1,6 +1,7 @@
 (() => {
   const copy = {
     en: {
+      releaseNews:'<strong>New in 0.10.2:</strong> multilingual microphone captions, editable solutions and checked component startup.',
       skip:'Skip to content', navHow:'How it works', navGuide:'User guide', eyebrow:'Native macOS · Apple Silicon',
       heroTitle:'Local AI.<br>One place to run it.', heroCopy:'Your engines, model files, downloads and services—together in a native Mac app. Choose a model, configure its capabilities, and connect the tools you already use.',
       download:'Get ModelDock <span aria-hidden="true">↓</span>',readGuide:'Read the guide <span aria-hidden="true">→</span>',requirements:'Apple Silicon · macOS 14+ · Noncommercial use',windowTitle:'Your model workspace',heroCaption:'Illustrated interface. Speed figures are historical single runs on M4 Max; quantization and cache differ.',demoCaption:'Screenshots use demonstration data. Sizes and resource values are illustrative.',
@@ -14,6 +15,7 @@
       licenseEye:'Source available · Noncommercial',licenseTitle:'Explore it. Learn from it.<br>Keep it noncommercial.',licenseCopy:'First-party code and documentation use PolyForm Noncommercial 1.0.0. Permitted noncommercial use, modification and redistribution are allowed; commercial use is not granted. Third-party engines and models keep their own terms.',licenseLink:'Read the license ↗',finalTitle:'Give your models a home.',source:'View the source ↗',installNote:'Current releases are not Apple-notarized. See the installation guide before opening a downloaded copy.',footer:'Made for local AI on Mac. Source-available, for noncommercial purposes.'
     },
     zh: {
+      releaseNews:'<strong>0.10.2 更新：</strong>多语言麦克风字幕、方案配置修改、逐组件启动检查。',
       skip:'跳至正文',navHow:'使用流程',navGuide:'使用说明',eyebrow:'原生 macOS · Apple Silicon',heroTitle:'本地模型。<br>一处掌控。',heroCopy:'把运行引擎、模型文件、下载任务和服务放进一个原生 Mac 应用。选好模型，配置输入能力，接入你常用的工具。',download:'下载 ModelDock <span aria-hidden="true">↓</span>',readGuide:'阅读使用说明 <span aria-hidden="true">→</span>',requirements:'Apple Silicon · macOS 14+ · 非商业使用',windowTitle:'你的模型工作空间',heroCaption:'界面为示意图；速度来自 M4 Max 历史单次实测，量化与缓存条件不同。',demoCaption:'截图使用示例数据。模型大小和资源数值仅用于说明界面。',
       workflowEye:'从模型文件到可用接口',workflowTitle:'下一个模型，按步骤准备。',workflowCopy:'分别管理模型、运行时和服务，每一步都能看到明确的状态。',stepDownload:'下载与检查',stepDownloadCopy:'支持 Hugging Face、ModelScope 和 GitHub，选择文件、续传任务，多个模型同时下载。',stepModel:'选择兼容基座',stepModelCopy:'查看适配引擎，检查文件，配置纯文本或模型支持的多模态。',stepService:'运行与接入',stepServiceCopy:'使用独立端口和实例，直接或通过统一网关接入 pi、OpenCode。',captionDownloads:'勾选表示选择下载，是否完成要在任务详情中确认。',captionModels:'核对兼容情况，为选中的模型配置启动方式。',captionServices:'每个服务实例都有自己的模型、接口地址和启动设置。',
       controlEye:'掌握下载与文件',controlTitle:'模型文件很大。<br>每个操作很清楚。',controlCopy:'暂停某个文件，让其他文件先下载。保留旧模型版本供后续切换，清理前先核对范围。',controlOne:'任务与单文件进度、速度和预计剩余时间，可设置 1–8 个模型并发下载。',controlTwo:'删除任务保留文件；清理未完成文件是独立操作。',controlThree:'运行中的模型和共用辅助文件受到删除保护。',detailCaption:'暂停文件或优先下载其他文件，保留可续传的数据。',

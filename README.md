@@ -21,7 +21,7 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 - **Manage models:** import local GGUF/Safetensors directories, inspect file completeness and compatibility, repair individual files, keep model revisions side by side, and choose a version for a future launch. See running/stopped instance counts for each model and jump to its engine instance list.
 - **Control downloads:** resolve a Hugging Face `owner/repo` or a full URL, use ModelScope or GitHub repositories, GitHub Release assets, or supported direct file links. Download up to 8 models concurrently (2 by default), see per-task and per-file progress, speed and estimated time remaining, and pause or prioritize individual files. Search Hugging Face directly, with fit labels on GGUF files.
 - **Run services:** configure ports, context windows, text or multimodal input, and supported runtime options; manage several independent instances; see startup stages and associated draft/vision components. Estimate memory before launch; save presets, start with ModelDock, stop when idle; try chat and compare two services side by side. Deleting models or services also removes their client registrations.
-- **Build a solution:** configure speech transcription, translation with reference-voice synthesis, a coding assistant, or image Q&A. Reuse compatible services, identify their source, and copy a stable solution gateway URL and request examples. Speech workflows process uploaded recordings.
+- **Live translation:** use microphone captions or audio files, choose source/target languages and models, and enable optional translated speech. Edit saved configurations without changing their gateway URLs; inspect each component’s readiness. Other recipe creation entries are temporarily hidden.
 - **Connect clients:** register models with pi or OpenCode while preserving existing settings. Choose a direct endpoint or the OpenAI-compatible gateway; add remote compatible APIs to the same gateway. The gateway logs request usage (never content) and can optionally be shared on the LAN.
 - **Stay in the menu bar:** monitor CPU, memory, disk usage, download progress, and measured model performance. Closing the main window keeps the app running by default; clicking outside the menu-bar panel dismisses it.
 - **Update ModelDock:** check official GitHub Releases, automatically download and verify a newer Apple Silicon package, replace the app and reopen it. Model files, settings and running model services are preserved.
@@ -49,6 +49,9 @@ A format label does not guarantee that every engine can run every architecture. 
 4. In **Downloads & Import**, enter a Hugging Face model ID, resolve it, select the required files, and download. You can also import an existing local model from **Model Files**.
 5. Choose the model and a compatible engine, review text/multimodal settings, then start its service.
 6. Open **Services → One-click integration** to register it with pi or OpenCode, or copy its API endpoint.
+7. For translation, open **Solutions → Configuration**, choose languages and component models, then **Install and start**. Use **Edit configuration** for an existing deployment.
+
+![Multilingual translation configuration](docs/assets/images/en-solutions.png)
 
 English is the first-launch default. Click the **globe/language button at the top right** to choose English, Chinese, French, Portuguese, or system language. You can also open **Settings → Interface language** with **⌘,**. Changes apply immediately.
 
