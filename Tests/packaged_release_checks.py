@@ -42,7 +42,7 @@ try:
         policy = '(version 1)(allow default)(deny file-read* (subpath "/opt/homebrew") (subpath "/usr/local") (literal "/usr/bin/python3") (subpath "/Applications/Llama.app") (subpath "/Applications/LM Studio.app"))(deny process-exec (subpath "/opt/homebrew") (subpath "/usr/local") (literal "/usr/bin/python3"))'
         subprocess.run(['/usr/bin/sandbox-exec', '-p', policy, str(app / 'Contents/MacOS/ModelManager'), '--distribution-checks', '--state-dir', str(home / 'Library/Application Support/ModelManager'), '--check-dir', str(output)], env=env, check=True, timeout=45)
         python = app / 'Contents/Resources/PythonRuntime/bin/python3'
-        for helper in ('strata.py', 'app_update.py', 'audio_server.py'):
+        for helper in ('strata.py', 'app_update.py', 'audio_server.py', 'image_server.py'):
             subprocess.run(['/usr/bin/sandbox-exec', '-p', policy, str(python), '-B', str(app / 'Contents/Resources' / helper), '--help'], env=env, check=True, stdout=subprocess.DEVNULL, timeout=15)
         subprocess.run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)], check=True)
         assert not list(app.rglob('__pycache__'))

@@ -15,7 +15,7 @@ version = info['CFBundleShortVersionString']
 assert info['LSMinimumSystemVersion'] == '14.0'
 assert (app / 'Contents/Resources/PythonRuntime/bin/python3').is_file()
 assert (app / 'Contents/Resources/ThirdPartyNotices').is_dir()
-allowed = {'AppIcon.icns', 'gateway.py', 'strata.py', 'app_update.py', 'audio_server.py', 'ProcessIdentity.dylib', 'PythonRuntime', 'python-runtime.json', 'ThirdPartyNotices', 'Localization', 'LICENSE', 'LICENSE-NOTICE.txt'}
+allowed = {'AppIcon.icns', 'gateway.py', 'strata.py', 'app_update.py', 'audio_server.py', 'image_server.py', 'ProcessIdentity.dylib', 'PythonRuntime', 'python-runtime.json', 'ThirdPartyNotices', 'Localization', 'LICENSE', 'LICENSE-NOTICE.txt'}
 assert {p.name for p in (app / 'Contents/Resources').iterdir()} == allowed, 'Unexpected application resources'
 assert not list(app.rglob('__pycache__')), 'Bytecode should not be embedded in distribution'
 subprocess.run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)], check=True)
@@ -45,7 +45,15 @@ Apple Silicon (M-series) Macs · macOS 14 or later.
    captions, audio file translation and optional speech. Install and start
    matched components, or edit an existing configuration. Each solution
    retains its dedicated gateway URL when edited.
-8. Close the main window to keep downloads/monitoring running. Use the
+8. Stopped service cards and service details can start an existing instance
+   with its saved configuration. Instance deletion keeps services, models
+   and engines unless optional cleanup is explicitly selected; shared
+   resources are protected. Port conflicts are checked before restart;
+   Use free port changes the draft until Save & Start / Save & Restart.
+9. Strata SC117 Flash-Next and MFLUX Qwen-Image-2.1-Turbo integrations are
+   previews. Full-model inference validation remains pending complete
+   model downloads. Image generation requires a separate MFLUX runtime.
+10. Close the main window to keep downloads/monitoring running. Use the
    menu-bar icon to reopen it; clicking outside its panel dismisses it.
 
 This distribution is ad-hoc signed and is not Apple-notarized. If a trusted
