@@ -22,6 +22,7 @@ import CryptoKit
         for _ in 0..<120 { if !store.gateway.busy { break }; try? await Task.sleep(nanoseconds: 50_000_000) }
     }
     private static func exercise(_ store: AppStore, fixture: EngineServiceChecks.Fixture) async throws {
+        try SolutionRecommendationChecks.run(store, fixture: fixture)
         let root = fixture.root
         func require(_ condition: Bool, _ message: String) throws { try ConnectionChecks.require(condition, message) }
         let solutions = store.solutions

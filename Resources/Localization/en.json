@@ -1783,5 +1783,15 @@
   "安装 mlx-lm": "Install mlx-lm",
   "正在下载官方发行包": "Download official release",
   "在下载页面管理进度和文件": "Manage progress and files in Downloads",
-  "正在准备…": "Preparing…"
+  "正在准备…": "Preparing…",
+  "默认以 Qwen3.8-27B 为基准，优先复用本地匹配模型；轻量模型需手动选择。": "Qwen3.8-27B is the default baseline. Matching local models are reused first; lightweight alternatives require manual selection.",
+  "轻量备选": "Lightweight alternative",
+  "推荐基准": "Recommended baseline",
+  "手动选择 · 用途需核实": "Manual choice · Task suitability unverified",
+  "优先复用推荐模型": "Prefer recommended local models",
+  "选择轻量备选模型": "Choose a lightweight alternative",
+  "推荐模型 · 已安装": "Recommended models · Installed",
+  "其他本地模型 · 手动选择": "Other local models · Manual selection",
+  "已有方案使用旧推荐，可按当前推荐新建配置。原方案可在实例中查看和使用。": "The existing solution uses earlier recommendations. Create a new configuration with the current recommendations; the original remains available under Instances.",
+  "按当前推荐新建配置": "Create with current recommendations"
 }

@@ -1783,5 +1783,15 @@
   "安装 mlx-lm": "Instalar mlx-lm",
   "正在下载官方发行包": "Baixar versão oficial",
   "在下载页面管理进度和文件": "Gerencie o progresso e os arquivos em Downloads",
-  "正在准备…": "Preparando…"
+  "正在准备…": "Preparando…",
+  "默认以 Qwen3.8-27B 为基准，优先复用本地匹配模型；轻量模型需手动选择。": "Qwen3.8-27B é a referência padrão. Modelos locais compatíveis são reutilizados primeiro; alternativas leves exigem seleção manual.",
+  "轻量备选": "Alternativa leve",
+  "推荐基准": "Referência recomendada",
+  "手动选择 · 用途需核实": "Escolha manual · Adequação à tarefa não verificada",
+  "优先复用推荐模型": "Priorizar modelos locais recomendados",
+  "选择轻量备选模型": "Escolher uma alternativa leve",
+  "推荐模型 · 已安装": "Modelos recomendados · Instalados",
+  "其他本地模型 · 手动选择": "Outros modelos locais · Seleção manual",
+  "已有方案使用旧推荐，可按当前推荐新建配置。原方案可在实例中查看和使用。": "A solução existente usa recomendações anteriores. Crie uma nova configuração com as recomendações atuais; a original continua disponível em Instâncias.",
+  "按当前推荐新建配置": "Criar com as recomendações atuais"
 }

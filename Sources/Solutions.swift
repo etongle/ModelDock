@@ -24,8 +24,7 @@ enum SolutionCatalog {
             return quality == .light ? .init(repository: "mlx-community/Qwen3-ASR-0.6B-8bit", revision: "89e96d92ba34aca20b3e29fb10cc284097d1219f") : .init(repository: "mlx-community/Qwen3-ASR-1.7B-8bit", revision: "a8379a2e2f9e313c9292cdf1af4055ab56d50d55")
         case .tts:
             return quality == .quality ? .init(repository: "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16", revision: "a6eb4f68e4b056f1215157bb696209bc82a6db48") : .init(repository: "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-bf16", revision: "1eccf1cb2519b5a4e8a95b5f0544f3303568164f")
-        case .vision: return .init(repository: "mlx-community/Qwen2.5-VL-3B-Instruct-4bit", revision: "46d4cf06a06ffc1a766c214174f9cbed2f45bcab")
-        case .text, .chat: return .init(repository: "mlx-community/Qwen3-4B-4bit", revision: "4dcb3d101c2a062e5c1d4bb173588c54ea6c4d25")
+        case .text, .chat, .vision: return SolutionRecommendations.baseline
         }
     }
     static func engine(_ role: SolutionRole) -> String { [.asr, .tts].contains(role) ? "audio" : "mlx" }
@@ -95,6 +94,9 @@ struct SolutionLocalChoice: Identifiable {
     var definition: SolutionDefinition { SolutionCatalog.all.first { $0.id == selectedID } ?? SolutionCatalog.all[0] }
     var draft: SolutionDraft { drafts[selectedID] ?? .init() }
     var latest: SolutionDeployment? { deployments.last { $0.solutionID == selectedID } }
+    func usesCurrentRecommendations(_ deployment: SolutionDeployment) -> Bool {
+        deployment.components.allSatisfy { SolutionRecommendations.isCurrent($0, draft: deployment.draft) }
+    }
     func setDraft(_ value: SolutionDraft) { drafts[selectedID] = value; save() }
     @discardableResult func save() -> Bool {
         do { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true); try JSONEncoder().encode(SolutionState(drafts: drafts, deployments: deployments)).write(to: directory.appendingPathComponent("solutions.json"), options: .atomic); return true }
@@ -117,6 +119,9 @@ struct SolutionLocalChoice: Identifiable {
                 return true
             }.map { SolutionLocalChoice(engine: $0, model: model) }
         }.sorted { left, right in
+            let recommendedLeft = SolutionRecommendations.matches(left.model, role: role, draft: draft)
+            let recommendedRight = SolutionRecommendations.matches(right.model, role: role, draft: draft)
+            if recommendedLeft != recommendedRight { return recommendedLeft }
             let l = store.modelInstanceCounts(left.model, engineID: left.engine.id).running > 0
             let r = store.modelInstanceCounts(right.model, engineID: right.engine.id).running > 0
             if l != r { return l }
@@ -126,13 +131,12 @@ struct SolutionLocalChoice: Identifiable {
     }
     func selection(_ role: SolutionRole, draft: SolutionDraft, store: AppStore) throws -> SolutionComponent {
         let candidates = choices(role, store: store)
-        if let chosen = draft.localChoices[role.rawValue], !chosen.isEmpty, chosen != "download" {
+        if let chosen = draft.localChoices[role.rawValue], !chosen.isEmpty, chosen != "download", chosen != SolutionRecommendations.lightweightChoice {
             guard let local = candidates.first(where: { $0.id == chosen }) else { throw LaunchError.message("所选模型已移动、不完整或基座已禁用，请重新选择") }
             return .init(role: role, engineID: local.engine.id, modelID: local.model.id, modelPath: local.model.path, repository: local.model.repository ?? local.model.name, revision: local.model.origin?.revision ?? "")
         }
-        let source = SolutionCatalog.model(role, quality: draft.quality)
-        // Auto reuse for translation/chat is explicit in the picker. Speech/vision defaults stay on pinned recipes.
-        let local = (role == .text || role == .chat) ? candidates.first : candidates.first { $0.model.repository == source.repository && $0.model.origin?.revision == source.revision }
+        let source = SolutionRecommendations.source(role, draft: draft)
+        let local = candidates.first { SolutionRecommendations.matches($0.model, role: role, draft: draft) }
         if draft.localChoices[role.rawValue] != "download", let local {
             return .init(role: role, engineID: local.engine.id, modelID: local.model.id, modelPath: local.model.path, repository: local.model.repository ?? local.model.name, revision: local.model.origin?.revision ?? "")
         }
@@ -142,7 +146,7 @@ struct SolutionLocalChoice: Identifiable {
         guard store.inventory != nil, !store.scanning else { message = "正在扫描模型文件…"; return }
         guard preparingID == nil, !store.installation.running, !store.maintaining else { message = "请等待当前引擎操作完成"; return }
         let definition = definition, draft = draft
-        if let existing = deployments.last(where: { $0.solutionID == definition.id && $0.draft == draft && $0.state != .configured }) {
+        if let existing = deployments.last(where: { $0.solutionID == definition.id && $0.draft == draft && $0.state != .configured && usesCurrentRecommendations($0) }) {
             retry(existing.id, store: store); return
         }
         do {

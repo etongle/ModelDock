@@ -74,7 +74,13 @@ import AppKit
     }
     private var configuration: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if let record = controller.latest, record.draft == controller.draft { deploymentProgress(record) }
+            if let record = controller.latest, record.draft == controller.draft {
+                if controller.usesCurrentRecommendations(record) { deploymentProgress(record) }
+                else {
+                    Text(verbatim: L10n.text("已有方案使用旧推荐，可按当前推荐新建配置。原方案可在实例中查看和使用。"))
+                        .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                }
+            }
             HStack {
                 Text(verbatim: L10n.text("配套模型与引擎")).font(.system(size: TypeScale.section, weight: .semibold))
                 Spacer()
@@ -83,6 +89,10 @@ import AppKit
                     ForEach(SolutionQuality.allCases, id: \.self) { Text(verbatim: L10n.text($0.rawValue)).tag($0) }
                 }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: 220).disabled(controller.preparingID != nil).accessibilityIdentifier("solution-quality")
                 }
+            }
+            if controller.definition.roles.contains(where: SolutionRecommendations.usesBaseline) {
+                Text(verbatim: L10n.text("默认以 Qwen3.8-27B 为基准，优先复用本地匹配模型；轻量模型需手动选择。"))
+                    .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
             VStack(spacing: 0) {
                 ForEach(controller.definition.roles, id: \.rawValue) { role in
@@ -114,13 +124,15 @@ import AppKit
                     Button(L10n.text("全局引擎设置")) { store.showGlobalEngines = true }.buttonStyle(PlainAction())
                 }.padding(.top, 10)
             }.font(.system(size: TypeScale.body)).padding(.vertical, 4)
-            if let deployment = controller.latest, deployment.state == .configured { SolutionGatewayCard(store: store, gateway: store.gateway, deployment: deployment) }
+            if let deployment = controller.latest, deployment.state == .configured, controller.usesCurrentRecommendations(deployment) { SolutionGatewayCard(store: store, gateway: store.gateway, deployment: deployment) }
         }
     }
     private func componentRow(_ role: SolutionRole) -> some View {
         let selection = try? controller.selection(role, draft: controller.draft, store: store)
         let local = selection?.modelID.flatMap { id in store.models.first { $0.id == id } }
-        let deployed = controller.latest?.draft == controller.draft ? controller.latest?.components.first { $0.role == role } : nil
+        let deployed = controller.latest.flatMap { record in
+            record.draft == controller.draft && controller.usesCurrentRecommendations(record) ? record.components.first { $0.role == role } : nil
+        }
         let job = deployed?.downloadID.flatMap { id in store.downloads.jobs.first { $0.id == id } }
         let inspect = local ?? deployed?.modelID.flatMap { id in store.models.first { $0.id == id } }
         let installingEngine = controller.latest?.state == .installing && controller.latest?.progress?.engineID == selection?.engineID
@@ -132,15 +144,32 @@ import AppKit
                     Text(verbatim: local?.name ?? selection?.repository.components(separatedBy: "/").last ?? L10n.text("请重新选择模型"))
                         .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(1)
                     Text(verbatim: store.engines.first { $0.id == selection?.engineID }?.name ?? "—").font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
+                    if SolutionRecommendations.usesBaseline(role) {
+                        Text(verbatim: L10n.text(SolutionRecommendations.label(role, draft: controller.draft, model: local)))
+                            .font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
+                    }
                 }
                 Spacer(minLength: 6)
                 Text(verbatim: L10n.text(installingEngine ? "正在安装引擎" : job?.state.rawValue ?? (local == nil ? "待下载" : "可复用"))).font(.system(size: TypeScale.callout)).foregroundStyle(local == nil ? Theme.muted : Theme.successText)
                 Menu(L10n.text("更换")) {
-                    Button(L10n.text("自动选择并复用")) { choose(role, value: nil) }
+                    Button(L10n.text("优先复用推荐模型")) { choose(role, value: nil) }
                     Button(L10n.text("下载方案默认模型")) { choose(role, value: "download") }
+                    if SolutionRecommendations.usesBaseline(role) { Button(L10n.text("选择轻量备选模型")) { choose(role, value: SolutionRecommendations.lightweightChoice) } }
                     if let inspect { Button(L10n.text("管理模型文件")) { store.showModelFile(inspect) } }
                     Divider()
-                    ForEach(controller.choices(role, store: store)) { item in Button(item.model.name + " · " + item.engine.name) { choose(role, value: item.id) } }
+                    let choices = controller.choices(role, store: store)
+                    let recommended = choices.filter { SolutionRecommendations.matches($0.model, role: role, draft: controller.draft) }
+                    if !recommended.isEmpty {
+                        Section(L10n.text("推荐模型 · 已安装")) {
+                            ForEach(recommended) { item in Button(item.model.name + " · " + item.engine.name) { choose(role, value: item.id) } }
+                        }
+                    }
+                    let other = choices.filter { !SolutionRecommendations.matches($0.model, role: role, draft: controller.draft) }
+                    if !other.isEmpty {
+                        Section(L10n.text("其他本地模型 · 手动选择")) {
+                            ForEach(other) { item in Button(item.model.name + " · " + item.engine.name) { choose(role, value: item.id) } }
+                        }
+                    }
                 }.menuStyle(.borderlessButton).fixedSize().disabled(controller.preparingID != nil).accessibilityIdentifier("solution-model-" + role.rawValue)
             }
             if let job {
@@ -162,8 +191,9 @@ import AppKit
     }
     private var actionBar: some View {
         let record = controller.latest
-        let configured = record?.state == .configured && record?.draft == controller.draft
-        let installing = record?.draft == controller.draft && record.map { [.preparing, .installing, .downloading].contains($0.state) } == true
+        let current = record.map(controller.usesCurrentRecommendations) ?? true
+        let configured = current && record?.state == .configured && record?.draft == controller.draft
+        let installing = current && record?.draft == controller.draft && record.map { [.preparing, .installing, .downloading].contains($0.state) } == true
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 5) {
@@ -175,7 +205,7 @@ import AppKit
                 if configured, let record {
                     Button { controller.start(record.id, store: store) } label: { Label(L10n.text("启动方案"), systemImage: "play.fill") }.buttonStyle(AccentButton()).disabled(controller.services(record, store: store).allSatisfy { $0.pid != nil })
                 } else {
-                    Button { controller.install(store: store) } label: { Label(L10n.text(installing ? "安装进行中" : record?.draft == controller.draft && (record.map { [.paused, .failed].contains($0.state) } ?? false) ? "继续安装" : "一键安装并配置"), systemImage: "arrow.down.circle") }.buttonStyle(AccentButton()).disabled(store.scanning || controller.preparingID != nil || (record?.draft == controller.draft && record?.state == .downloading)).accessibilityIdentifier("install-solution")
+                    Button { controller.install(store: store) } label: { Label(L10n.text(!current ? "按当前推荐新建配置" : installing ? "安装进行中" : record?.draft == controller.draft && (record.map { [.paused, .failed].contains($0.state) } ?? false) ? "继续安装" : "一键安装并配置"), systemImage: "arrow.down.circle") }.buttonStyle(AccentButton()).disabled(store.scanning || controller.preparingID != nil || (current && record?.draft == controller.draft && record?.state == .downloading)).accessibilityIdentifier("install-solution")
                 }
             }
             if configured { Button(L10n.text("查看实例与试用")) { controller.section = .instances }.buttonStyle(PlainAction()) }
