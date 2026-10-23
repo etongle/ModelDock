@@ -15,7 +15,7 @@ version = info['CFBundleShortVersionString']
 assert info['LSMinimumSystemVersion'] == '14.0'
 assert (app / 'Contents/Resources/PythonRuntime/bin/python3').is_file()
 assert (app / 'Contents/Resources/ThirdPartyNotices').is_dir()
-allowed = {'AppIcon.icns', 'gateway.py', 'strata.py', 'app_update.py', 'audio_server.py', 'image_server.py', 'ProcessIdentity.dylib', 'PythonRuntime', 'python-runtime.json', 'ThirdPartyNotices', 'Localization', 'LICENSE', 'LICENSE-NOTICE.txt'}
+allowed = {'AppIcon.icns', 'gateway.py', 'strata.py', 'app_update.py', 'audio_server.py', 'image_server.py', 'playground.py', 'PlaygroundClient', 'ProcessIdentity.dylib', 'PythonRuntime', 'python-runtime.json', 'ThirdPartyNotices', 'Localization', 'LICENSE', 'LICENSE-NOTICE.txt'}
 assert {p.name for p in (app / 'Contents/Resources').iterdir()} == allowed, 'Unexpected application resources'
 assert not list(app.rglob('__pycache__')), 'Bytecode should not be embedded in distribution'
 subprocess.run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)], check=True)
@@ -41,10 +41,15 @@ Apple Silicon (M-series) Macs · macOS 14 or later.
    individual files and Release assets. Download 2 models at once by default;
    change the limit (1–8) in the sidebar or Settings → Downloads. The + button
    opens a clean import form. Task/file progress includes time remaining.
-7. Solutions (⌘6) offers multilingual live translation with microphone
+7. Solutions (⌘6) adds local image generation (official Turbo or Heretic MLX),
+   plus multilingual live translation with microphone
    captions, audio file translation and optional speech. Install and start
    matched components, or edit an existing configuration. Each solution
    retains its dedicated gateway URL when edited.
+   Replace the translation model with another compatible local model or
+   explicitly reuse an existing service, keeping its port and parameters.
+   Engines -> Splash -> Configuration offers official model/quantization
+   examples, with hardware and runtime-version requirements.
 8. Stopped service cards and service details can start an existing instance
    with its saved configuration. Instance deletion keeps services, models
    and engines unless optional cleanup is explicitly selected; shared
@@ -78,6 +83,11 @@ Project and illustrated guides: https://github.com/etongle/ModelDock
 软件限于许可规定的非商业使用；第一方与第三方许可在应用资源中保留。
 本发行包不包含个人配置、密钥或模型权重。
 '''
+
+if '-rc.' in version:
+    readme = ('LOCAL VALIDATION BUILD / 本地验证版\n'
+              'Not published to GitHub. Release waits for validation.\n'
+              '尚未发布到 GitHub；验证通过后再发行。\n\n') + readme
 
 try:
     staged_app = stage / app.name

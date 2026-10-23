@@ -21,6 +21,20 @@ struct ModelOrigin: Codable, Hashable {
         guard validRepository(repo) else { return nil }
         return .init(site: .huggingface, repository: repo, revision: parts[repoIndex + 2], files: [])
     }
+    static func fromDownloads(_ model: LocalModel, jobs: [ModelDownload]) -> ModelOrigin? {
+        let path = URL(fileURLWithPath: model.path).standardizedFileURL.resolvingSymlinksInPath()
+        let identity = FileIdentity.read(path.path)
+        let candidates = jobs.filter { job in
+            guard job.site != .direct, validRepository(job.repository), DownloadPaths.safeRelative(job.folder) else { return false }
+            return job.files.contains { file in
+                guard DownloadPaths.safeRelative(file.path) else { return false }
+                let fileURL = URL(fileURLWithPath: job.root).appendingPathComponent(job.folder).appendingPathComponent(file.path).standardizedFileURL.resolvingSymlinksInPath()
+                return fileURL == path || (identity != nil && FileIdentity.read(fileURL.path) == identity)
+            }
+        }.map { ModelOrigin(site: $0.site, repository: $0.repository, revision: $0.revision, files: $0.files.map(\.path), sourceURL: $0.sourceURL) }
+        let versions = Set(candidates.map { "\($0.site.rawValue)/\($0.repository)/\($0.revision)" })
+        return versions.count == 1 ? candidates.first : nil
+    }
     private static func receipt(above folder: URL) -> (URL, ModelOrigin)? {
         var current = folder
         for _ in 0..<8 {
@@ -108,10 +122,23 @@ final class ModelUpdateDraft: ObservableObject, Identifiable {
     @Published var updating = false
     @Published var error: String?
     @Published var result: String?
+    @Published var existingFiles = Set<String>()
     private var checkedAddress: String?
     var original: ModelOrigin? { ModelOrigin.read(model) }
     var replacement: String? { ModelOrigin.replacement(model) }
     var selectedFiles: [RemoteFile] { listing?.files.filter { selected.contains($0.path) } ?? [] }
+    var requiredFiles: Set<String> { listing.map { ModelOrigin.selectedFiles(model: model, listing: $0) } ?? [] }
+    var missingFiles: Set<String> { requiredFiles.subtracting(existingFiles) }
+    var status: ModelUpdateStatus {
+        guard let listing else { return .unchecked }
+        guard let original else { return .unknown }
+        guard original.site == listing.site, original.repository == listing.repository else { return .differentRepository }
+        guard !original.revision.isEmpty else { return .unknown }
+        guard sameRevision else { return .available }
+        guard !requiredFiles.isEmpty else { return .unmatched }
+        return missingFiles.isEmpty ? .current : .incomplete
+    }
+    var downloadTitle: String { sameRevision ? selectedFiles.isEmpty ? "无需下载" : "下载缺失文件" : status == .unknown ? "下载所选仓库版本" : "下载新版本" }
     var sameRevision: Bool {
         guard let original, let listing, listing.site == .huggingface else { return false }
         return original.repository == listing.repository && original.revision == listing.revision
@@ -120,16 +147,26 @@ final class ModelUpdateDraft: ObservableObject, Identifiable {
         self.model = model
         address = ModelOrigin.replacement(model).map { "https://huggingface.co/" + $0 } ?? ModelOrigin.read(model).map(ModelOrigin.address) ?? ""
     }
-    func check() {
+    func check(store: AppStore? = nil) {
         guard !checking, !updating else { return }; checking = true; error = nil; listing = nil; selected = []; result = nil
-        let input = address, credential = token
+        let input = address, credential = store?.downloads.accessTokens.credential(for: address, override: token) ?? token
         Task {
             defer { checking = false }
             do {
                 let value = try await ModelCatalog.listing(input, token: credential)
                 guard address == input else { return }
                 guard value.site != .direct else { throw LaunchError.message("文件直链无法检查仓库版本，请填写 Hugging Face 或 ModelScope 仓库地址") }
-                checkedAddress = input; listing = value; selected = ModelOrigin.selectedFiles(model: model, listing: value)
+                checkedAddress = input; listing = value
+                existingFiles = []
+                if sameRevision {
+                    let root = ModelOrigin.sourceRoot(model)
+                    for file in value.files where DownloadPaths.safeRelative(file.path) {
+                        let url = root.appendingPathComponent(file.path).resolvingSymlinksInPath()
+                        if let size = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]), size.isRegularFile == true, file.bytes > 0, Int64(size.fileSize ?? 0) == file.bytes { existingFiles.insert(file.path) }
+                    }
+                }
+                selected = requiredFiles.subtracting(existingFiles)
+                if original == nil, let store { try store.rememberModelSource(model, listing: value) }
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -138,6 +175,12 @@ final class ModelUpdateDraft: ObservableObject, Identifiable {
         guard checkedAddress == address else { error = "仓库地址已变化，请重新检查版本"; return }
         guard !store.maintaining else { error = "请先暂停当前下载或等待清理完成"; return }
         guard !store.strata.uses(model.path) else { error = "此模型正在准备 Strata 配套组件，请等待操作完成。"; return }
+        if sameRevision {
+            do { try store.downloads.supplementModel(model, listing: listing, files: selectedFiles.filter { !existingFiles.contains($0.path) }, credential: token) }
+            catch { self.error = error.localizedDescription; return }
+            if let message = store.downloads.message { error = message; return }
+            store.modelUpdate = nil; store.tab = .downloads; return
+        }
         let destination = store.downloads.destination
         store.downloads.beginImport(); store.downloads.destination = destination
         store.downloads.address = address; store.downloads.token = token

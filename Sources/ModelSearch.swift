@@ -35,10 +35,8 @@ enum ModelSearch {
     }
     static func search(_ query: String, format: ModelSearchFormat, token: String) async throws -> [ModelSearchResult] {
         guard let url = url(query, format: format) else { throw LaunchError.message("搜索关键词无效") }
-        var request = URLRequest(url: url); request.timeoutInterval = 20
-        if !token.isEmpty { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw LaunchError.message("Hugging Face 搜索失败（HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)）") }
+        let (data, response) = try await CatalogHTTP.fetch(url, token: token)
+        guard response.statusCode == 200 else { throw LaunchError.message("Hugging Face 搜索失败（HTTP \(response.statusCode)）") }
         return try parse(data)
     }
     /// 下载前按文件大小粗判能否放进本机：权重 + 运行开销，对照 GPU 可用的 75% 物理内存（不含上下文缓存）。
@@ -82,9 +80,9 @@ final class ModelSearchController: ObservableObject {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 TextField(L10n.text("搜索 Hugging Face 模型，例如 qwen3 gguf"), text: $search.query).textFieldStyle(.roundedBorder).font(.system(size: TypeScale.body))
-                    .onSubmit { search.search(token: downloads.token) }.accessibilityIdentifier("model-search")
+                    .onSubmit { search.search(token: downloads.accessTokens.credential(for: "https://huggingface.co", override: downloads.token)) }.accessibilityIdentifier("model-search")
                 Picker(L10n.text("格式"), selection: $search.format) { ForEach(ModelSearchFormat.allCases) { Text(verbatim: L10n.text($0.title)).tag($0) } }.labelsHidden().fixedSize()
-                Button { search.search(token: downloads.token) } label: { Label(L10n.text("搜索"), systemImage: "magnifyingglass") }.buttonStyle(SecondaryButton())
+                Button { search.search(token: downloads.accessTokens.credential(for: "https://huggingface.co", override: downloads.token)) } label: { Label(L10n.text("搜索"), systemImage: "magnifyingglass") }.buttonStyle(SecondaryButton())
                     .disabled(search.searching || search.query.trimmingCharacters(in: .whitespaces).isEmpty)
                 if search.searching { ProgressView().controlSize(.small) }
             }

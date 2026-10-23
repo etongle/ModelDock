@@ -347,7 +347,7 @@ enum LaunchBuilder {
         switch engine.kind {
         case .mflux:
             guard let model, ImageModelPolicy.recognizes(URL(fileURLWithPath: model.path)), model.complete else { throw LaunchError.message("请选择文件齐全的 Qwen-Image-2.1-Turbo 模型") }
-            args = ["--model", model.path, "--port", String(port)]
+            args = ["--model", model.path, "--port", String(port), "--api-model", model.repository ?? ModelOrigin.read(model)?.repository ?? ImageModelPolicy.repository]
             let python = URL(fileURLWithPath: engine.path).deletingLastPathComponent().appendingPathComponent("python3")
             if FileManager.default.isExecutableFile(atPath: python.path), let helper = ImageModelPolicy.helper, FileManager.default.fileExists(atPath: helper) {
                 executable = python.path; args = ["-u", helper] + args
@@ -403,6 +403,7 @@ enum LaunchBuilder {
         case .ollama:
             args = ["serve"]; env = ["OLLAMA_HOST": "127.0.0.1:\(port)", "OLLAMA_MODELS": Scanner.defaultRoot.appendingPathComponent("ollama").path, "OLLAMA_CONTEXT_LENGTH": String(context), "OLLAMA_MAX_LOADED_MODELS": String(maximumLoadedModels)]
         case .mlx:
+            if let model, NativeTensorPolicy.supports(model), ![.current, .newer].contains(EngineVersionPolicy.state(installed: engine.version, available: "0.32.0")) { throw LaunchError.message("请先将 MLX-LM 更新到 0.32.0 或更新版本，再加载这套原始权重。") }
             if inputMode == .multimodal || (inputMode == .automatic && model.map({ ModalityPolicy.local($0).supportsMedia }) == true && engine.visionPath != nil) {
                 guard let vision = engine.visionPath, FileManager.default.isExecutableFile(atPath: vision) else { throw LaunchError.message("尚未安装 MLX-VLM，请更新此基座的多模态组件后重试。") }
                 executable = vision; version = engine.visionVersion ?? engine.version

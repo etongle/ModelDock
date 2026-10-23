@@ -7,8 +7,10 @@ enum TranslationLanguages {
         return ["English": "English", "Chinese": "中文", "French": "Français", "Portuguese": "Português", "German": "Deutsch", "Spanish": "Español", "Italian": "Italiano", "Japanese": "日本語", "Korean": "한국어", "Russian": "Русский"][value] ?? value
     }
     static func modelIssue(_ model: LocalModel) -> String? {
-        let identity = (model.origin?.repository ?? model.repository ?? model.name).lowercased()
-        if identity.contains("confucius4-t3po") { return "T3PO 需要专用的中英同传协议，不能用于当前多语言翻译流程。请选择 Qwen3.8。" }
+        identityIssue(model.origin?.repository ?? model.repository ?? model.name)
+    }
+    static func identityIssue(_ name: String) -> String? {
+        if name.lowercased().contains("confucius4-t3po") { return "T3PO 需要专用的中英同传协议，不能用于当前多语言翻译流程。请选择兼容的通用对话模型或服务。" }
         return nil
     }
 }

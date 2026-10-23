@@ -12,12 +12,22 @@ struct DownloadFileDetails: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(verbatim: L10n.text("下载文件详情")).font(.system(size: TypeScale.title, weight: .bold))
-                    Text(job.repository).font(.system(size: TypeScale.body, weight: .semibold)).textSelection(.enabled)
+                    if let url = job.huggingFacePage {
+                        Link(destination: url) { Label(job.repository, systemImage: "arrow.up.right.square") }.font(.system(size: TypeScale.body, weight: .semibold)).help(L10n.text("查看 Hugging Face 页面")).accessibilityIdentifier("download-repository-page")
+                    } else { Text(job.repository).font(.system(size: TypeScale.body, weight: .semibold)).textSelection(.enabled) }
                     Text(verbatim: L10n.text(job.site.rawValue + " · " + job.state.rawValue)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                 }
                 Spacer()
                 // The sidebar's + returns to the new-download form; the header carries the task's own actions.
                 DownloadTaskActions(store: store, downloads: downloads, job: job)
+            }
+            if job.needsAuthorization {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(L10n.text("下载需要访问授权"), systemImage: "key.fill").font(.system(size: TypeScale.body, weight: .semibold))
+                    Text(verbatim: L10n.text("访问令牌可能未提供、已失效或没有读取权限。已下载文件保留，更新令牌后可以继续。"))
+                        .font(.system(size: TypeScale.callout))
+                    Button(L10n.text("输入令牌并继续…")) { downloads.requestAuthorization(job.id) }.buttonStyle(.bordered).accessibilityIdentifier("download-auth-recovery")
+                }.foregroundStyle(Theme.warningText).padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Theme.selection, in: RoundedRectangle(cornerRadius: 12))
             }
             if let target = job.repairTarget {
                 Text(verbatim: L10n.text("单文件修复：" + target)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled)
@@ -51,6 +61,14 @@ struct DownloadFileDetails: View {
                 if !(job.pausedFiles ?? []).isEmpty { Button(L10n.text("继续所有暂停文件")) { downloads.resumeAllFiles(job.id) }.buttonStyle(.bordered).controlSize(.small).disabled(!downloads.canControlFiles(job.id)) }
             }.padding(18).background(Theme.selection.opacity(0.5), in: RoundedRectangle(cornerRadius: 12)).accessibilityIdentifier("download-files-summary")
             if job.state == .queued { Label(L10n.text(downloads.queueReason(job.id)), systemImage: "clock").font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
+            if let retry = downloads.retryStatuses[job.id] {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(L10n.format("网络中断，{0} 秒后自动续传（{1}/{2}）", [String(Int(retry.delay)), String(retry.attempt), String(retry.limit)]), systemImage: "arrow.clockwise")
+                        .font(.system(size: TypeScale.body, weight: .semibold))
+                    Text(verbatim: L10n.text("已下载文件和本次授权保留，可以随时暂停。连续重试仍失败时，会保留进度并等待手动继续。"))
+                        .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Theme.selection, in: RoundedRectangle(cornerRadius: 12)).accessibilityIdentifier("download-network-retry")
+            }
             VStack(alignment: .leading, spacing: 6) {
                 Text(verbatim: L10n.text("保存位置")).font(.system(size: TypeScale.callout, weight: .semibold))
                 Text(job.displayLocation).font(.system(size: TypeScale.caption, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled)
@@ -125,7 +143,7 @@ struct DownloadFileRow: View {
             if let error = progress.error { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
             if progress.state != .complete {
                 HStack {
-                    if progress.state == .paused { Button(L10n.text("继续")) { resume() }.accessibilityIdentifier("resume-file-\(progress.id)") }
+                    if progress.state == .paused || progress.state == .failed { Button(L10n.text(progress.state == .failed ? "重试" : "继续")) { resume() }.accessibilityIdentifier("resume-file-\(progress.id)") }
                     else { Button(L10n.text("暂停")) { pause() }.accessibilityIdentifier("pause-file-\(progress.id)") }
                     if !progress.state.processing { Button(L10n.text("优先下载")) { prioritize() }.accessibilityIdentifier("prioritize-file-\(progress.id)") }
                 }.buttonStyle(.bordered).controlSize(.small).disabled(!controlsEnabled)

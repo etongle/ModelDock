@@ -23,6 +23,8 @@ import CryptoKit
     }
     private static func exercise(_ store: AppStore, fixture: EngineServiceChecks.Fixture) async throws {
         try SolutionRecommendationChecks.run(store, fixture: fixture)
+        try SplashRecommendationChecks.run(root: fixture.root)
+        try await SolutionServiceChoiceChecks.run(store, fixture: fixture)
         let root = fixture.root
         func require(_ condition: Bool, _ message: String) throws { try ConnectionChecks.require(condition, message) }
         let solutions = store.solutions
@@ -45,12 +47,14 @@ import CryptoKit
         from http.server import HTTPServer,BaseHTTPRequestHandler
         p=argparse.ArgumentParser();p.add_argument('--port',type=int);p.add_argument('--model',default='fixture');p.add_argument('--task',default='chat');a,_=p.parse_known_args()
         class H(BaseHTTPRequestHandler):
+            conversations=[]
             def log_message(self,*args):pass
             def reply(self,data,kind='application/json'):
                 self.send_response(200);self.send_header('Content-Type',kind);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
-            def do_GET(self):self.reply(json.dumps({'helper_version':2,'loaded':True} if self.path=='/health' else {'data':[{'id':a.model}]}).encode())
+            def do_GET(self):self.reply(json.dumps(self.conversations if self.path=='/fixture/conversations' else {'helper_version':2,'loaded':True} if self.path=='/health' else {'data':[{'id':a.model}]}).encode())
             def do_POST(self):
-                self.rfile.read(int(self.headers.get('Content-Length',0)))
+                body=self.rfile.read(int(self.headers.get('Content-Length',0)))
+                if self.path.endswith('/chat/completions'):self.conversations.append(json.loads(body).get('messages',[]))
                 if self.path.endswith('/speech'):self.reply(b'RIFF'+b'0'*4+b'WAVE'+b'0'*36,'audio/wav')
                 elif self.path.endswith('/transcriptions'):self.reply(json.dumps({'text':'Hello world'}).encode())
                 else:self.reply(json.dumps({'choices':[{'message':{'content':'Bonjour le monde'}}]}).encode())
@@ -146,6 +150,7 @@ import CryptoKit
         try require(store.solutionTrial.error == nil && store.solutionTrial.output != nil && store.gateway.requests == 3, "Explicit direct trial failed or used the gateway")
         try await SolutionExampleChecks.run(configured, store: store, root: root)
         try await RealtimeTranslationChecks.pipeline(store: store, deployment: configured)
+        try await SolutionExperienceChecks.translation(store: store, deployment: configured, input: input)
         await cleanupGateway(store)
         store.solutionTrial.connection = .gateway; store.solutionTrial.run(configured, store: store)
         try await wait { !store.solutionTrial.busy }

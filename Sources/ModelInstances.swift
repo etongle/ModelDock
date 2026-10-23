@@ -5,6 +5,27 @@ struct ModelInstanceFilter { var engineID: String; var model: LocalModel }
 
 /// Bind an instance to a local revision, never just to a display name shared by versions.
 enum ModelInstancePolicy {
+    /// Display names come from the canonical local file, not from a launch command's API alias.
+    /// Keep the saved alias intact: engines and clients may require it verbatim.
+    static func displayName(_ spec: ServiceSpec, models: [LocalModel], loaded: [LoadedModel] = []) -> String {
+        if spec.engineID == "ollama", spec.modelID.isEmpty { return spec.modelName }
+        if let model = models.first(where: { $0.matchesID(spec.modelID) }) { return model.name }
+        let candidates = models.filter { Self.matches(spec, model: $0, models: models, loaded: loaded) }
+        if candidates.count == 1 { return candidates[0].name }
+        // Command-launched services can predate local file IDs. An exact, unique
+        // repository reference may supply a label, never a file/ownership binding.
+        if spec.modelPath.isEmpty, (spec.modelID.isEmpty || spec.modelID.hasPrefix("command:\(spec.engineID):")), spec.modelName.contains("/") {
+            let arguments = spec.launchArguments ?? ((try? ServiceCommand.words(spec.commandText ?? "")) ?? [])
+            let index = arguments.firstIndex(of: "--revision")
+            let revision = index.flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
+            let repositories = models.filter {
+                ($0.repository == spec.modelName || $0.origin?.repository == spec.modelName) &&
+                    (revision == nil || $0.origin?.revision.hasPrefix(revision!) == true)
+            }
+            if repositories.count == 1 { return repositories[0].name }
+        }
+        return spec.modelName
+    }
     static func samePath(_ left: String, _ right: String) -> Bool {
         guard left.hasPrefix("/"), right.hasPrefix("/") else { return false }
         let l = URL(fileURLWithPath: left).standardizedFileURL.resolvingSymlinksInPath()
@@ -49,6 +70,9 @@ struct ModelInstanceCounts {
 
 @MainActor
 extension AppStore {
+    func serviceDisplayName(_ spec: ServiceSpec) -> String {
+        ModelInstancePolicy.displayName(spec, models: models, loaded: services.loadedModels[spec.port] ?? [])
+    }
     func modelServices(_ model: LocalModel, engineID: String? = nil) -> [ServiceSpec] {
         services.records.filter { spec in
             (engineID == nil || spec.engineID == engineID) && ModelInstancePolicy.matches(spec, model: model, models: models, loaded: services.loadedModels[spec.port] ?? [])

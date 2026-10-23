@@ -68,6 +68,7 @@ struct SolutionCleanupPlan {
         if let issue = item.issue { return issue }
         guard let identity = item.identity, FileIdentity.read(item.path.path) == identity,
               item.path.resolvingSymlinksInPath() == item.resolved else { return "模型文件已变化，请重新打开清理页" }
+        if !ModelFileSafety.dependencies(item.model, removal: item.path, models: store.models).isEmpty { return "其他模型仍引用此文件或配套组件，不能一并清理" }
         let paths = ModelInstancePolicy.paths(item.model) + [item.path.path]
         func overlaps(_ value: String) -> Bool { paths.contains { DownloadController.overlaps($0, value) } }
         if deployments.contains(where: { other in other.id != record.id && other.components.contains { $0.modelID == item.model.id || $0.modelPath.map(overlaps) == true } }) { return "其他实例仍引用此模型，不能一并清理" }

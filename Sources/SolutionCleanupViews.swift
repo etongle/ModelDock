@@ -52,7 +52,7 @@ import SwiftUI
                 .font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
             ForEach(controller.removalItems(record, store: store)) { item in
                 let blocker = controller.cleanupServiceBlocker(item.id, record: record, store: store)
-                cleanupToggle(title: item.service.modelName + " · " + String(item.service.port), detail: blocker ?? "仅删除服务配置，模型文件保留", selected: binding(item.id, group: .services), blocker: blocker, id: "cleanup-service-" + item.id)
+                cleanupToggle(title: store.serviceDisplayName(item.service) + " · " + String(item.service.port), detail: blocker ?? "仅删除服务配置，模型文件保留", selected: binding(item.id, group: .services), blocker: blocker, id: "cleanup-service-" + item.id)
             }
         }
     }

@@ -60,6 +60,32 @@ enum ModelUpdateChecks {
         try ConnectionChecks.require(!fm.fileExists(atPath: newFolder.appendingPathComponent("model-Q4_K_M.gguf").path), "Update downloaded an unrelated quantization")
         let receipt = try JSONDecoder().decode(ModelOrigin.self, from: Data(contentsOf: newFolder.appendingPathComponent("model-manager-source.json")))
         try ConnectionChecks.require(receipt.revision == ModelUpdateHTTPFixture.revision && receipt.files.count == 2, "Imported revision receipt was lost")
+        // Checking the same revision must distinguish complete local files from missing ones.
+        let currentModel = LocalModel(id: "gguf:\(newFolder.path)/model-Q8_0.gguf", name: "Current fixture", format: "GGUF Q8_0", path: newFolder.appendingPathComponent("model-Q8_0.gguf").path, kind: .language, bytes: Int64(ModelUpdateHTTPFixture.bytes.count), complete: true, verification: "fixture", missingFiles: [], companion: newFolder.appendingPathComponent("mmproj.gguf").path, removalPath: newFolder.appendingPathComponent("model-Q8_0.gguf").path)
+        let current = ModelUpdateDraft(model: currentModel); current.check()
+        for _ in 0..<100 { if !current.checking { break }; try await Task.sleep(nanoseconds: 30_000_000) }
+        try ConnectionChecks.require(current.status == .current && current.selected.isEmpty && current.existingFiles.contains("model-Q8_0.gguf"), "Complete current version offered an unnecessary update")
+        store.modelUpdate = current
+        try await capture?("model-update-current")
+        try fm.removeItem(at: newFolder.appendingPathComponent("mmproj.gguf"))
+        current.check()
+        for _ in 0..<100 { if !current.checking { break }; try await Task.sleep(nanoseconds: 30_000_000) }
+        try ConnectionChecks.require(current.status == .incomplete && current.selected == ["mmproj.gguf"], "Same version did not select only missing files")
+        current.download(store: store)
+        for _ in 0..<150 { if !store.downloads.hasPendingWork { break }; try await Task.sleep(nanoseconds: 30_000_000) }
+        let supplement = store.downloads.jobs.first!
+        let preservedCurrent = try Data(contentsOf: newFolder.appendingPathComponent("model-Q8_0.gguf"))
+        try ConnectionChecks.require(supplement.state == .complete && supplement.files.map(\.path) == ["mmproj.gguf"] && URL(fileURLWithPath: supplement.displayLocation).standardizedFileURL == newFolder.standardizedFileURL && preservedCurrent == ModelUpdateHTTPFixture.bytes, "Supplement repeated weights or wrote missing files to a different snapshot")
+        let unknownFolder = root.appendingPathComponent("untracked")
+        try fm.createDirectory(at: unknownFolder, withIntermediateDirectories: true)
+        let unknownPath = unknownFolder.appendingPathComponent("local.gguf"); try oldBytes.write(to: unknownPath)
+        let unknown = LocalModel(id: "untracked", name: "Local model", format: "GGUF", path: unknownPath.path, kind: .language, bytes: Int64(oldBytes.count), complete: true, verification: "fixture", missingFiles: [], removalPath: unknownPath.path)
+        let history = ModelDownload(site: .huggingface, repository: "fixture-update/demo", revision: ModelUpdateHTTPFixture.revision, root: root.path, folder: "untracked", files: [.init(path: "local.gguf", url: URL(string: "https://huggingface.co/fixture-update/demo/resolve/main/local.gguf")!, bytes: Int64(oldBytes.count))])
+        try ConnectionChecks.require(ModelOrigin.fromDownloads(unknown, jobs: [history])?.repository == "fixture-update/demo", "Download history did not restore an unrecorded source")
+        try store.rememberModelSource(unknown, listing: .init(site: .huggingface, repository: "fixture-update/demo", revision: ModelUpdateHTTPFixture.revision, files: []))
+        let restoredSources = AppStore(stateDirectory: store.downloads.directory)
+        restoredSources.prepareModelUpdate(unknown)
+        try ConnectionChecks.require(restoredSources.modelUpdate?.address == "https://huggingface.co/fixture-update/demo" && restoredSources.modelUpdate?.original?.revision.isEmpty == true, "Manual source was not remembered or incorrectly labeled local bytes with a remote revision")
         for _ in 0..<100 { if !store.scanning { break }; try await Task.sleep(nanoseconds: 30_000_000) }
         let scan = Scanner.scan(extraRoots: [root.appendingPathComponent("models").path])
         let scanEncoder = JSONEncoder(); scanEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]

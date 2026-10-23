@@ -33,7 +33,7 @@ final class AppStore: ObservableObject {
             guard let self else { return }
             self.notifier.observe(services: statuses, controller: self.services) { id in
                 guard let spec = self.services.records.first(where: { $0.id == id }) else { return id }
-                return (self.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID) + " · " + spec.modelName
+                return (self.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID) + " · " + self.serviceDisplayName(spec)
             }
         }.store(in: &subscriptions)
     }
@@ -55,10 +55,14 @@ final class AppStore: ObservableObject {
     @Published var modelFilter = "全部" { didSet { selectVisibleFile() } }
     @Published var modelEngineFilter = "" { didSet { selectVisibleFile() } }
     @Published var serviceEngineFilter = ""
+    @Published var serviceStateFilter: ServiceStateFilter = .all { didSet { selectVisibleService() } }
     @Published var preparingInstall = false
     @Published var relaunchingServiceID: String?
     @Published var chat: ChatSession?
+    @Published var instanceBenchmark: InstanceBenchmarkDraft?
     var imageSessions: [String: ImageGenerationSession] = [:]
+    @Published var solutionExperience: SolutionExperienceSession?
+    var solutionExperiences: [String: SolutionExperienceSession] = [:]
     @Published var servicePresets: [ServicePreset] = []
     let modelSearch = ModelSearchController()
     let loginItem = LoginItemController()
@@ -98,8 +102,10 @@ final class AppStore: ObservableObject {
     @Published var multiModel: MultiModelDraft?
     @Published var commandDraft: CommandDraft?
     @Published var modelUpdate: ModelUpdateDraft?
+    @Published var modelSources: [String: ModelOrigin] = [:]
     @Published var preparingMulti = false
     private var subscriptions = Set<AnyCancellable>()
+    let imagePlayground: ImagePlaygroundController
     @Published var hiddenToStatusBar = false
     @Published var windowCloseBehavior: WindowCloseBehavior = .keepRunning { didSet { savePreferences() } }
     @Published var appearance: AppAppearance = .system { didSet { savePreferences(); onAppearanceChange?() } }
@@ -124,9 +130,11 @@ final class AppStore: ObservableObject {
     private var scanAgain = false
     private var commandReadyScanned = Set<String>()
 
-    init(stateDirectory: URL) {
+    init(stateDirectory: URL, tokenStorage: (any ModelTokenStorage)? = nil) {
+        imagePlayground = ImagePlaygroundController(directory: stateDirectory)
         services = ServiceController(stateDirectory: stateDirectory)
-        downloads = DownloadController(directory: stateDirectory)
+        downloads = DownloadController(directory: stateDirectory, tokenStorage: tokenStorage)
+        modelSources = (try? Data(contentsOf: stateDirectory.appendingPathComponent("model-sources.json"))).flatMap { try? JSONDecoder().decode([String: ModelOrigin].self, from: $0) } ?? [:]
         performance = PerformanceController(directory: stateDirectory)
         installation = EngineInstallController(directory: stateDirectory)
         connections = ConnectionController(directory: stateDirectory)
@@ -200,24 +208,25 @@ final class AppStore: ObservableObject {
     var engines: [Engine] { (inventory?.engines ?? Scanner.engines()).map { item in var value = item; value.launchSettings = engineConfigurations[item.id]; if let port = value.launchSettings?.port { value.defaultPort = port }; return value } }
     var engine: Engine { engines.first { $0.id == engineID } ?? engines[0] }
     var enabledEngines: [Engine] { engines.filter { engineEnabled($0.id) } }
-    var models: [LocalModel] { (inventory?.models ?? []).map { model in var value = model; value.association = modelAssociations[model.id] ?? (model.splashRegistrations ?? []).flatMap(\.aliases).compactMap { modelAssociations[$0] }.first; if let path = value.association?.projectorPath { value.companion = path }; return value } }
+    var models: [LocalModel] { (inventory?.models ?? []).map { model in var value = model; value.origin = value.origin ?? modelSources[model.path]; value.association = modelAssociations[model.id] ?? (model.splashRegistrations ?? []).flatMap(\.aliases).compactMap { modelAssociations[$0] }.first; if let path = value.association?.projectorPath { value.companion = path }; return value } }
     var compatibleModels: [LocalModel] { models.filter { $0.compatible(with: engine) } }
     var selectedModel: LocalModel? { compatibleModels.first { $0.id == selectedModels[engineID] } ?? compatibleModels.first }
     var selectedFile: LocalModel? { filteredModels.first { $0.id == selectedFileID } ?? filteredModels.first }
     var selectedService: ServiceSpec? { services.records.first { $0.id == selectedServiceID } }
-    var visibleServices: [ServiceSpec] { services.records.filter { serviceEngineFilter.isEmpty || $0.engineID == serviceEngineFilter } }
-    var visibleExternalServices: [ObservedService] { services.external.filter { serviceEngineFilter.isEmpty || $0.engineID == serviceEngineFilter } }
+    var visibleServices: [ServiceSpec] { services.records.filter { (serviceEngineFilter.isEmpty || $0.engineID == serviceEngineFilter) && serviceMatchesState($0) } }
+    var visibleExternalServices: [ObservedService] { services.external.filter { (serviceEngineFilter.isEmpty || $0.engineID == serviceEngineFilter) && serviceStateFilter.matches($0) } }
     func selectVisibleService() {
         if !visibleServices.contains(where: { $0.id == selectedServiceID }) { selectedServiceID = visibleServices.first?.id }
         if let selectedExternal, !visibleExternalServices.contains(where: { $0.port == selectedExternal }) { self.selectedExternal = nil }
         if selectedServiceID == nil && selectedExternal == nil { selectedExternal = visibleExternalServices.first?.port }
     }
     var resourceTargets: [ResourceTarget] {
-        services.records.filter { $0.pid != nil }.map { spec in .init(id: spec.id, name: engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, model: spec.modelName, port: spec.port, pid: spec.pid, birth: spec.processStart) } + services.external.filter(\.ready).map { external in .init(id: "external:\(external.port)", name: external.engineName, model: external.models.first ?? "模型管理服务", port: external.port, pid: external.pid, birth: external.birth) }
+        services.records.filter { $0.pid != nil }.map { spec in .init(id: spec.id, name: engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, model: serviceDisplayName(spec), port: spec.port, pid: spec.pid, birth: spec.processStart) } + services.external.filter(\.ready).map { external in .init(id: "external:\(external.port)", name: external.engineName, model: external.models.first ?? "模型管理服务", port: external.port, pid: external.pid, birth: external.birth) }
     }
     var benchmarkTargets: [BenchmarkTarget] {
         var targets: [BenchmarkTarget] = []
         for spec in services.records where spec.pid != nil && services.status(spec) == .running {
+            if ["audio", "mflux"].contains(spec.engineID) { continue }
             let local = models.first { $0.id == spec.modelID }
             if let local, local.kind != .language { continue }
             let engine = engines.first { $0.id == spec.engineID }
@@ -225,7 +234,7 @@ final class AppStore: ObservableObject {
             let candidates = names.isEmpty ? (local.map { [$0.repository ?? $0.name] } ?? []) : names
             for name in candidates {
                 let model = spec.engineID == "ollama" ? models.first { $0.format == "Ollama" && $0.repository == name } : local
-                targets.append(.init(id: "\(spec.id):\(name)", engineID: spec.engineID, engineName: engine?.name ?? spec.engineID, engineVersion: spec.engineVersion ?? engine?.version ?? "—", modelID: model?.id, modelName: model?.name ?? name, apiModel: name, port: spec.port, pid: spec.pid, birth: spec.processStart, context: spec.context))
+                targets.append(.init(id: "\(spec.id):\(name)", engineID: spec.engineID, engineName: engine?.name ?? spec.engineID, engineVersion: spec.engineVersion ?? engine?.version ?? "—", modelID: model?.id, modelName: model?.name ?? (spec.engineID == "ollama" ? name : serviceDisplayName(spec)), apiModel: name, port: spec.port, pid: spec.pid, birth: spec.processStart, context: spec.context))
             }
         }
         for external in services.external where external.ready {
@@ -301,6 +310,7 @@ final class AppStore: ObservableObject {
     func showPortOwner(_ candidate: Int) {
         gatewaySelected = false
         serviceEngineFilter = ""
+        serviceStateFilter = .all
         if let external = services.external.first(where: { $0.port == candidate }) { selectedExternal = external.port }
         else if let spec = services.records.first(where: { $0.port == candidate && $0.pid != nil }) { selectedServiceID = spec.id; selectedExternal = nil }
         tab = .services
@@ -315,7 +325,7 @@ final class AppStore: ObservableObject {
     }
     // 手动停止的服务不再由网关唤醒。
     func stop(_ spec: ServiceSpec) { do { try services.stop(spec); services.updateBehavior(spec.id, sleeping: false) } catch { message = error.localizedDescription } }
-    func showService(_ spec: ServiceSpec) { gatewaySelected = false; if !serviceEngineFilter.isEmpty && serviceEngineFilter != spec.engineID { serviceEngineFilter = "" }; selectedServiceID = spec.id; selectedExternal = nil; tab = .services }
+    func showService(_ spec: ServiceSpec) { gatewaySelected = false; if !serviceEngineFilter.isEmpty && serviceEngineFilter != spec.engineID { serviceEngineFilter = "" }; if !serviceMatchesState(spec) { serviceStateFilter = .all }; selectedServiceID = spec.id; selectedExternal = nil; tab = .services }
     func configureService(_ spec: ServiceSpec) {
         if let command = spec.commandText, let engine = engines.first(where: { $0.id == spec.engineID }) { prepareCommand(engine: engine, text: command); return }
         guard engines.contains(where: { $0.id == spec.engineID }) else { return }

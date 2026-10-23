@@ -31,7 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     func applicationDidFinishLaunching(_ notification: Notification) {
         // --appearance (captures/checks) overrides the saved preference; applied after the store loads below.
         let directory = argumentValue("--state-dir").map { URL(fileURLWithPath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/ModelManager")
-        store = AppStore(stateDirectory: directory)
+        let normalCredentials = !passiveTesting && argumentValue("--state-dir") == nil && argumentValue("--capture-dir") == nil && !CommandLine.arguments.contains("--documentation-ui")
+        store = AppStore(stateDirectory: directory, tokenStorage: normalCredentials ? KeychainModelTokenStorage() : MemoryModelTokenStorage())
         store.onLanguageChange = { [weak self] in self?.refreshLanguage() }
         store.onAppearanceChange = { [weak self] in self?.applyAppearance() }
         store.onMenuBarStyleChange = { [weak self] in self?.updateStatusBar() }
@@ -198,6 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     }
     func applicationWillTerminate(_ notification: Notification) {
         store.realtimeTranslation.cancel()
+        for session in store.solutionExperiences.values { session.stop() }
         outsideClicks.stop()
         store.strata.pause()
         store.resources.end(); store.performance.cancel()
@@ -623,6 +625,7 @@ enum Entry {
         if args.contains("--self-test") { selfTest(); return }
         if args.contains("--strata-checks") { Task { do { try await StrataChecks.run(); exit(0) } catch { fputs("STRATA CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--image-model-checks") { do { try ImageModelChecks.run(); exit(0) } catch { fputs("IMAGE MODEL CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
+        if args.contains("--native-tensor-checks") { do { try NativeTensorChecks.run(); exit(0) } catch { fputs("NATIVE TENSOR CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--notification-checks") { do { try NotificationChecks.run() } catch { fputs("NOTIFICATION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--localization-checks") { do { try LocalizationChecks.run() } catch { fputs("LOCALIZATION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--live-context-checks") || argumentValue("--repair-connection-context") != nil {
@@ -658,6 +661,8 @@ enum Entry {
         if args.contains("--splash-checks") { do { try SplashChecks.run() } catch { fputs("SPLASH CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--feature-checks") { Task { do { try await FeatureChecks.run(); exit(0) } catch { fputs("FEATURE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--monitor-checks") { Task { do { try await MonitorChecks.run(); exit(0) } catch { fputs("MONITOR CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--instance-performance-checks") { Task { do { try await InstancePerformanceChecks.run(); exit(0) } catch { fputs("INSTANCE PERFORMANCE CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
+        if args.contains("--service-filter-checks") { do { try ServiceFilterChecks.run(); exit(0) } catch { fputs("SERVICE FILTER CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) }; return }
         if args.contains("--operation-checks") { Task { do { try await OperationChecks.run(); exit(0) } catch { fputs("OPERATION CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--port-checks") { Task { do { try await PortChecks.run(); exit(0) } catch { fputs("PORT CHECK FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }
         if args.contains("--live-multi-smoke") { Task { do { try await OperationChecks.liveMulti(); exit(0) } catch { fputs("LIVE MULTI FAILED: \(error.localizedDescription)\n", stderr); exit(1) } }; CFRunLoopRun(); return }

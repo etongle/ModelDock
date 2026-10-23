@@ -51,7 +51,7 @@ struct EngineServicesView: View {
         return VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(spec.modelName).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1).help(L10n.text(spec.modelName))
+                    Text(verbatim: store.serviceDisplayName(spec)).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1).help(store.serviceDisplayName(spec))
                     Text(verbatim: "127.0.0.1:\(spec.port)/v1").font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted)
                 }
                 Spacer(minLength: 8)
@@ -77,6 +77,7 @@ struct EngineServicesView: View {
     private func actions(_ spec: ServiceSpec) -> some View {
         HStack(spacing: 12) {
             Button(L10n.text("查看详情")) { store.showService(spec) }.buttonStyle(PlainAction()).accessibilityIdentifier("show-engine-service-\(spec.id)")
+            Button(L10n.text("性能测试")) { store.openInstanceBenchmark(serviceID: spec.id, port: spec.port) }.buttonStyle(.bordered).accessibilityIdentifier("benchmark-engine-service-\(spec.id)")
             if spec.pid != nil {
                 Button { store.stop(spec) } label: { Label(L10n.text("停止"), systemImage: "stop.fill") }.buttonStyle(.bordered).disabled(services.status(spec) == .stopping).accessibilityIdentifier("stop-engine-service-\(spec.id)")
             } else {
@@ -100,7 +101,8 @@ struct EngineServicesView: View {
             HStack {
                 Text(verbatim: "127.0.0.1:\(service.port)/v1").font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted)
                 Spacer(minLength: 8)
-                Button(L10n.text("查看详情")) { if !store.serviceEngineFilter.isEmpty && store.serviceEngineFilter != service.engineID { store.serviceEngineFilter = "" }; store.selectedExternal = service.port; store.tab = .services }.buttonStyle(PlainAction())
+                Button(L10n.text("查看详情")) { store.showExternalService(service) }.buttonStyle(PlainAction())
+                Button(L10n.text("性能测试")) { store.openInstanceBenchmark(port: service.port) }.buttonStyle(.bordered)
             }
             if service.models.count == 1, let name = service.models.first { ModelCapabilityBadge(capabilities: services.modelCapabilities[service.port]?[name] ?? ModelCapabilities(), prefix: "当前输入 · ") }
         }.padding(18).background(Theme.surface.opacity(0.65), in: RoundedRectangle(cornerRadius: 12))

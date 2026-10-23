@@ -13,7 +13,16 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 
 *Illustrated interface. Speed figures are historical single runs on M4 Max; quantization and cache differ. Documentation screenshots use demonstration data.*
 
-**New in 0.10.3:** start saved service instances directly, expand solution cards by clicking the whole header, and review optional cleanup with shared-resource protection. Port conflicts are checked before changing or restarting services. [Multilingual live translation](docs/USER_GUIDE.md#solutions) remains the available solution; Strata SC117 and MFLUX image generation are included as previews.
+**New in 0.10.4:** Local image generation opens the bundled GPT Image Playground. The current solution automatically supplies its image service and an available local vision-capable chat service, so Agent mode needs no manual API setup. Continue a conversation, open **Edit output / Edit image** directly, paint a real mask and follow actual generation progress. The responsive input bar wraps its controls. Editing keeps the source dimensions; PNG output preserves every unselected pixel when a mask is used. Existing blurry results are not restored, and full-frame edits can still change details.
+
+**Downloads and services:** a global Hugging Face token is stored in macOS Keychain and reused for search, model checks and resumed downloads; temporary task tokens take priority. Open the original Hugging Face page from downloaded models or tasks. Model checks distinguish a new revision from missing files and unknown sources. This release also adds per-instance performance tests, service-state filters, compatible replacement services for solutions, official Splash model recommendations, and shared-file protection.
+
+| New feature | Where to find it |
+| --- | --- |
+| Local image Playground | Solutions → Local image generation; automatic image/chat pairing, direct mask editing, continuous chat and progress percentages |
+| Global HF token | Settings → Downloads & Import; Keychain storage, reauthorization and resume, repository links |
+| Per-instance performance | Services; independent measurements and history, running/stopped filters |
+| Solution and model choices | Compatible service reuse, official Splash recommendations and shared-file deletion protection |
 
 ## What you can do
 
@@ -23,6 +32,7 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 - **Run services:** configure ports, context windows, text or multimodal input, and supported runtime options; manage several independent instances; see startup stages and associated draft/vision components. Estimate memory before launch; save presets, start with ModelDock, stop when idle; try chat and compare two services side by side. Deleting models or services also removes their client registrations.
 - **Live translation:** use microphone captions or audio files, choose source/target languages and models, and enable optional translated speech. Edit saved configurations without changing their gateway URLs; inspect each component’s readiness. Other recipe creation entries are temporarily hidden.
 - **Connect clients:** register models with pi or OpenCode while preserving existing settings. Choose a direct endpoint or the OpenAI-compatible gateway; add remote compatible APIs to the same gateway. The gateway logs request usage (never content) and can optionally be shared on the LAN.
+- **Per-instance performance tests:** test each service directly and keep its history separate. Text tests measure first output and token throughput; speech, images and embeddings use task-specific metrics.
 - **Stay in the menu bar:** monitor CPU, memory, disk usage, download progress, and measured model performance. Closing the main window keeps the app running by default; clicking outside the menu-bar panel dismisses it.
 - **Update ModelDock:** check official GitHub Releases, automatically download and verify a newer Apple Silicon package, replace the app and reopen it. Model files, settings and running model services are preserved.
 
@@ -38,7 +48,7 @@ ModelDock brings model runtimes, model files, downloads, and API services into o
 | LM Studio | GGUF / MLX, depending on its runtime | Models are loaded through the application or its supported CLI |
 | llama.cpp · Prism | Compatible GGUF | Options and architecture support depend on the local build |
 | Strata · Niko1221 | Prepared Flash-Next GGUF / Metal assemblies | Experimental Apple Silicon source installation on macOS 15+; matched MTP and optional images; local or external API |
-| MFLUX (development preview) | Complete Qwen-Image-2.1-Turbo pipeline | Offline text-to-image API; 8-step progress, cancellation and PNG export; full-model validation pending |
+| MFLUX | Complete Qwen-Image-2.1-Turbo pipeline | Offline text-to-image / image-to-image APIs; step progress, cancellation and PNG export; official Turbo locally validated |
 
 A format label does not guarantee that every engine can run every architecture. ModelDock checks local files and launch constraints; the runtime validates the actual architecture and auxiliary components.
 
@@ -66,15 +76,18 @@ For Strata, compile its official Metal source build from **Engines**, download a
 
 **Preview in 0.10.3; full-model inference validation pending:** SC117 Flash-Next variants have separate model-pack preparation and managed downloads for MTP/vision components. Their original shard names are preserved and their packs never reuse original-Qwen offsets. Swift MLX is not part of this work.
 
-For image generation, install **MFLUX** in Engines, open **Configuration → Download or view image model**, and download the complete pinned `Qwen/Qwen-Image-2.1-Turbo` snapshot (about 32.45 GB). Its transformer, text encoder, VAE, processor and sampling configuration are one model entry. Start it on a free port, then open **Services → Generate image**. The default is 8 steps at 1024×1024; progress shows prompt encoding, denoising and image decoding. Save PNG or copy an `/v1/images/generations` example. The unified gateway exposes image output without offering this model to coding clients. This is text-to-image generation, separate from Strata image understanding; image editing is not implemented in this preview. Protocol/fixture checks do not establish real-model generation quality, speed or memory use.
+Open **Solutions → Local image generation**, install the recommended MFLUX engine and complete Qwen-Image-2.1-Turbo snapshot (about 32.45 GB), or reuse a compatible service. Once ready, open GPT Image Playground; the solution supplies the image service and an available local vision-capable chat service automatically. Use text-to-image, reference editing or a pixel mask, and continue from previous images. **Edit output** opens the editor directly. Dimensions are 256–2048 per side in multiples of 32; automatic editing keeps the source size. Quality uses the Turbo standard 8 steps and PNG output. In a local 1536×864 masked edit on October 23, 2026, all 1,275,660 unselected pixels were unchanged; selected areas still depend on model output. Heretic full inference remains unverified; Noct-Q/Viggle and multiple references are not included.
 
 The speech pipeline was verified with real local Qwen3-ASR, Qwen3.8 and Qwen3-TTS models using a synthetic English recording, French/Portuguese translation and reference-voice WAV output. Native checks cover configuration editing, stable URLs, reused-service startup and ordered subtitle requests. Physical microphone capture still requires a user-granted permission and device test; latency depends on hardware and models.
 
 ## Build from source
 
-You need a Mac with Apple Silicon, Xcode Command Line Tools, and Python 3 to prepare the portable runtime.
+You need a Mac with Apple Silicon, Xcode Command Line Tools, Node.js 20+, npm, and Python 3 to prepare the portable runtime and bundled Playground.
 
 ```sh
+npm --prefix Client/Playground ci
+npm --prefix Client/Playground run build
+python3 Tools/bundle_playground.py
 python3 prepare-runtime.py
 python3 prepare-notices.py
 MM_PYTHON_RUNTIME_DIR="$PWD/build/runtime-cache/python-3.13.16-20261009" bash build.sh

@@ -378,6 +378,8 @@ struct MainView: View {
             .sheet(item: $store.engineConfigurationDraft) { draft in EngineConfigurationView(store: store, draft: draft) }
             .sheet(item: $store.associationDraft) { draft in ModelAssociationView(store: store, draft: draft) }
             .sheet(item: $store.chat) { session in ChatPlaygroundView(store: store, session: session) }
+            .sheet(item: $store.solutionExperience) { session in SolutionExperienceView(store: store, session: session) }
+            .sheet(item: $store.instanceBenchmark) { draft in InstanceBenchmarkView(store: store, performance: store.performance, draft: draft) }
             .sheet(isPresented: $store.showGlobalEngines) { GlobalEngineSettingsView(store: store) }
             .sheet(item: Binding(get: { store.connections.draft }, set: { store.connections.draft = $0 })) { draft in ClientConnectionsView(store: store, controller: store.connections, port: draft.port) }
             .sheet(item: Binding(get: { store.gateway.editor }, set: { store.gateway.editor = $0 })) { draft in GatewayEndpointView(store: store, gateway: store.gateway, draft: draft) }
@@ -440,9 +442,10 @@ struct EngineWorkspace: View {
                         Button { store.showLaunch = true } label: { Label(L10n.text("启动服务…"), systemImage: "play.fill") }.buttonStyle(AccentButton()).disabled(!store.engine.canServe).accessibilityIdentifier("open-launch")
                         Button { store.prepareCommand() } label: { Label(L10n.text("按命令行启动…"), systemImage: "terminal") }.buttonStyle(SecondaryButton()).disabled(!store.engine.canServe || store.installation.running || store.maintaining).accessibilityIdentifier("command-launch-entry")
                         Spacer()
-                        if let model = store.selectedModel { Button(L10n.text("检查模型更新…")) { store.modelUpdate = ModelUpdateDraft(model: model) }.buttonStyle(SecondaryButton()) }
+                        if let model = store.selectedModel { Button(L10n.text("检查模型更新…")) { store.prepareModelUpdate(model) }.buttonStyle(SecondaryButton()) }
                     }.padding(.top, 16)
                     case .configuration:
+                    if store.engine.kind == .splash { SplashRecommendationsView(store: store).padding(.bottom, 24) }
                     HStack { Text(verbatim: L10n.text("兼容的本地模型")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer(); Button { store.showEngineModels(store.engineID) } label: { Label(L10n.text("管理模型文件"), systemImage: "folder") }.buttonStyle(PlainAction()).font(.system(size: TypeScale.body)) }.padding(.bottom, 22)
                     HStack(spacing: 6) { Text(verbatim: L10n.text(store.engine.modelRule)).font(.system(size: TypeScale.body, weight: .medium)); InfoTip(text: store.engine.modalityGuide.summary) }.padding(.bottom, 14)
                     HStack { Button(L10n.text("引擎配置…")) { store.prepareEngineConfiguration() }.buttonStyle(.bordered).accessibilityIdentifier("engine-configuration"); if !store.engineEnabled(store.engineID) { Text(verbatim: L10n.text("此基座已停用")).foregroundStyle(Theme.warningText) } }.padding(.bottom, 14)
@@ -632,7 +635,7 @@ struct ModelWorkspace: View {
                         if model.kind == .draft { DraftModelInfo(store: store, model: model) }
                         else {
                             Text(verbatim: L10n.text("启动模型")).font(.system(size: TypeScale.section, weight: .semibold))
-                            CompatibilityRows(store: store, model: model, onlyCompatible: true)
+                            CompatibilityRows(store: store, model: model)
                             ModelLocalVersions(store: store, model: model)
                             if model.kind == .language { ModelAssociationEntry(store: store, model: model) }
                             PreparedEngineComponentsView(store: store, model: model)
@@ -646,7 +649,7 @@ struct ModelWorkspace: View {
                         Divider()
                         ModelFileListView(store: store, files: store.modelFiles, model: model)
                         Divider()
-                        Text(verbatim: L10n.text("全部引擎适配情况")).font(.system(size: TypeScale.section, weight: .semibold))
+                        Text(verbatim: L10n.text("适配基座")).font(.system(size: TypeScale.section, weight: .semibold))
                         CompatibilityRows(store: store, model: model)
                         if model.kind == .language { Divider(); ModelPerformanceSummary(store: store, performance: store.performance, model: model) }
                         if !model.missingFiles.isEmpty { Text(verbatim: L10n.text("缺失文件")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(model.missingFiles.joined(separator: "\n"))).font(.system(size: TypeScale.body, design: .monospaced)).foregroundStyle(Theme.warningText) }
@@ -678,12 +681,16 @@ struct ServiceWorkspace: View {
                     SidebarToggleButton(store: store)
                 }.padding(.bottom, 4)
                 Picker(L10n.text("模型基座"), selection: $store.serviceEngineFilter) { Text(verbatim: L10n.text("全部基座")).tag(""); ForEach(store.engines) { Text(verbatim: L10n.text($0.name)).tag($0.id) } }.labelsHidden().fixedSize().frame(maxWidth: .infinity, alignment: .leading).onChange(of: store.serviceEngineFilter) { _, _ in store.selectVisibleService() }
+                Picker(L10n.text("服务状态"), selection: $store.serviceStateFilter) {
+                    ForEach(ServiceStateFilter.allCases, id: \.self) { filter in Text(verbatim: L10n.text(filter.title)).tag(filter) }
+                }.pickerStyle(.segmented).labelsHidden().controlSize(.small)
+                    .accessibilityLabel(L10n.text("服务状态")).accessibilityIdentifier("service-state-filter")
                 List(selection: Binding(get: { serviceSelection }, set: { selectService($0) })) {
                     HStack(spacing: 10) { SidebarSymbol(symbol: "point.3.connected.trianglepath.dotted"); VStack(alignment: .leading, spacing: 3) { Text(verbatim: L10n.text("统一网关")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(store.gateway.ready ? "运行中 · \(store.gateway.routes.filter(\.enabled).count) 个模型" : "本机与外部接口统一接入")).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary) }; Spacer(minLength: 0) }.padding(.vertical, 4).tag(ServiceListSelection.gateway).listRowSeparator(.hidden).accessibilityIdentifier("show-gateway")
                     Section { 
-                        if store.visibleServices.isEmpty { Text(verbatim: L10n.text("此范围还没有配置服务")).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).listRowSeparator(.hidden) }
+                        if store.visibleServices.isEmpty { Text(verbatim: L10n.text(store.hasServiceFilters ? "没有符合筛选条件的受管服务" : "此范围还没有配置服务")).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).listRowSeparator(.hidden) }
                         ForEach(store.visibleServices) { spec in
-                            serviceRow(title: store.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, detail: "\(spec.modelName) · \(spec.port)", status: services.statusTitle(spec), color: services.status(spec).color, engine: store.engines.first { $0.id == spec.engineID }, origin: store.serviceOrigin(spec))
+                            serviceRow(title: store.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID, detail: "\(store.serviceDisplayName(spec)) · \(spec.port)", status: services.statusTitle(spec), color: services.status(spec).color, engine: store.engines.first { $0.id == spec.engineID }, origin: store.serviceOrigin(spec))
                                 .tag(ServiceListSelection.managed(spec.id)).listRowSeparator(.hidden)
                                 .contextMenu {
                                     Button(L10n.text("复制接口地址")) { store.copy("http://127.0.0.1:\(spec.port)/v1") }
@@ -691,14 +698,16 @@ struct ServiceWorkspace: View {
                                 }
                         }
                     } header: { SidebarSectionTitle(title: "由 ModelDock 管理") }
-                    Section {
+                    if store.serviceStateFilter != .stopped { Section {
                         if store.visibleExternalServices.isEmpty { Text(verbatim: L10n.text("未发现此范围的本地接口")).font(.system(size: TypeScale.callout)).foregroundStyle(.secondary).listRowSeparator(.hidden) }
                         ForEach(store.visibleExternalServices) { item in
                             serviceRow(title: item.engineName, detail: "127.0.0.1:\(item.port)", status: item.ready ? "接口可用" : "端口已占用", color: item.ready ? .green : .orange)
                                 .tag(ServiceListSelection.external(item.port)).listRowSeparator(.hidden)
                         }
-                    } header: { SidebarSectionTitle(title: "本机已发现") }
+                    } header: { SidebarSectionTitle(title: "本机已发现") } }
                 }.sidebarList()
+                .onChange(of: store.visibleServices.map(\.id)) { _, _ in store.selectVisibleService() }
+                .onChange(of: store.visibleExternalServices.map(\.port)) { _, _ in store.selectVisibleService() }
                 // ⌫ only asks to delete a managed configuration; the confirmation alert does the rest.
                 .onDeleteCommand { if case .managed(let id) = serviceSelection, let spec = services.records.first(where: { $0.id == id }), services.canRemoveConfiguration(spec) { store.serviceRemoval = spec } }
                 Text(verbatim: L10n.text("每 3 秒检查本机常用模型端口")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
@@ -723,6 +732,7 @@ struct ServiceWorkspace: View {
                             Button(L10n.text("打开服务页面")) { store.openEndpoint(port) }.buttonStyle(SecondaryButton())
                         }
                         ConnectionEntry(store: store, port: port)
+                        InstancePerformanceEntry(store: store, performance: store.performance, port: port)
                         Divider(); Text(verbatim: L10n.text("服务报告的模型")).font(.system(size: TypeScale.section, weight: .semibold))
                         ForEach(external.models, id: \.self) { name in VStack(alignment: .leading, spacing: 8) { Text(name).font(.system(size: TypeScale.body, design: .monospaced)).textSelection(.enabled); ModelCapabilityBadge(capabilities: services.modelCapabilities[port]?[name] ?? ModelCapabilities(), prefix: "当前服务 · ") } }
                         if external.engineID == "ollama" { OllamaLoadedView(store: store, services: services, port: port) }
@@ -731,7 +741,11 @@ struct ServiceWorkspace: View {
                     } else if let spec = store.visibleServices.first(where: { $0.id == store.selectedServiceID }) ?? store.visibleServices.first {
                         let status = services.status(spec)
                         Text(verbatim: L10n.text(store.engines.first { $0.id == spec.engineID }?.name ?? spec.engineID)).font(.system(size: TypeScale.display, weight: .bold))
-                        Text(spec.modelName).font(.system(size: TypeScale.section)).foregroundStyle(Theme.muted)
+                        Text(verbatim: store.serviceDisplayName(spec)).font(.system(size: TypeScale.section)).foregroundStyle(Theme.muted)
+                        if let names = services.reportedModels[spec.port], !names.isEmpty {
+                            Text(verbatim: L10n.text("API 模型 ID") + " · " + names.joined(separator: "\n"))
+                                .font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled)
+                        }
                         if let version = spec.engineVersion { Text(verbatim: L10n.text("运行版本 · " + version)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
                         StateLabel(title: services.statusTitle(spec), color: status.color)
                         ServiceOriginDetails(store: store, spec: spec)
@@ -757,6 +771,7 @@ struct ServiceWorkspace: View {
                             }
                         }
                         if let error = services.errors[spec.id] { Text(verbatim: L10n.text(error)).foregroundStyle(Theme.errorText).font(.system(size: TypeScale.body)) }
+                        InstancePerformanceEntry(store: store, performance: store.performance, serviceID: spec.id, port: spec.port)
                         if spec.engineID != "lmstudio" { ServiceParametersView(store: store, services: services, spec: spec).id(spec.id) }
                         if let command = spec.commandText ?? spec.launchArguments.map({ ([spec.engineExecutable ?? ""] + $0).map(ServiceCommand.quote).joined(separator: " ") }) { DisclosureGroup("启动命令") { Text(verbatim: L10n.text(command)).font(.system(size: TypeScale.callout, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8) } }
                         if store.serviceModelMissing(spec) {
@@ -767,7 +782,7 @@ struct ServiceWorkspace: View {
                                 Button(role: .destructive) { store.serviceRemoval = spec } label: { Label(L10n.text("移除服务及相关接入…"), systemImage: "trash") }.buttonStyle(AccentButton(destructive: true))
                             }.frame(maxWidth: .infinity, alignment: .leading).padding(16).background(Theme.line.opacity(0.22), in: RoundedRectangle(cornerRadius: 10))
                         } else if spec.engineID == "mflux" {
-                            if status == .running { ImageGenerationView(session: store.imageSession(spec), copy: store.copy) }
+                            if status == .running { ImageGenerationView(session: store.imageSession(spec), copy: store.copy, showService: { store.showService(spec) }) }
                         } else { ConnectionEntry(store: store, port: spec.port) }
                         if spec.engineID == "ollama" && status == .running { OllamaLoadedView(store: store, services: services, port: spec.port) }
                         Divider()
@@ -779,9 +794,14 @@ struct ServiceWorkspace: View {
                         LogView(text: services.log(spec.id), follow: store.followLog)
                         Button(role: .destructive) { store.serviceRemoval = spec } label: { Label(L10n.text("删除服务配置…"), systemImage: "trash") }.buttonStyle(.bordered).disabled(!services.canRemoveConfiguration(spec)).help(L10n.text("保留模型文件和运行日志"))
                     } else {
-                        EmptyMessage(symbol: "server.rack", title: L10n.text("服务尚未配置"), detail: "在“运行引擎”选择兼容模型，即可启动本地服务。")
-                        Button(L10n.text("启动服务…")) { store.showLaunch = true }.buttonStyle(AccentButton())
-                        if !services.external.isEmpty { Text(verbatim: L10n.text("左侧已列出检测到的外部服务。")).foregroundStyle(Theme.muted) }
+                        if store.hasServiceFilters {
+                            EmptyMessage(symbol: "line.3.horizontal.decrease.circle", title: L10n.text("没有匹配的服务"), detail: "请切换状态或模型基座筛选。")
+                            Button(L10n.text("清除筛选")) { store.clearServiceFilters() }.buttonStyle(.bordered)
+                        } else {
+                            EmptyMessage(symbol: "server.rack", title: L10n.text("服务尚未配置"), detail: "在“运行引擎”选择兼容模型，即可启动本地服务。")
+                            Button(L10n.text("启动服务…")) { store.showLaunch = true }.buttonStyle(AccentButton())
+                            if !services.external.isEmpty { Text(verbatim: L10n.text("左侧已列出检测到的外部服务。")).foregroundStyle(Theme.muted) }
+                        }
                     }
                 }.padding(34)
                 }

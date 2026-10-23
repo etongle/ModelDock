@@ -47,6 +47,12 @@ final class DownloadController: ObservableObject {
     @Published var deletingIDs = Set<String>()
     @Published var selectedTaskID: String?
     @Published var transferPhases: [String: DownloadTransferPhase] = [:]
+    @Published var authorization: DownloadAuthorizationDraft?
+    @Published var retryStatuses: [String: DownloadRetryStatus] = [:]
+    // Credentials belong to a task and stay in memory; a new import must not erase them.
+    private var credentials: [String: String] = [:]
+    let accessTokens: ModelAccessTokens
+    private var tokenSubscription: AnyCancellable?
     private struct Pending { var id: String; var allowReplacement: Bool; var credential: String }
     private var pending: [Pending] = []
     private var executions: [String: DownloadExecution] = [:]
@@ -57,9 +63,11 @@ final class DownloadController: ObservableObject {
     var onImported: ((String) -> Void)?
     var onRepair: ((ModelDownload) throws -> Void)?
     var transferProtocolClasses: [AnyClass]?
+    var retryDelays = DownloadRetryPolicy.delays
     var catalogLoader: ((String, String) async throws -> RemoteListing)?
     var directory: URL { stateURL.deletingLastPathComponent() }
-    init(directory: URL) {
+    init(directory: URL, tokenStorage: (any ModelTokenStorage)? = nil) {
+        accessTokens = ModelAccessTokens(storage: tokenStorage ?? MemoryModelTokenStorage())
         stateURL = directory.appendingPathComponent("downloads.json")
         let preferences = (try? Data(contentsOf: directory.appendingPathComponent("download-settings.json"))).flatMap { try? JSONDecoder().decode(DownloadPreferences.self, from: $0) } ?? .init()
         maximumConcurrentDownloads = min(8, max(1, preferences.concurrentDownloads))
@@ -72,6 +80,7 @@ final class DownloadController: ObservableObject {
             catch { jobs[index].error = error.localizedDescription }
         }
         selectedTaskID = jobs.first?.id
+        tokenSubscription = accessTokens.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
     var selectedFiles: [RemoteFile] { listing?.files.filter { selected.contains($0.id) } ?? [] }
     func speedLabel(_ id: String) -> String {
@@ -118,7 +127,7 @@ final class DownloadController: ObservableObject {
         resolution?.cancel(); let generation = UUID(); resolutionID = generation
         resolving = true; message = nil; listing = nil; selected = []; selectedTaskID = nil
         address = ModelCatalog.normalizedAddress(address)
-        let input = address, credential = token
+        let input = address, credential = accessTokens.credential(for: address, override: token)
         resolution = Task {
             do {
                 let result = try await (catalogLoader ?? ModelCatalog.listing)(input, credential)
@@ -163,7 +172,8 @@ final class DownloadController: ObservableObject {
         guard !isScheduled(id), !deletingIDs.contains(id), let i = jobs.firstIndex(where: { $0.id == id }) else { return }
         jobs[i].state = .queued; jobs[i].error = nil; selectedTaskID = id
         guard save() else { jobs[i].state = .paused; return }
-        pending.append(.init(id: id, allowReplacement: allowReplacement, credential: credential ?? token)); pump()
+        if let credential { credentials[id] = credential.trimmingCharacters(in: .whitespacesAndNewlines) }
+        pending.append(.init(id: id, allowReplacement: allowReplacement, credential: credentials[id] ?? "")); pump()
     }
     private func pump() {
         pending.removeAll { entry in !jobs.contains { $0.id == entry.id && $0.state == .queued } }
@@ -193,12 +203,32 @@ final class DownloadController: ObservableObject {
                 restored.files = selectedFiles.map { fresh in var file = fresh; if file.bytes == 0 { file.bytes = candidate.files.first { $0.path == fresh.path }?.bytes ?? 0 }; return file }
                 restored.pausedFiles = []
                 if let i = jobs.firstIndex(where: { $0.id == candidate.id }) { jobs[i] = restored }
-                notice = "已使用现有任务，保留已下载进度。"; selectedTaskID = candidate.id; run(candidate.id, allowReplacement: true); return
+                notice = "已使用现有任务，保留已下载进度。"; selectedTaskID = candidate.id; run(candidate.id, allowReplacement: true, credential: token.isEmpty ? nil : token); return
             } catch let error as DownloadResumeError {
                 if let i = jobs.firstIndex(where: { $0.id == candidate.id }) { jobs[i].resumeBlockedReason = error.localizedDescription; jobs[i].error = error.localizedDescription }
             } catch { message = error.localizedDescription; return }
         }
         add(listing: listing, files: selectedFiles, root: root, replacing: matches.first)
+    }
+    func supplementModel(_ model: LocalModel, listing: RemoteListing, files: [RemoteFile], credential: String) throws {
+        guard !files.isEmpty else { return }
+        message = nil; notice = nil
+        let folder = ModelOrigin.sourceRoot(model).standardizedFileURL
+        guard listing.site == .huggingface, folder.lastPathComponent == listing.revision, folder.deletingLastPathComponent().lastPathComponent == "snapshots",
+              folder.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent == "models--" + listing.repository.replacingOccurrences(of: "/", with: "--") else {
+            throw LaunchError.message("无法确定原模型的补齐位置，请先确认模型来源目录。")
+        }
+        let root = folder.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let relative = "models--" + listing.repository.replacingOccurrences(of: "/", with: "--") + "/snapshots/" + listing.revision
+        for file in files {
+            let target = try DownloadPaths.destination(root: root, folder: relative, file: file.path)
+            guard !FileManager.default.fileExists(atPath: target.path) else { throw LaunchError.message("本地文件已存在但大小不符，请在模型文件明细中修复，原文件已保留。") }
+        }
+        if let job = jobs.first(where: { $0.site == listing.site && $0.repository == listing.repository && $0.revision == listing.revision && URL(fileURLWithPath: $0.displayLocation).standardizedFileURL == folder && DownloadRecovery.sameFiles($0.files, files) }) {
+            if !isScheduled(job.id) { run(job.id, allowReplacement: false, credential: credential) }
+            selectedTaskID = job.id; return
+        }
+        add(listing: listing, files: files, root: root, replacing: nil, credential: credential, targetFolder: relative)
     }
     private func matching(listing: RemoteListing, files: [RemoteFile], root: URL) -> [ModelDownload] {
         jobs.enumerated().filter { !deletingIDs.contains($0.element.id) && DownloadRecovery.matches($0.element, listing: listing, files: files, root: root) }.sorted { left, right in
@@ -237,8 +267,8 @@ final class DownloadController: ObservableObject {
         let root = URL(fileURLWithPath: destination).resolvingSymlinksInPath().standardizedFileURL
         return matching(listing: listing, files: selectedFiles, root: root).first { $0.state == .paused && $0.resumeBlockedReason == nil && (try? DownloadRecovery.reconcile($0)) != nil }
     }
-    private func add(listing: RemoteListing, files: [RemoteFile], root: URL, replacing old: ModelDownload?, credential: String? = nil) {
-        let folder = DownloadRecovery.folder(listing: listing, recovery: old != nil)
+    private func add(listing: RemoteListing, files: [RemoteFile], root: URL, replacing old: ModelDownload?, credential: String? = nil, targetFolder: String? = nil) {
+        let folder = targetFolder ?? DownloadRecovery.folder(listing: listing, recovery: old != nil)
         var job = ModelDownload(site: listing.site, repository: listing.repository, revision: listing.revision, root: root.path, folder: folder, files: files)
         job.sourceURL = listing.sourceURL
         job.replacementOf = old?.id
@@ -258,7 +288,7 @@ final class DownloadController: ObservableObject {
                 }
             }
         } catch { message = error.localizedDescription; return }
-        jobs.insert(job, at: 0); guard save() else { return }; run(job.id, allowReplacement: false, credential: credential)
+        jobs.insert(job, at: 0); guard save() else { return }; run(job.id, allowReplacement: false, credential: credential ?? token)
     }
     @discardableResult
     func createRepair(file: RemoteFile, source: ModelOrigin, target: URL, modelID: String) throws -> ModelDownload {
@@ -274,11 +304,16 @@ final class DownloadController: ObservableObject {
         job.sourceURL = source.sourceURL
         jobs.insert(job, at: 0); selectedTaskID = job.id
         guard save() else { throw LaunchError.message("修复任务未能保存") }
-        run(job.id, allowReplacement: false)
+        run(job.id, allowReplacement: false, credential: token)
         return job
     }
     func resume(_ id: String, includingPausedFiles: Bool = false) {
         guard !isScheduled(id), !deletingIDs.contains(id), let index = jobs.firstIndex(where: { $0.id == id }) else { return }
+        if jobs[index].needsAuthorization {
+            if jobs[index].site == .huggingface, !accessTokens.credential(for: "https://huggingface.co").isEmpty {
+                credentials.removeValue(forKey: id); jobs[index].authorizationStatus = nil; jobs[index].error = nil
+            } else { requestAuthorization(id, includingPausedFiles: includingPausedFiles); return }
+        }
         message = nil; notice = nil
         if includingPausedFiles { jobs[index].pausedFiles = [] }
         let job = jobs[index]
@@ -290,9 +325,23 @@ final class DownloadController: ObservableObject {
             add(listing: .init(site: job.site, repository: job.repository, revision: job.revision, files: job.files, sourceURL: job.sourceURL), files: job.files, root: URL(fileURLWithPath: job.root).resolvingSymlinksInPath().standardizedFileURL, replacing: job)
         } catch { message = error.localizedDescription }
     }
+    func requestAuthorization(_ id: String, includingPausedFiles: Bool = false) {
+        guard let job = jobs.first(where: { $0.id == id }), !isScheduled(id), !deletingIDs.contains(id) else { return }
+        authorization = DownloadAuthorizationDraft(job: job, includingPausedFiles: includingPausedFiles)
+    }
+    func authorizeAndResume(_ draft: DownloadAuthorizationDraft) {
+        guard authorization?.id == draft.id, let index = jobs.firstIndex(where: { $0.id == draft.job.id }), !isScheduled(draft.job.id) else { return }
+        let credential = draft.token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !credential.isEmpty, credential.utf8.count <= 4096, credential.utf8.allSatisfy({ (33...126).contains($0) }) else { draft.error = "请输入有效访问令牌，不要包含空格或换行。"; return }
+        guard jobs[index].files.contains(where: { CatalogHTTP.credentialHosts.contains($0.url.host?.lowercased() ?? "") }) else { draft.error = "此下载地址不支持发送访问令牌。"; return }
+        credentials[draft.job.id] = credential
+        jobs[index].authorizationStatus = nil; jobs[index].error = nil
+        draft.token = ""; authorization = nil
+        resume(draft.job.id, includingPausedFiles: draft.includingPausedFiles)
+    }
     private func start(_ id: String, allowReplacement: Bool, credential: String) {
         guard !isActive(id), let index = jobs.firstIndex(where: { $0.id == id }) else { return }
-        let execution = DownloadExecution(); executions[id] = execution; activeIDs.insert(id); execution.pauseRequested = false; execution.interruptedFile = nil; jobs[index].state = .downloading; jobs[index].error = nil
+        let execution = DownloadExecution(); executions[id] = execution; activeIDs.insert(id); execution.pauseRequested = false; execution.interruptedFile = nil; jobs[index].state = .downloading; jobs[index].error = nil; jobs[index].authorizationStatus = nil
         guard save() else { activeIDs.remove(id); executions.removeValue(forKey: id); jobs[index].state = .paused; return }
         let original = jobs[index], generation = UUID(); execution.speedGeneration = generation
         execution.rate = DownloadRate(); execution.networkBytes = 0; execution.fileBaseline = nil; speeds[id] = 0
@@ -305,6 +354,7 @@ final class DownloadController: ObservableObject {
         execution.speedTimer = timer; RunLoop.main.add(timer, forMode: .common)
         Task {
             var replacement: ModelDownload?
+            var retryCounts: [String: Int] = [:]
             do {
                 let root = URL(fileURLWithPath: original.root)
                 while true {
@@ -317,7 +367,8 @@ final class DownloadController: ObservableObject {
                     let fileGeneration = UUID(); execution.speedGeneration = fileGeneration
                     try DownloadPaths.validateURL(file.url)
                     let eligible = CatalogHTTP.credentialHosts.contains(file.url.host?.lowercased() ?? "")
-                    let worker = try DownloadTransfer(file: file, root: root, folder: original.folder, token: eligible ? credential : "", protocolClasses: transferProtocolClasses, phase: { [weak self = self] phase in
+                    let fileCredential = eligible ? (credential.isEmpty && original.site == .huggingface ? accessTokens.credential(for: file.url.absoluteString) : credential) : ""
+                    let worker = try DownloadTransfer(file: file, root: root, folder: original.folder, token: fileCredential, protocolClasses: transferProtocolClasses, phase: { [weak self = self] phase in
                         Task { @MainActor in
                             guard let self, self.isActive(id), execution.speedGeneration == fileGeneration else { return }
                             self.transferPhases[id] = phase
@@ -347,6 +398,24 @@ final class DownloadController: ObservableObject {
                             guard let i = jobs.firstIndex(where: { $0.id == id }) else { throw CancellationError() }
                             jobs[i] = try DownloadRecovery.reconcile(jobs[i]); jobs[i].currentFile = ""
                             synchronizeSharedProgress(id); save()
+                            continue
+                        }
+                        let attempts = retryCounts[file.path] ?? 0
+                        if !execution.pauseRequested, DownloadRetryPolicy.allows(error), attempts < retryDelays.count,
+                           let i = jobs.firstIndex(where: { $0.id == id }) {
+                            jobs[i] = try DownloadRecovery.reconcile(jobs[i])
+                            let delay = retryDelays[attempts]
+                            retryCounts[file.path] = attempts + 1
+                            retryStatuses[id] = .init(attempt: attempts + 1, limit: retryDelays.count, delay: delay)
+                            transferPhases[id] = .connecting; speeds[id] = 0
+                            synchronizeSharedProgress(id); save()
+                            let deadline = ProcessInfo.processInfo.systemUptime + delay
+                            while ProcessInfo.processInfo.systemUptime < deadline {
+                                if execution.pauseRequested || !jobs.contains(where: { $0.id == id }) { throw CancellationError() }
+                                if execution.interruptedFile != nil { break }
+                                try await Task.sleep(nanoseconds: 100_000_000)
+                            }
+                            retryStatuses.removeValue(forKey: id); execution.interruptedFile = nil
                             continue
                         }
                         throw error
@@ -390,6 +459,8 @@ final class DownloadController: ObservableObject {
                 if let i = jobs.firstIndex(where: { $0.id == id }) {
                     jobs[i].state = execution.pauseRequested || error is CancellationError || error is DownloadFilesSuspended ? .paused : .failed
                     jobs[i].error = jobs[i].state == .failed ? error.localizedDescription : nil
+                    jobs[i].authorizationStatus = (error as? DownloadAuthorizationError)?.status
+                    if error is DownloadAuthorizationError { credentials.removeValue(forKey: id) }
                     if let restored = try? DownloadRecovery.reconcile(jobs[i]) { jobs[i] = restored }
                     if error is DownloadFilesSuspended { notice = "其余文件已下载，剩余文件已单独暂停。可在文件详情中继续。"; if jobs[i].finished.isEmpty { notice = "所有文件已暂停，可在文件详情中继续。"} }
                     if error is DownloadResumeError && !execution.pauseRequested {
@@ -399,7 +470,7 @@ final class DownloadController: ObservableObject {
                 }
             }
             synchronizeSharedProgress(id)
-            execution.transfer = nil; execution.interruptedFile = nil; activeIDs.remove(id); executions.removeValue(forKey: id); execution.speedGeneration = UUID(); speeds.removeValue(forKey: id); transferPhases.removeValue(forKey: id); execution.speedTimer?.invalidate(); execution.speedTimer = nil; save()
+            execution.transfer = nil; execution.interruptedFile = nil; activeIDs.remove(id); executions.removeValue(forKey: id); execution.speedGeneration = UUID(); speeds.removeValue(forKey: id); transferPhases.removeValue(forKey: id); retryStatuses.removeValue(forKey: id); execution.speedTimer?.invalidate(); execution.speedTimer = nil; save()
             if let job = replacement { add(listing: .init(site: job.site, repository: job.repository, revision: job.revision, files: job.files, sourceURL: job.sourceURL), files: job.files, root: URL(fileURLWithPath: job.root), replacing: job, credential: credential) }
             pump()
         }
@@ -453,7 +524,8 @@ final class DownloadController: ObservableObject {
             while isActive(id) && Date() < deadline { try await Task.sleep(nanoseconds: 20_000_000) }
             guard !isActive(id) else { throw LaunchError.message("任务仍在停止，请稍后再删除") }
         }
-        jobs.removeAll { $0.id == id }; speeds.removeValue(forKey: id)
+        jobs.removeAll { $0.id == id }; speeds.removeValue(forKey: id); credentials.removeValue(forKey: id)
+        if authorization?.job.id == id { authorization?.token = ""; authorization = nil }
         if selectedTaskID == id { selectedTaskID = activeID ?? jobs.first?.id }
         guard save() else { throw LaunchError.message(message ?? "删除任务未能保存") }
         notice = "任务记录已删除，已下载文件和未完成文件保留。"

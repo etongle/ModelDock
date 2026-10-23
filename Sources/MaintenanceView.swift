@@ -53,22 +53,30 @@ struct UsageBadge: View {
 struct CompatibilityRows: View {
     @ObservedObject var store: AppStore
     var model: LocalModel
-    var onlyCompatible = false
-    var engines: [Engine] {
-        onlyCompatible ? store.enabledEngines.filter { let match = model.compatibility(with: $0); return match.selectable || (match.level == .importRequired && $0.kind == .splash) } : store.enabledEngines
-    }
+    var engines: [Engine] { store.enabledEngines.filter { model.supportsEngineFormat($0) } }
+    var disabledMatches: [Engine] { store.engines.filter { !store.engineEnabled($0.id) && model.supportsEngineFormat($0) } }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             UsageBadge(model: model)
             Text(verbatim: L10n.text(model.usageExplanation)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             if let architecture = model.architecture { Text(verbatim: L10n.text("模型架构：\(architecture)")).font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted) }
+            if engines.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(L10n.text(disabledMatches.isEmpty ? "暂无适配基座" : "适配基座已在全局设置中禁用。"), systemImage: "info.circle")
+                    if !disabledMatches.isEmpty {
+                        Text(verbatim: disabledMatches.map { L10n.text($0.name) }.joined(separator: " · "))
+                        Button(L10n.text("启用适配基座…")) { store.showGlobalEngines = true }.buttonStyle(.bordered)
+                    }
+                }.font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).padding(.vertical, 7).accessibilityIdentifier("no-compatible-engine")
+            }
             ForEach(engines) { engine in
                 let match = model.compatibility(with: engine)
                 HStack(alignment: .top, spacing: 14) {
                     EngineIcon(engine: engine, size: 40)
                     VStack(alignment: .leading, spacing: 6) { HStack { Text(verbatim: L10n.text(engine.name)).fontWeight(.semibold); Text(verbatim: L10n.text(match.title)).font(.system(size: TypeScale.caption, weight: .medium)).foregroundStyle(match.selectable ? Theme.muted : match.level == .importRequired ? Theme.warningText : Theme.muted); if !engine.installed { Text(verbatim: L10n.text("未安装")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) } }; Text(verbatim: L10n.text(match.reason)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
                     Spacer(minLength: 6)
-                    if match.selectable { Button(L10n.text("配置服务")) { store.launch(model: model, engine: engine) }.buttonStyle(.bordered).disabled(!engine.canServe || store.maintaining) }
+                    if !engine.installed { Button(L10n.text("安装基座…")) { store.chooseEngine(engine.id); store.checkInstall() }.buttonStyle(.bordered).disabled(store.maintaining || store.installation.running || store.installation.checking != nil) }
+                    else if match.selectable { Button(L10n.text("配置服务")) { store.launch(model: model, engine: engine) }.buttonStyle(.bordered).disabled(!engine.canServe || store.maintaining) }
                     else if match.level == .importRequired && engine.kind == .splash { Button(L10n.text("准备并启动…")) { store.prepareSplashSource(model, engine: engine) }.buttonStyle(.bordered).disabled(!engine.canServe || store.maintaining) }
                 }.padding(.vertical, 7)
             }

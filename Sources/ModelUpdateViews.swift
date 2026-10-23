@@ -58,10 +58,13 @@ struct ModelUpdateEntry: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(verbatim: L10n.text("模型版本")).font(.system(size: TypeScale.section, weight: .semibold)); Spacer()
-                Button { store.modelUpdate = ModelUpdateDraft(model: model) } label: { Label(L10n.text(ModelOrigin.replacement(model) == nil ? "检查模型更新…" : "更新为新版模型…"), systemImage: "arrow.triangle.2.circlepath") }.buttonStyle(.bordered).accessibilityIdentifier("model-update-entry")
+                Button { store.prepareModelUpdate(model) } label: { Label(L10n.text(ModelOrigin.replacement(model) == nil ? "检查模型更新…" : "更新为新版模型…"), systemImage: "arrow.triangle.2.circlepath") }.buttonStyle(.bordered).accessibilityIdentifier("model-update-entry")
             }
             if let source = ModelOrigin.read(model) {
                 Text(source.repository).font(.system(size: TypeScale.body, design: .monospaced)).textSelection(.enabled)
+                if source.site == .huggingface, ModelOrigin.validRepository(source.repository), let url = URL(string: "https://huggingface.co/" + source.repository) {
+                    Link(destination: url) { Label(L10n.text("查看 Hugging Face 页面"), systemImage: "arrow.up.right.square") }.accessibilityIdentifier("model-repository-page")
+                }
                 Text(verbatim: L10n.text("本地版本 · " + (source.revision.isEmpty ? "未记录" : source.revision))).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).textSelection(.enabled)
             } else { Text(verbatim: L10n.text(model.format == "Ollama" ? "通过管理此模型的 Ollama 服务同步最新版本。" : "更新前可以补充模型仓库地址。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
             if let replacement = ModelOrigin.replacement(model) { Text(verbatim: L10n.text("旧 packed 已停止支持。新版对应 \(replacement)，更新会下载独立版本。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.warningText) }
@@ -75,7 +78,7 @@ struct ModelUpdateView: View {
     @ObservedObject var draft: ModelUpdateDraft
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text(verbatim: L10n.text(draft.replacement == nil ? "更新模型" : "更新旧 Splash 模型")).font(.system(size: TypeScale.section, weight: .semibold))
+            Text(verbatim: L10n.text(draft.replacement == nil ? "检查模型更新" : "更新旧 Splash 模型")).font(.system(size: TypeScale.section, weight: .semibold))
             Text(verbatim: L10n.text(draft.model.name)).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -86,24 +89,30 @@ struct ModelUpdateView: View {
                     } else {
                         if draft.replacement != nil { Text(verbatim: L10n.text("新版 Splash 使用上游 MLX 权重。下载完成后，用下方启动入口让 Splash 准备匹配组件。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted) }
                         Text(verbatim: L10n.text("模型仓库地址")).font(.system(size: TypeScale.body, weight: .semibold))
+                        if draft.address.isEmpty {
+                            Label(L10n.text("此模型未记录来源地址。请填写原始仓库地址，检查成功后会记住；不会仅凭模型名称猜测来源。"), systemImage: "link").font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                        }
                         TextField(L10n.text("https://huggingface.co/owner/model"), text: $draft.address).textFieldStyle(.roundedBorder).disabled(draft.checking).onChange(of: draft.address) { draft.listing = nil; draft.selected = [] }.accessibilityIdentifier("model-update-address")
-                        SecureField(L10n.text("访问令牌（可选，不保存）"), text: $draft.token).textFieldStyle(.roundedBorder).disabled(draft.checking)
+                        SecureField(L10n.text("单次访问令牌（可选，覆盖全局配置）"), text: $draft.token).textFieldStyle(.roundedBorder).disabled(draft.checking)
+                        Text(verbatim: L10n.text("Hugging Face 自动使用全局令牌，可在设置 → 下载中配置。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                         HStack {
-                            Button(L10n.text("检查版本")) { draft.check() }.buttonStyle(.bordered).disabled(draft.address.isEmpty || draft.checking)
+                            Button(L10n.text("检查版本")) { draft.check(store: store) }.buttonStyle(.bordered).disabled(draft.address.isEmpty || draft.checking)
                             if draft.checking { ProgressView().controlSize(.small); Text(verbatim: L10n.text("正在读取仓库清单…")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
                         }
                         if let listing = draft.listing {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(verbatim: L10n.text(draft.sameRevision ? "仓库版本与本地相同 · 可补齐文件" : draft.original == nil ? "仓库版本已读取" : "可下载独立模型版本")).font(.system(size: TypeScale.body, weight: .semibold))
+                                Label(L10n.text(draft.status.title), systemImage: draft.status == .current ? "checkmark.circle.fill" : draft.status == .incomplete ? "exclamationmark.circle" : "info.circle").font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(draft.status == .current ? Theme.successText : draft.status == .incomplete ? Theme.warningText : Theme.linkColor).accessibilityIdentifier("model-update-result")
+                                Text(verbatim: L10n.text(draft.status.detail)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                                 Text(listing.repository).font(.system(size: TypeScale.body, design: .monospaced)).textSelection(.enabled)
+                                Text(verbatim: L10n.text("本地版本 · " + (draft.original?.revision.isEmpty == false ? draft.original!.revision : "未记录"))).font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled)
                                 Text(verbatim: L10n.text("仓库版本 · " + listing.revision)).font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled)
                             }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(Theme.selection, in: RoundedRectangle(cornerRadius: 10))
                             Text(verbatim: L10n.text("GGUF 选择当前量化权重与投影；MLX 选择完整权重、配置和 tokenizer。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
-                            HStack { Text(verbatim: L10n.text("更新文件")).font(.system(size: TypeScale.body, weight: .semibold)); Spacer(); Button(L10n.text("全选")) { draft.selected = Set(listing.files.map(\.path)) }; Button(L10n.text("取消全选")) { draft.selected = [] } }.buttonStyle(.bordered).controlSize(.small)
+                            HStack { Text(verbatim: L10n.text("可下载文件")).font(.system(size: TypeScale.body, weight: .semibold)); Spacer(); Button(L10n.text("全选")) { draft.selected = Set(listing.files.map(\.path)).subtracting(draft.existingFiles) }; Button(L10n.text("取消全选")) { draft.selected = [] } }.buttonStyle(.bordered).controlSize(.small)
                             ForEach(listing.files) { file in
                                 Toggle(isOn: Binding(get: { draft.selected.contains(file.path) }, set: { if $0 { draft.selected.insert(file.path) } else { draft.selected.remove(file.path) } })) {
-                                    HStack { Text(file.path).font(.system(size: TypeScale.callout, design: .monospaced)).lineLimit(2); Spacer(); Text(verbatim: L10n.text(file.bytes > 0 ? sizeLabel(file.bytes) : "大小待确认")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
-                                }.toggleStyle(.checkbox)
+                                    HStack { Text(file.path).font(.system(size: TypeScale.callout, design: .monospaced)).lineLimit(2); Spacer(); if draft.existingFiles.contains(file.path) { Text(verbatim: L10n.text("本地已有")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.successText) }; Text(verbatim: L10n.text(file.bytes > 0 ? sizeLabel(file.bytes) : "大小待确认")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted) }
+                                }.toggleStyle(.checkbox).disabled(draft.existingFiles.contains(file.path))
                             }
                             Text(verbatim: L10n.text("已选 \(draft.selectedFiles.count) 个文件 · \(sizeLabel(draft.selectedFiles.reduce(0) { $0 + $1.bytes }))")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
                         }
@@ -120,7 +129,7 @@ struct ModelUpdateView: View {
                 Button(L10n.text("关闭")) { store.modelUpdate = nil }.buttonStyle(SecondaryButton()).disabled(draft.updating).keyboardShortcut(.cancelAction)
                 Spacer()
                 if draft.model.format == "Ollama" { Button(L10n.text("更新此模型")) { draft.ollamaUpdate(store: store) }.buttonStyle(AccentButton()).disabled(draft.updating || store.maintaining) }
-                else { Button { draft.download(store: store) } label: { Label(L10n.text("下载模型版本"), systemImage: "arrow.down.circle") }.buttonStyle(AccentButton()).disabled(draft.selectedFiles.isEmpty || draft.checking || store.maintaining).accessibilityIdentifier("download-model-version") }
+                else { Button { draft.download(store: store) } label: { Label(L10n.text(draft.downloadTitle), systemImage: "arrow.down.circle") }.buttonStyle(AccentButton()).disabled(draft.selectedFiles.isEmpty || draft.checking || store.maintaining).accessibilityIdentifier("download-model-version") }
             }
         }.padding(26).frame(width: 710, height: 705).background(Theme.background).interactiveDismissDisabled(draft.updating)
     }

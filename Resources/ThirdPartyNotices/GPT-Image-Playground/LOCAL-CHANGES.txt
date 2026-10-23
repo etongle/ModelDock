@@ -1,0 +1,1 @@
+Adapted for ModelDock local model services: same-origin configuration, server-side gateway credentials, direct mask editing, generation progress, responsive input controls and local image preservation. Upstream MIT license remains applicable to this component.

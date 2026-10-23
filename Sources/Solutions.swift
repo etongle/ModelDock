@@ -3,7 +3,7 @@ import Combine
 
 enum SolutionSection: String, CaseIterable { case overview = "概览", configuration = "配置", instances = "实例", maintenance = "维护" }
 enum SolutionQuality: String, Codable, CaseIterable { case light = "轻量", balanced = "均衡", quality = "高质量" }
-enum SolutionRole: String, Codable { case asr = "语音识别", text = "文字翻译", chat = "对话模型", vision = "视觉模型", tts = "语音合成" }
+enum SolutionRole: String, Codable { case asr = "语音识别", text = "文字翻译", chat = "对话模型", vision = "视觉模型", tts = "语音合成", image = "图片生成" }
 struct SolutionModel: Hashable {
     var repository: String; var revision: String
     var address: String { "https://huggingface.co/" + repository + "/tree/" + revision }
@@ -17,24 +17,26 @@ enum SolutionCatalog {
         .init(id: "voice-translation", title: "多语言实时翻译", subtitle: "麦克风字幕 · 音频翻译 · 可选配音", symbol: "waveform", roles: [.asr, .text, .tts]),
         .init(id: "transcription", title: "语音转写", subtitle: "音频文件转文字", symbol: "doc.text", roles: [.asr]),
         .init(id: "coding", title: "本地编程助手", subtitle: "模型服务与编程客户端接入", symbol: "chevron.left.forwardslash.chevron.right", roles: [.chat]),
+        .init(id: "image-generation", title: "本地生图", subtitle: "Qwen Image 2.1 · Turbo 8 步 · 可替换模型", symbol: "photo.badge.plus", roles: [.image]),
         .init(id: "vision", title: "图片与文档问答", subtitle: "视觉模型与配套组件", symbol: "photo", roles: [.vision])
     ]
-    static var visible: [SolutionDefinition] { all.filter { $0.id == "voice-translation" } }
+    static var visible: [SolutionDefinition] { all.filter { ["voice-translation", "image-generation"].contains($0.id) } }
     static func model(_ role: SolutionRole, quality: SolutionQuality) -> SolutionModel {
         switch role {
         case .asr:
             return quality == .light ? .init(repository: "mlx-community/Qwen3-ASR-0.6B-8bit", revision: "89e96d92ba34aca20b3e29fb10cc284097d1219f") : .init(repository: "mlx-community/Qwen3-ASR-1.7B-8bit", revision: "a8379a2e2f9e313c9292cdf1af4055ab56d50d55")
         case .tts:
             return quality == .quality ? .init(repository: "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16", revision: "a6eb4f68e4b056f1215157bb696209bc82a6db48") : .init(repository: "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-bf16", revision: "1eccf1cb2519b5a4e8a95b5f0544f3303568164f")
+        case .image: return .init(repository: ImageModelPolicy.repository, revision: ImageModelPolicy.revision)
         case .text, .chat, .vision: return SolutionRecommendations.baseline
         }
     }
-    static func engine(_ role: SolutionRole) -> String { [.asr, .tts].contains(role) ? "audio" : "mlx" }
+    static func engine(_ role: SolutionRole) -> String { role == .image ? "mflux" : [.asr, .tts].contains(role) ? "audio" : "mlx" }
 }
 struct SolutionDraft: Codable, Equatable {
     var quality: SolutionQuality = .balanced
     var language = "English"
-    /// Values are engineID + newline + exact inventory modelID; never a display-name match.
+    /// Values pin an inventory model or an explicit service + API model; never a display-name match.
     var localChoices: [String: String] = [:]
     var destination: String?
     var sourceLanguage: String?
@@ -52,6 +54,7 @@ struct SolutionComponent: Codable, Identifiable {
     var ownsDownload = false
     var serviceID: String?
     var ownsConfiguration = false
+    var serviceBinding: SolutionServiceBinding? = nil
 }
 struct SolutionProcess: Codable { var serviceID: String; var pid: Int32; var birth: UInt64 }
 enum SolutionInstallState: String, Codable { case preparing, installing, downloading, paused, configured, failed }
@@ -123,6 +126,7 @@ struct SolutionLocalChoice: Identifiable {
         store.models.filter { model in
             guard model.complete else { return false }
             switch role {
+            case .image: return model.kind == .image && ImageModelPolicy.recognizes(URL(fileURLWithPath: model.path))
             case .asr: return AudioModelPolicy.task(model) == "asr"
             case .tts: return AudioModelPolicy.supportsReference(model)
             case .text: return model.kind == .language && TranslationLanguages.modelIssue(model) == nil
@@ -148,8 +152,15 @@ struct SolutionLocalChoice: Identifiable {
         }
     }
     func selection(_ role: SolutionRole, draft: SolutionDraft, store: AppStore) throws -> SolutionComponent {
+        if let chosen = draft.localChoices[role.rawValue], chosen.hasPrefix(SolutionServiceChoice.prefix) {
+            guard let service = serviceChoices(role, store: store).first(where: { $0.id == chosen }) else { throw LaunchError.message("所选服务已删除或模型配置已变化，请重新选择替代服务。") }
+            return serviceComponent(service, role: role, store: store)
+        }
         let candidates = choices(role, store: store)
-        if let chosen = draft.localChoices[role.rawValue], !chosen.isEmpty, chosen != "download", chosen != SolutionRecommendations.lightweightChoice {
+        if role == .image, draft.localChoices[role.rawValue] == nil, let service = serviceChoices(role, store: store).first {
+            return serviceComponent(service, role: role, store: store)
+        }
+        if let chosen = draft.localChoices[role.rawValue], !chosen.isEmpty, chosen != "download", chosen != SolutionRecommendations.lightweightChoice, chosen != "heretic" {
             guard let local = candidates.first(where: { $0.id == chosen }) else { throw LaunchError.message("所选模型已移动、不完整或基座已禁用，请重新选择") }
             return .init(role: role, engineID: local.engine.id, modelID: local.model.id, modelPath: local.model.path, repository: local.model.repository ?? local.model.name, revision: local.model.origin?.revision ?? "")
         }
@@ -196,12 +207,12 @@ struct SolutionLocalChoice: Identifiable {
             do {
                 guard let current = deployments.first(where: { $0.id == id }) else { return }
                 var listings: [String: RemoteListing] = [:]
-                let unresolved = current.components.filter { component in component.modelPath == nil && (component.downloadID == nil || !store.downloads.jobs.contains(where: { $0.id == component.downloadID })) }
+                let unresolved = current.components.filter { component in component.serviceBinding == nil && component.modelPath == nil && (component.downloadID == nil || !store.downloads.jobs.contains(where: { $0.id == component.downloadID })) }
                 update(id) { $0.state = .preparing; $0.stage = "正在解析并固定模型版本…"; $0.progress = .init(phase: .checking, total: unresolved.count) }
                 for component in unresolved {
                     update(id) { $0.progress?.detail = component.repository }
                     let source = SolutionModel(repository: component.repository, revision: component.revision)
-                    let listing = try await (catalogLoader ?? ModelCatalog.listing)(source.address, "")
+                    let listing = try await (catalogLoader ?? ModelCatalog.listing)(source.address, store.downloads.accessTokens.credential(for: source.address))
                     guard listing.repository == component.repository && listing.revision == component.revision else { throw LaunchError.message("方案仓库版本与固定清单不一致") }
                     listings[component.id] = listing; try Task.checkCancellation()
                     update(id) { $0.progress?.completed += 1 }
@@ -211,12 +222,13 @@ struct SolutionLocalChoice: Identifiable {
                 while !FileManager.default.fileExists(atPath: volume.path) && volume.path != "/" { volume.deleteLastPathComponent() }
                 let required = listings.values.reduce(Int64(0)) { $0 + $1.files.reduce(Int64(0)) { $0 + max(0, $1.bytes) } }
                 if let free = (try? FileManager.default.attributesOfFileSystem(forPath: volume.path)[.systemFreeSize]) as? NSNumber, free.int64Value < required { throw LaunchError.message("模型库所在磁盘空间不足，请更换目录或释放空间后重试") }
-                let engineIDs = Set(current.components.map(\.engineID)).sorted()
+                let engineIDs = Set(current.components.filter { $0.serviceBinding == nil }.map(\.engineID)).sorted()
                 update(id) { $0.progress = .init(phase: .engines, total: engineIDs.count) }
                 for engineID in engineIDs {
                     guard store.engineEnabled(engineID), let engine = store.engines.first(where: { $0.id == engineID }) else { throw LaunchError.message("方案所需基座已禁用或无法识别") }
                     let needsVision = engineID == "mlx" && current.components.contains { $0.role == .vision }
-                    if engine.canServe && (!needsVision || engine.visionPath != nil) { update(id) { $0.progress?.completed += 1 }; continue }
+                    let imageSupported = engineID != "mflux" || [.current, .newer].contains(EngineVersionPolicy.state(installed: engine.version, available: "0.23.0"))
+                    if engine.canServe && imageSupported && (!needsVision || engine.visionPath != nil) { update(id) { $0.progress?.completed += 1 }; continue }
                     guard !store.installation.running, !store.maintaining else { throw LaunchError.message("请等待当前引擎操作完成后重试") }
                     update(id) { $0.state = .installing; $0.stage = "正在安装 " + engine.name; $0.progress?.engineID = engine.id; $0.progress?.detail = "正在检查引擎版本…"; $0.progress?.engineStep = nil }
                     store.installation.running = true; store.installation.activeEngineID = engine.id
@@ -245,6 +257,10 @@ struct SolutionLocalChoice: Identifiable {
                 }
                 update(id) { $0.progress = .init(phase: .models) }
                 for component in current.components {
+                    if component.serviceBinding != nil {
+                        if let issue = boundServiceIssue(component, store: store) { throw LaunchError.message(issue) }
+                        continue
+                    }
                     if let path = component.modelPath {
                         guard FileManager.default.fileExists(atPath: path) else { throw LaunchError.message("复用的模型文件已移动，请重新选择") }; continue
                     }
@@ -298,6 +314,10 @@ struct SolutionLocalChoice: Identifiable {
         guard let deployment = deployments.first(where: { $0.id == id }) else { return }
         for (offset, component) in deployment.components.enumerated() {
             update(id) { $0.progress?.completed = offset; $0.progress?.detail = component.role.rawValue }
+            if component.serviceBinding != nil {
+                if let issue = boundServiceIssue(component, store: store) { throw LaunchError.message(issue) }
+                continue
+            }
             if let existing = component.serviceID, store.services.records.contains(where: { $0.id == existing && $0.engineID == component.engineID && $0.modelID == component.modelID }) { continue }
             guard let engine = store.engines.first(where: { $0.id == component.engineID }), engine.canServe, store.engineEnabled(engine.id) else { throw LaunchError.message("基座尚未安装完成或已禁用") }
             let model: LocalModel
@@ -384,6 +404,8 @@ struct SolutionLocalChoice: Identifiable {
         }
         deployments.removeAll { $0.id == id }
         guard save() else { deployments = before; return }
+        store.solutionExperiences.removeValue(forKey: id)?.stop()
+        if store.solutionExperience?.id == id { store.solutionExperience = nil }
         if selectedDeploymentID == id { selectedDeploymentID = deployments.last(where: { $0.solutionID == deployment.solutionID })?.id }
         if editingID == id { editingID = nil }
         store.synchronizeGateway()

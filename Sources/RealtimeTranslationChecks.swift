@@ -3,7 +3,7 @@ import Foundation
 @MainActor enum RealtimeTranslationChecks {
     static func segments() throws {
         func require(_ value: Bool, _ message: String) throws { try ConnectionChecks.require(value, message) }
-        try require(SolutionCatalog.visible.map(\.id) == ["voice-translation"], "Unverified solutions remain in the visible catalog")
+        try require(SolutionCatalog.visible.map(\.id) == ["voice-translation", "image-generation"], "Unverified solutions remain in the visible catalog")
         var segmenter = SpeechSegmenter()
         let silence = [Float](repeating: 0, count: 1600)
         let speech = (0..<1600).map { Float(sin(Double($0) * 0.12)) * 0.1 }

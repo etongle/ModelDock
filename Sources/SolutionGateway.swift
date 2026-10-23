@@ -15,10 +15,10 @@ struct GatewaySolution: Codable, Hashable, Identifiable {
 
 extension SolutionRole {
     var gatewayModel: String {
-        switch self { case .asr: return "asr"; case .text: return "translation"; case .chat: return "chat"; case .vision: return "vision"; case .tts: return "tts" }
+        switch self { case .asr: return "asr"; case .text: return "translation"; case .chat: return "chat"; case .vision: return "vision"; case .tts: return "tts"; case .image: return "image" }
     }
     var gatewayOperation: String {
-        switch self { case .asr: return "/audio/transcriptions"; case .tts: return "/audio/speech"; default: return "/chat/completions" }
+        switch self { case .asr: return "/audio/transcriptions"; case .tts: return "/audio/speech"; case .image: return "/images/generations"; default: return "/chat/completions" }
     }
 }
 
@@ -26,14 +26,22 @@ extension SolutionRole {
     func solutionEndpoint(_ deployment: SolutionDeployment) -> String {
         "http://127.0.0.1:\(settings.port)/solutions/\(deployment.id.lowercased())/v1"
     }
+    func supportsRoutes(for deployment: SolutionDeployment) -> Bool {
+        supportsSolutionRoutes && (deployment.solutionID != "image-generation" || (supportsImageSolutionRoutes && supportsImageEditRoutes))
+    }
     func solutionReady(_ deployment: SolutionDeployment) -> Bool {
-        guard ready, supportsSolutionRoutes, let solution = solutionRoutes.first(where: { $0.id == deployment.id.lowercased() }), solution.configured, !solution.components.isEmpty else { return false }
+        guard ready, supportsRoutes(for: deployment), let solution = solutionRoutes.first(where: { $0.id == deployment.id.lowercased() }), solution.configured, !solution.components.isEmpty else { return false }
         return solution.components.allSatisfy { component in routes.contains { $0.id == component.routeID && $0.available && $0.enabled } }
     }
     func synchronizeSolutions(_ deployments: [SolutionDeployment], local: [LocalModel], services: ServiceController) -> [GatewaySolution] {
         deployments.map { record in
             let definition = SolutionCatalog.all.first { $0.id == record.solutionID }
             let components = (definition?.roles(for: record.draft) ?? record.components.map(\.role)).map { role -> GatewaySolutionComponent in
+                if let component = record.components.first(where: { $0.role == role }), let binding = component.serviceBinding {
+                    guard let spec = services.records.first(where: { $0.id == component.serviceID && $0.engineID == component.engineID }),
+                          binding.matches(spec), role != .text || (TranslationLanguages.identityIssue(binding.model) == nil && TranslationLanguages.identityIssue(binding.configurationModelName) == nil && TranslationLanguages.identityIssue(component.repository) == nil) else { return .init(role: role.gatewayModel) }
+                    return .init(role: role.gatewayModel, routeID: routes.first { $0.sourceID == spec.id && $0.model == binding.model && $0.capabilities.known && $0.inputs.contains("text") && $0.outputs.contains(role == .image ? "image" : "text") && (role != .vision || $0.inputs.contains("image")) }?.id)
+                }
                 guard let component = record.components.first(where: { $0.role == role }),
                       let spec = services.records.first(where: { $0.id == component.serviceID && $0.engineID == component.engineID && $0.modelID == component.modelID }),
                       let path = component.modelPath else { return .init(role: role.gatewayModel) }

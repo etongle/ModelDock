@@ -8,7 +8,7 @@ import SwiftUI
     private var status: String {
         if !store.solutions.runtime(deployment, store: store).allReady { return "等待方案组件就绪" }
         if !gateway.ready { return "网关未启动" }
-        if !gateway.supportsSolutionRoutes { return "重启网关后启用方案地址" }
+        if !gateway.supportsRoutes(for: deployment) { return "重启网关后启用方案地址" }
         return gateway.solutionReady(deployment) ? "方案接口可用" : "等待方案组件就绪"
     }
     var body: some View {
@@ -46,6 +46,7 @@ import SwiftUI
                         .foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                     ForEach(deployment.components) { component in
                         Text(verbatim: component.role.gatewayModel + "  →  " + component.role.gatewayOperation).font(.system(size: TypeScale.caption, design: .monospaced)).textSelection(.enabled)
+                        if component.role == .image { Text(verbatim: "image  →  /images/edits").font(.system(size: TypeScale.caption, design: .monospaced)).textSelection(.enabled) }
                     }
                     Text(verbatim: L10n.text("可通过 /models 查看此方案的可用组件；/health 查看组件就绪状态。服务未就绪时会明确报错，不会切换到其他方案。"))
                         .foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
@@ -64,7 +65,7 @@ import SwiftUI
         }.buttonStyle(.bordered)
         if !gateway.ownsProcess() {
             Button(L10n.text("启动网关")) { gateway.start(store: store) }.buttonStyle(.bordered).disabled(gateway.busy)
-        } else if gateway.ready && !gateway.supportsSolutionRoutes {
+        } else if gateway.ready && !gateway.supportsRoutes(for: deployment) {
             Button(L10n.text("重启网关")) { gateway.restartForSolutions(store: store) }.buttonStyle(.bordered).disabled(gateway.busy || gateway.active > 0)
         }
         if showName {

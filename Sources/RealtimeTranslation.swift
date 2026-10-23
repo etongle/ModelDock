@@ -23,9 +23,9 @@ struct RealtimeSubtitle: Identifiable {
     private var session = UUID()
     private var flush: ((Data) -> Void)?
 
-    func start(_ deployment: SolutionDeployment, store: AppStore, microphone: Bool = true) {
+    func start(_ deployment: SolutionDeployment, store: AppStore, microphone: Bool = true, preserveHistory: Bool = false) {
         guard !listening && !processing else { return }
-        error = nil; subtitles = []; clips = []; pending = 0; session = UUID()
+        error = nil; if !preserveHistory { subtitles = [] }; clips = []; pending = 0; session = UUID()
         let token = session
         flush = { [weak self, weak store] data in guard let self, let store else { return }; self.submit(data, deployment: deployment, store: store) }
         operation = Task { [weak self, weak store] in

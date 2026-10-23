@@ -50,6 +50,37 @@ enum ModelIdentityChecks {
         try ConnectionChecks.require(store.currentService?.id == active.id && ModelFileSafety.used(primary, removal: folder, services: [active], external: [], models: merged), "Existing service/deletion protection lost after merge")
         let draft = LocalModel(id: draftFolder.path, name: "DFlash2", format: "DFlash2 草稿", path: draftFolder.path, kind: .draft, bytes: 5, complete: true, verification: "", repository: "incoai/Qwen3.8-27B-DFlash2", missingFiles: [], removalPath: draftFolder.path)
         try ConnectionChecks.require(ModelFileSafety.used(draft, removal: draftFolder, services: [active], external: [], models: merged), "Shared auxiliary protection lost after deduplication")
+        try ConnectionChecks.require(!ModelFileSafety.dependencies(primary, removal: folder, models: merged).isEmpty, "Deleting raw weights ignored a stopped Splash registration")
+        try ConnectionChecks.require(!ModelFileSafety.dependencies(draft, removal: draftFolder, models: merged + [draft]).isEmpty, "Deleting a draft ignored dependent model registrations")
+        let blob = root.appendingPathComponent("blobs/main-weight")
+        try fm.createDirectory(at: blob.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let mainLink = folder.appendingPathComponent("model.safetensors")
+        try fm.moveItem(at: mainLink, to: blob); try fm.createSymbolicLink(at: mainLink, withDestinationURL: blob)
+        try ConnectionChecks.require(!ModelFileSafety.dependencies(primary, removal: folder, models: merged).isEmpty, "Snapshot deletion ignored weights linked to an external shared blob")
+        try ConnectionChecks.require(!ModelFileSafety.dependencies(primary, removal: mainLink, models: merged).isEmpty, "Deleting a weight symlink broke dependent preparations")
+        try ConnectionChecks.require(!ModelFileSafety.references(draftFolder.path, within: folder), "Independent draft path was treated as owned by the main snapshot")
+        let textFolder = root.appendingPathComponent(".resolved/text")
+        try fm.copyItem(at: assembly, to: textFolder)
+        var text = registration; text.id += "-text"; text.path = textFolder.path; text.splashVision = "none"
+        var secondVision = registration; secondVision.id += "-second-vision"; secondVision.path = textFolder.path
+        let displayGroups = PreparedSplashGroup.all([.init(registration), .init(secondVision), .init(text)])
+        try ConnectionChecks.require(displayGroups.count == 2 && displayGroups.map { $0.registrations.count }.sorted() == [1, 2], "Equivalent component records were not grouped by physical files and input mode")
+        var groupedService = active; groupedService.modelPath = secondVision.path
+        try ConnectionChecks.require(displayGroups.first(where: { $0.registrations.count == 2 })?.contains(groupedService) == true, "Grouped configurations lost service usage evidence")
+        var independent = secondVision; independent.origin?.revision = String(repeating: "f", count: 40)
+        try ConnectionChecks.require(PreparedSplashGroup.all([.init(registration), .init(independent)]).count == 2, "Different model revisions were grouped merely by shared files")
+        let link = root.appendingPathComponent("text-selection")
+        try fm.createSymbolicLink(at: link, withDestinationURL: textFolder)
+        text.splashSelection = link.path; text.removalPath = link.path
+        var missingVision = registration, missingText = text
+        missingVision.complete = false; missingText.complete = false; alias.complete = false
+        try fm.moveItem(at: folder, to: root.appendingPathComponent("temporarily-missing-source"))
+        let missing = ModelIdentity.coalesce([missingText, missingVision, alias])
+        try ConnectionChecks.require(missing.count == 1 && missing[0].preparedSplashModels.count == 2 && missing[0].matchesID(text.id) && missing[0].matchesID(alias.id), "Missing source duplicated text/vision preparations or lost launch aliases")
+        let selectionRemoval = try ModelFileSafety.removalURL(text, models: missing, roots: [root.path])
+        try ConnectionChecks.require(selectionRemoval.path == link.standardizedFileURL.path, "Deleting a selection was widened to the shared resolved folder")
+        try ConnectionChecks.require(ModelFileSafety.dependencies(text, removal: link, models: missing).isEmpty && fm.fileExists(atPath: textFolder.path), "Removing a selection was treated as deleting its source")
+        try fm.moveItem(at: root.appendingPathComponent("temporarily-missing-source"), to: folder)
         store.showModelFile(store.models[0]); try await capture?("single-model-with-components"); store.services.records = []
         let actual = Scanner.scan()
         let repositories = ["mlx-community/Qwen3.8-27B-4bit", "Jiunsong/SuperQwen3.8-27b-abliterated-MLX-4bit"]
@@ -57,7 +88,8 @@ enum ModelIdentityChecks {
         for repository in repositories {
             let matching = actual.models.filter { $0.origin?.repository == repository && $0.kind == .language }
             counts[repository] = matching.count
-            try ConnectionChecks.require(matching.count == 1 && matching[0].splashRegistrations?.isEmpty == false, "Actual downloaded model still duplicated: " + repository)
+            let signatures = matching.map { ModelIdentity.weights($0) }
+            try ConnectionChecks.require(Set(signatures).count == signatures.count, "Actual model duplicated identical main weights: " + repository)
         }
         let report: [String: Any] = ["result": "passed", "actualModelCounts": counts, "checks": ["same source revision and physical weight identity coalesced", "selection aliases merged", "different revision and independent quantizations retained", "MLX and Splash launch correctly from one entry", "helper listing and repair use helper repository", "saved associations and active service identity retained", "shared weights and draft deletion protected"]]
         try ConnectionFiles.json(report).write(to: root.appendingPathComponent("result.json")); print(root.path)

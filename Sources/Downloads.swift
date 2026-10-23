@@ -14,6 +14,10 @@ struct RemoteListing {
     var sourceURL: String? = nil
 }
 enum DownloadState: String, Codable { case queued = "等待下载", paused = "已暂停", downloading = "下载中", complete = "已完成", failed = "需重试" }
+struct DownloadAuthorizationError: LocalizedError {
+    let status: Int
+    var errorDescription: String? { "访问授权失败（HTTP \(status)）。请更新访问令牌后继续，已下载文件保留。" }
+}
 struct ModelDownload: Identifiable, Codable {
     var id = UUID().uuidString
     var site: ModelSite; var repository: String; var revision: String
@@ -29,6 +33,9 @@ struct ModelDownload: Identifiable, Codable {
     var repairFingerprint: RepairFingerprint? = nil
     var repairModelID: String? = nil
     var sourceURL: String? = nil
+    var authorizationStatus: Int? = nil
+    var needsAuthorization: Bool { authorizationStatus == 401 || authorizationStatus == 403 || error?.contains("HTTP 401") == true || error?.contains("HTTP 403") == true }
+    var huggingFacePage: URL? { site == .huggingface && ModelOrigin.validRepository(repository) ? URL(string: "https://huggingface.co/" + repository) : nil }
     var displayLocation: String { repairTarget.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path } ?? URL(fileURLWithPath: root).appendingPathComponent(folder).path }
     var total: Int64 { files.reduce(0) { $0 + $1.bytes } }
 }
@@ -118,7 +125,7 @@ enum ModelCatalog {
     }
     static func suggested(_ listing: RemoteListing) -> Set<String> {
         if let preferred = listing.preferred { return [preferred] }
-        if listing.repository == ImageModelPolicy.repository {
+        if [ImageModelPolicy.repository, ImageModelPolicy.heretic.repository].contains(listing.repository) {
             return Set(listing.files.filter { ["model_index.json", "LICENSE"].contains($0.path) || ["transformer/", "text_encoder/", "vae/", "processor/", "scheduler/"].contains(where: $0.path.hasPrefix) }.map(\.path))
         }
         let gguf = listing.files.filter { $0.path.hasSuffix(".gguf") && !URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("mmproj") }
@@ -203,6 +210,7 @@ final class DownloadTransfer: NSObject, URLSessionDataDelegate, @unchecked Senda
     }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
         do {
+            if let status = (response as? HTTPURLResponse)?.statusCode, [401, 403].contains(status) { throw DownloadAuthorizationError(status: status) }
             guard let response = response as? HTTPURLResponse, [200, 206].contains(response.statusCode) else { throw LaunchError.message("下载失败（HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)），未完成文件已保留") }
             guard response.mimeType != "text/html" else { throw LaunchError.message("此链接返回网页，请使用模型文件的直接下载链接") }
             if response.statusCode == 206 {

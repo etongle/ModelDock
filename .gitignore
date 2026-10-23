@@ -9,4 +9,6 @@ DerivedData/
 .env
 .env.*
 !.env.example
+!Client/Playground/.env.production
+!Client/Playground/.env.test
 *.log

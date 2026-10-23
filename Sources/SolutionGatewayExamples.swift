@@ -64,6 +64,8 @@ struct SolutionGatewayExample: Identifiable {
                 MODELDOCK_PY
 
                 """
+            case .image:
+                script = json(["model": "image", "prompt": "A quiet lakeside cabin at sunrise", "size": "1024x1024", "seed": 42, "n": 1, "response_format": "b64_json"], operation: role.gatewayOperation)
             case .text, .chat:
                 var messages: [[String: String]] = []
                 if role == .text { messages.append(["role": "system", "content": "Translate the user's text into \(deployment.draft.language). Return only the translation."]) }
@@ -71,6 +73,14 @@ struct SolutionGatewayExample: Identifiable {
                 script = json(["model": role.gatewayModel, "messages": messages, "max_tokens": 512, "stream": false, "chat_template_kwargs": ["enable_thinking": false]], operation: role.gatewayOperation)
             }
             values.append(.init(id: role.gatewayModel, title: role.rawValue, script: script))
+            if role == .image {
+                values.append(.init(id: "image-to-image", title: "图生图", script: header + """
+                # Upload one PNG, JPEG or WebP image. Higher strength redraws more.
+                : "${MODELDOCK_IMAGE_FILE:?Set MODELDOCK_IMAGE_FILE to the reference image}"
+                \(curl) --form-string 'model=image' --form "image=@${MODELDOCK_IMAGE_FILE}" --form-string 'prompt=A quiet lakeside cabin in winter' --form-string 'strength=0.75' --form-string 'size=1024x1024' --form-string 'response_format=b64_json' "$MODELDOCK_BASE_URL/images/edits"
+
+                """))
+            }
         }
         return values
     }

@@ -72,6 +72,9 @@ enum DownloadTaskChecks {
         defer { controller.pause() }
 
         var old = try seed("range"); old.received = 8000
+        let alias = root.appendingPathComponent("library-alias")
+        try fm.createSymbolicLink(at: alias, withDestinationURL: library)
+        try ConnectionChecks.require(DownloadRecovery.matches(old, listing: listing("range"), files: listing("range").files, root: alias), "A model library alias created a duplicate task")
         var duplicate = old; duplicate.id = UUID().uuidString; duplicate.received = 1
         controller.jobs = [duplicate, old]; controller.listing = listing("range"); controller.selected = Set(old.files.map(\.path))
         controller.save()

@@ -24,6 +24,7 @@ extension DownloadController {
         if job.state == .complete { return L10n.text("已完成") }
         if job.state == .queued { return L10n.text("等待开始") }
         if !isActive(job.id) { return L10n.text(job.state.rawValue) }
+        if retryStatuses[job.id] != nil { return L10n.text("等待自动续传") }
         switch transferPhases[job.id] {
         case .checking, .verifying: return L10n.text("校验中")
         case .connecting: return L10n.text("连接中")

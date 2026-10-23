@@ -5,6 +5,7 @@ struct BenchmarkTarget: Identifiable, Hashable, Codable {
     var id: String; var engineID: String; var engineName: String; var engineVersion: String
     var modelID: String?; var modelName: String; var apiModel: String
     var port: Int; var pid: Int32?; var birth: UInt64?; var context: Int?
+    var operation: BenchmarkOperation? = nil
 }
 struct BenchmarkResult: Identifiable, Codable {
     var id = UUID().uuidString; var date = Date()
@@ -13,6 +14,9 @@ struct BenchmarkResult: Identifiable, Codable {
     var firstOutput: Double?; var elapsed: Double
     var generationRate: Double?; var promptRate: Double?; var endToEndRate: Double?
     var peakMemory: UInt64?; var processCount: Int?; var rateSource: String
+    var audioSeconds: Double? = nil
+    var outputUnits: Int? = nil
+    var sampleDescription: String? = nil
 }
 
 struct StreamMetrics {
@@ -59,17 +63,16 @@ struct StreamMetrics {
     private static func rate(_ value: Any?) -> Double? { guard let value = (value as? NSNumber)?.doubleValue, value.isFinite, value > 0 else { return nil }; return value }
 }
 
-private actor PeakSampler {
+actor PeakSampler {
     var bytes: UInt64?; var count: Int?
     func add(_ sample: ProcessSample?) { if let sample { bytes = max(bytes ?? 0, sample.bytes); count = max(count ?? 0, sample.processes.count) } }
 }
 
 final class BenchmarkRunner: @unchecked Sendable {
-    private let session = URLSession(configuration: .ephemeral)
+    let session = URLSession(configuration: .ephemeral)
     func cancel() { session.invalidateAndCancel() }
     func run(target: BenchmarkTarget, tokens: Int, chip: String, apiKey: String = "", progress: @escaping @Sendable (String) -> Void) async throws -> BenchmarkResult {
         guard (1024...65535).contains(target.port), (8...512).contains(tokens), !target.apiModel.isEmpty else { throw LaunchError.message("请选择有效的模型服务和输出长度") }
-        var target = target
         if let pid = target.pid, let birth = target.birth, birth > 0, processStartTime(pid) != birth { throw LaunchError.message("服务进程已变化，请刷新后重新选择") }
         var modelRequest = URLRequest(url: URL(string: "http://127.0.0.1:\(target.port)/v1/models")!); modelRequest.timeoutInterval = 10
         if !apiKey.isEmpty { modelRequest.setValue("Bearer " + apiKey, forHTTPHeaderField: "Authorization") }
@@ -78,8 +81,7 @@ final class BenchmarkRunner: @unchecked Sendable {
             let object = (try? JSONSerialization.jsonObject(with: modelData)) as? [String: Any]
             let names = (object?["data"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }
             if !names.contains(target.apiModel) {
-                if target.modelID != nil && target.engineID != "ollama", let first = names.first { target.apiModel = first }
-                else { throw LaunchError.message("所选模型已不在此接口中，请刷新后重新选择") }
+                throw LaunchError.message("所选模型已不在此接口中，请刷新后重新选择")
             }
         }
         let peak = PeakSampler()
@@ -120,6 +122,7 @@ final class BenchmarkRunner: @unchecked Sendable {
         try metrics.flush(elapsed: elapsed())
         try Task.checkCancellation()
         guard metrics.done || metrics.finishReason else { throw LaunchError.message("服务响应提前中断，本次结果未保存") }
+        try target.validateProcess()
         let duration = elapsed()
         if let rootPID { await peak.add(await Task.detached { ResourceSampler.process(rootPID, birth: rootBirth) }.value) }
         var measured = target; measured.pid = pid; measured.birth = birth
@@ -136,6 +139,7 @@ final class PerformanceController: ObservableObject {
     @Published var running = false
     @Published var phase = ""
     @Published var message: String?
+    @Published var activeTarget: BenchmarkTarget?
     private var runner: BenchmarkRunner?
     private var task: Task<Void, Never>?
     private let file: URL
@@ -144,18 +148,24 @@ final class PerformanceController: ObservableObject {
         file = directory.appendingPathComponent("performance.json")
         records = (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode([BenchmarkResult].self, from: $0) } ?? []
     }
-    func measure(_ target: BenchmarkTarget, chip: String) {
+    func measure(_ target: BenchmarkTarget, chip: String, input: InstanceBenchmarkInput = .init()) {
         guard !running else { return }
-        running = true; message = nil; phase = "正在准备测量…"
+        running = true; activeTarget = target; selection = target.id; message = nil; phase = "正在准备测量…"
         let measurementID = UUID(); self.measurementID = measurementID
         let worker = BenchmarkRunner(); runner = worker; let limit = outputLimit; let key = apiKey
         task = Task { [weak self] in
             do {
-                let result = try await worker.run(target: target, tokens: limit, chip: chip, apiKey: key) { [weak self] value in Task { @MainActor in if self?.measurementID == measurementID && self?.running == true { self?.phase = value } } }
+                let progress: @Sendable (String) -> Void = { [weak self] value in Task { @MainActor in if self?.measurementID == measurementID && self?.running == true { self?.phase = value } } }
+                let result: BenchmarkResult
+                if target.operation == nil || target.operation == .chat {
+                    result = try await worker.run(target: target, tokens: limit, chip: chip, apiKey: key, progress: progress)
+                } else {
+                    result = try await worker.runOperation(target: target, input: input, chip: chip, apiKey: key, progress: progress)
+                }
                 guard let self else { return }
                 try self.add(result); self.phase = "测量完成"
             } catch { self?.message = Task.isCancelled ? "测量已取消" : error.localizedDescription; self?.phase = "" }
-            self?.running = false; self?.runner = nil; self?.task = nil; self?.measurementID = nil
+            self?.running = false; self?.runner = nil; self?.task = nil; self?.measurementID = nil; self?.activeTarget = nil
         }
     }
     func cancel() { task?.cancel(); runner?.cancel() }

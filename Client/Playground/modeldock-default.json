@@ -1,0 +1,35 @@
+{
+  "profiles": [
+    {
+      "id": "modeldock-local-image",
+      "name": "ModelDock 本地生图 · Qwen Image",
+      "description": "仅连接本机 Qwen Turbo 验证服务。支持图片评论、参考图和局部遮罩编辑。每次一张参考图，PNG 无损输出。尺寸每边 256–2048、32 的倍数；自动编辑保持原图尺寸。标准 8 步，不提供虚假的高质量档位。",
+      "provider": "openai",
+      "baseUrl": "http://127.0.0.1/modeldock/v1/",
+      "model": "modeldock/Qwen/Qwen-Image-2.1-Turbo",
+      "apiKey": "modeldock-loopback",
+      "apiMode": "images",
+      "isDefault": true,
+      "timeout": 900,
+      "streamImages": false,
+      "responseFormatB64Json": true
+    },
+    {
+      "id": "modeldock-local-chat",
+      "name": "ModelDock 本地对话 · Splash",
+      "provider": "openai",
+      "baseUrl": "http://127.0.0.1/modeldock/v1/",
+      "model": "modeldock-local-chat",
+      "apiKey": "modeldock-loopback",
+      "apiMode": "responses",
+      "timeout": 300,
+      "streamImages": false,
+      "reasoningEffort": "none"
+    }
+  ],
+  "agent": {
+    "apiConfigMode": "hybrid",
+    "textProfileId": "modeldock-local-chat",
+    "imageProfileId": "modeldock-local-image"
+  }
+}

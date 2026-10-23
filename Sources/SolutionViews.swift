@@ -26,7 +26,7 @@ import AppKit
                             }.padding(.vertical, 6).contentShape(Rectangle()).tag(item.id).listRowSeparator(.hidden).accessibilityIdentifier("solution-" + item.id)
                         }
                     }.sidebarList()
-                    Text(verbatim: L10n.text("内置方案 · 固定模型版本")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                    Text(verbatim: L10n.text("内置方案 · 模型与服务可替换")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                     ScanStatus(store: store)
                 }.padding(SidebarMetrics.padding).frame(width: sidebarWidth).clipped().background(Theme.sidebar)
                 SidebarResizeHandle(store: store, width: sidebarWidth)
@@ -37,6 +37,9 @@ import AppKit
                     header
                     configurationSelector
                     Picker(L10n.text("解决方案"), selection: $controller.section) { ForEach(SolutionSection.allCases, id: \.self) { Text(verbatim: L10n.text($0.rawValue)).tag($0) } }.pickerStyle(.segmented).labelsHidden().fixedSize().padding(.top, 16).padding(.bottom, 20).accessibilityIdentifier("solution-sections")
+                    if controller.selectedID == "image-generation", [.overview, .configuration].contains(controller.section) {
+                        ImageSolutionEngineView(store: store, installer: store.installation).padding(.bottom, 20)
+                    }
                     switch controller.section {
                     case .overview: overview
                     case .configuration: configuration
@@ -102,7 +105,7 @@ import AppKit
                 VStack(alignment: .leading, spacing: 18) {
                     if record.state == .configured { SolutionRuntimeCard(store: store, controller: controller, record: record) }
                     else { deploymentProgress(record) }
-                    Text(verbatim: L10n.text("目标语言") + " · " + TranslationLanguages.title(record.draft.language)).font(.system(size: TypeScale.body))
+                    if record.solutionID != "image-generation" { Text(verbatim: L10n.text("目标语言") + " · " + TranslationLanguages.title(record.draft.language)).font(.system(size: TypeScale.body)) }
                     if record.state == .configured { SolutionGatewayCard(store: store, gateway: store.gateway, deployment: record) }
                 }
             } else { configurationEditor }
@@ -119,6 +122,7 @@ import AppKit
                 Text(verbatim: L10n.text("保存后更新此方案的接入地址配置；已有运行服务继续保留。"))
                     .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
+            if controller.selectedID != "image-generation" {
             HStack {
                 Text(verbatim: L10n.text("输入语言")).foregroundStyle(Theme.muted)
                 Picker(L10n.text("输入语言"), selection: Binding(get: { controller.draft.sourceLanguage ?? "auto" }, set: { var draft = controller.draft; draft.sourceLanguage = $0 == "auto" ? nil : $0; controller.setDraft(draft) })) {
@@ -135,6 +139,7 @@ import AppKit
                 Spacer()
             }
             Toggle(L10n.text("启用译文配音"), isOn: Binding(get: { controller.draft.speechOutput != false }, set: { var draft = controller.draft; draft.speechOutput = $0; controller.setDraft(draft) })).toggleStyle(.switch)
+            } else { ImageSolutionScopeView() }
             HStack {
                 Text(verbatim: L10n.text("配套模型与引擎")).font(.system(size: TypeScale.section, weight: .semibold))
                 Spacer()
@@ -145,7 +150,7 @@ import AppKit
                 }
             }
             if controller.roles.contains(where: SolutionRecommendations.usesBaseline) {
-                Text(verbatim: L10n.text("默认以 Qwen3.8-27B 为基准，优先复用本地匹配模型；轻量模型需手动选择。"))
+                Text(verbatim: L10n.text("Qwen3.8-27B 是默认推荐，可更换本地模型或复用已有兼容服务，无需重复下载。翻译效果可在方案中试用。"))
                     .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
             VStack(spacing: 0) {
@@ -177,6 +182,7 @@ import AppKit
     private func componentRow(_ role: SolutionRole) -> some View {
         let selection = try? controller.selection(role, draft: controller.draft, store: store)
         let local = selection?.modelID.flatMap { id in store.models.first { $0.id == id } }
+        let selectedService = selection?.serviceBinding.flatMap { _ in store.services.records.first { $0.id == selection?.serviceID } }
         let deployed = controller.latest.flatMap { record in
             record.draft == controller.draft && controller.usesCurrentRecommendations(record) ? record.components.first { $0.role == role } : nil
         }
@@ -185,10 +191,10 @@ import AppKit
         let installingEngine = controller.latest?.state == .installing && controller.latest?.progress?.engineID == selection?.engineID
         return VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 12) {
-                Image(systemName: [.asr, .tts].contains(role) ? "waveform" : role == .vision ? "photo" : "cube").font(.system(size: 20)).foregroundStyle(Theme.muted).frame(width: 40, height: 40).background(Theme.line, in: RoundedRectangle(cornerRadius: 9))
+                Image(systemName: [.asr, .tts].contains(role) ? "waveform" : [.vision, .image].contains(role) ? "photo" : "cube").font(.system(size: 20)).foregroundStyle(Theme.muted).frame(width: 40, height: 40).background(Theme.line, in: RoundedRectangle(cornerRadius: 9))
                 VStack(alignment: .leading, spacing: 5) {
                     Text(verbatim: L10n.text(role.rawValue)).font(.system(size: TypeScale.body, weight: .semibold))
-                    Text(verbatim: local?.name ?? selection?.repository.components(separatedBy: "/").last ?? L10n.text("请重新选择模型"))
+                    Text(verbatim: selection?.serviceBinding?.model ?? local?.name ?? selection?.repository.components(separatedBy: "/").last ?? L10n.text("请重新选择模型"))
                         .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(1)
                     Text(verbatim: store.engines.first { $0.id == selection?.engineID }?.name ?? "—").font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
                     if SolutionRecommendations.usesBaseline(role) {
@@ -197,10 +203,18 @@ import AppKit
                     }
                 }
                 Spacer(minLength: 6)
-                Text(verbatim: L10n.text(installingEngine ? "正在安装引擎" : job?.state.rawValue ?? (local == nil ? "待下载" : "可复用"))).font(.system(size: TypeScale.callout)).foregroundStyle(local == nil ? Theme.muted : Theme.successText)
+                Text(verbatim: L10n.text(selectedService.map { "复用服务 · " + String($0.port) } ?? (installingEngine ? "正在安装引擎" : job?.state.rawValue ?? (local == nil ? "待下载" : "可复用")))).font(.system(size: TypeScale.callout)).foregroundStyle(local == nil && selectedService == nil ? Theme.muted : Theme.successText)
                 Menu(L10n.text("更换")) {
+                    let services = controller.serviceChoices(role, store: store)
+                    if !services.isEmpty {
+                        Section(L10n.text("复用已有兼容服务")) {
+                            ForEach(services) { item in Button(serviceChoiceTitle(item, store: store)) { choose(role, value: item.id) } }
+                        }
+                        Divider()
+                    }
                     Button(L10n.text("优先复用推荐模型")) { choose(role, value: nil) }
                     Button(L10n.text("下载方案默认模型")) { choose(role, value: "download") }
+                    if role == .image { Button("Turbo · Heretic MLX") { choose(role, value: "heretic") } }
                     if SolutionRecommendations.usesBaseline(role) { Button(L10n.text("选择轻量备选模型")) { choose(role, value: SolutionRecommendations.lightweightChoice) } }
                     if let inspect { Button(L10n.text("管理模型文件")) { store.showModelFile(inspect) } }
                     Divider()
@@ -247,9 +261,9 @@ import AppKit
                     }
                     Spacer(minLength: 4)
                     if controller.startingIDs.contains(record.id) { ProgressView().controlSize(.small) }
-                    Button(L10n.text(record.state == .configured ? runtime.allReady ? "打开实时翻译" : runtime.actionTitle : "继续准备并启动")) {
+                    Button(L10n.text(record.state == .configured ? runtime.allReady ? (record.solutionID == "image-generation" ? "打开生图" : "打开实时翻译") : runtime.actionTitle : "继续准备并启动")) {
                         if record.state == .configured {
-                            if runtime.allReady { controller.section = .overview }
+                            if runtime.allReady { store.openSolutionExperience(record) }
                             else { controller.activate(record, store: store) }
                         } else { controller.edit(record.id, store: store); controller.install(store: store, launchWhenReady: true) }
                     }.buttonStyle(AccentButton()).disabled(controller.preparingID != nil || controller.startingIDs.contains(record.id) || !controller.removingIDs.isEmpty || store.scanning).accessibilityIdentifier("solution-primary-action")
@@ -282,14 +296,16 @@ import AppKit
     }
     private var overview: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(verbatim: L10n.text("使用麦克风逐段识别和翻译，显示实时字幕；也可以翻译音频文件。速度取决于本机模型和语音长度。" )).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-            Text(verbatim: L10n.text("方案会固定模型版本，检查配套文件，安装缺少的基座，并配置独立端口。"))
+            Text(verbatim: L10n.text(controller.selectedID == "image-generation" ? "输入提示词生成图片；支持进度、取消、种子和 PNG 保存。模型加载和生成速度取决于本机配置。" : "使用麦克风逐段识别和翻译，显示实时字幕；也可以翻译音频文件。速度取决于本机模型和语音长度。" )).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: L10n.text("方案模型与已有兼容服务均可替换。选择下载时固定模型版本；复用服务时保留原端口和参数。"))
                 .font(.system(size: TypeScale.body)).fixedSize(horizontal: false, vertical: true)
             if controller.latest == nil { Button(L10n.text("配置方案")) { controller.section = .configuration }.buttonStyle(.bordered) }
             if let record = controller.latest, record.state == .configured {
                 SolutionRuntimeCard(store: store, controller: controller, record: record)
-                RealtimeTranslationView(store: store, controller: store.realtimeTranslation, deployment: record)
-                DisclosureGroup(L10n.text("音频文件翻译")) { SolutionTrialView(store: store, trial: store.solutionTrial, deployment: record).padding(.top, 12) }
+                SolutionExperienceEntry(store: store, record: record)
+                if record.solutionID == "image-generation" {
+                    SolutionGatewayCard(store: store, gateway: store.gateway, deployment: record)
+                }
             }
         }
     }
@@ -332,7 +348,7 @@ import AppKit
                                     Button(L10n.text("删除实例"), role: .destructive) { ui.removal = record }.buttonStyle(.bordered)
                                 }
                                 ForEach(controller.services(record, store: store)) { spec in
-                                    HStack { Text(verbatim: spec.modelName).lineLimit(1); Spacer(); Button(L10n.text("查看详情")) { store.showService(spec) }.buttonStyle(PlainAction()) }
+                                    HStack { Text(verbatim: store.serviceDisplayName(spec)).lineLimit(1); Spacer(); Button(L10n.text("查看详情")) { store.showService(spec) }.buttonStyle(PlainAction()) }
                                         .font(.system(size: TypeScale.callout))
                                 }
                             }.padding(12).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))

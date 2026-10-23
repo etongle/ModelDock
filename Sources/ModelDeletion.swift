@@ -65,12 +65,47 @@ enum OllamaModelManagement {
 enum ModelFileSafety {
     static func removalURL(_ model: LocalModel, models: [LocalModel], roots: [String]) throws -> URL {
         var path = URL(fileURLWithPath: model.removalPath).standardizedFileURL
-        if models.contains(where: { $0.id != model.id && EngineMaintenance.contains(path.path, $0.path) }) {
+        // A Splash selection is a symlink. Never replace it with its resolved
+        // assembly directory; several aliases can point to that directory.
+        if model.splashSelection == nil && models.contains(where: { $0.id != model.id && EngineMaintenance.contains(path.path, $0.path) }) {
             path = URL(fileURLWithPath: model.path).standardizedFileURL
         }
         guard path.pathComponents.count > 4, !roots.contains(path.path), path.path != Scanner.defaultRoot.path,
               !["hub", "hf-cache", "models", "cache", "ollama", "lmstudio", "manifests", "blobs"].contains(path.lastPathComponent) else { throw LaunchError.message("这个位置包含多个模型，请选择具体模型文件") }
         return path
+    }
+    static func isLink(_ url: URL) -> Bool { (try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)) != nil }
+    static func references(_ path: String, within removal: URL) -> Bool {
+        guard path.hasPrefix("/") else { return false }
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        // Keep the named link and its resolved parent as well as the final file.
+        // A snapshot's symlink may resolve to a blob outside the directory, but
+        // removing the snapshot still breaks assemblies that refer through it.
+        let candidates = [url.path, url.deletingLastPathComponent().resolvingSymlinksInPath().appendingPathComponent(url.lastPathComponent).path, url.resolvingSymlinksInPath().path]
+        let roots = isLink(removal) ? [removal.standardizedFileURL.path] : [removal.standardizedFileURL.path, removal.resolvingSymlinksInPath().path]
+        return roots.contains { root in candidates.contains { EngineMaintenance.contains(root, $0) } }
+    }
+    static func dependencies(_ model: LocalModel, removal: URL, models: [LocalModel]) -> [String] {
+        // Moving the link itself does not remove its target or shared weights.
+        if model.splashSelection != nil && isLink(removal) { return [] }
+        func affected(_ path: String) -> Bool { references(path, within: removal) }
+        var users = Set<String>()
+        for other in models {
+            if other.id != model.id && affected(other.path) { users.insert(other.name) }
+            for assembly in other.preparedSplashModels {
+                let files = jsonFile(URL(fileURLWithPath: assembly.path).appendingPathComponent("model.json"))?["files"] as? [String: [String: Any]] ?? [:]
+                if files.values.compactMap({ $0["path"] as? String }).contains(where: affected) {
+                    users.insert("Splash · " + assembly.name + " · " + (assembly.splashVision == "none" ? L10n.text("仅文本") : L10n.text("文本 / 图片 / 文件")))
+                }
+            }
+            if let config = other.strataConfig, let files = jsonFile(URL(fileURLWithPath: config))?["files"] as? [String: [String: Any]], files.values.compactMap({ $0["path"] as? String }).contains(where: affected) { users.insert("Strata · " + other.name) }
+            if other.id != model.id {
+                let paths = [other.association?.draftPath, other.association?.projectorPath, other.association?.strataAssembly, other.companion].compactMap { $0 }
+                if paths.contains(where: affected) { users.insert(other.name) }
+                if other.kind == .image && ImageModelPolicy.requiredFiles(URL(fileURLWithPath: other.path)).contains(where: { affected(URL(fileURLWithPath: other.path).appendingPathComponent($0).path) }) { users.insert(other.name) }
+            }
+        }
+        return users.sorted()
     }
     static func used(_ model: LocalModel, removal: URL, services: [ServiceSpec], external: [ObservedService], models: [LocalModel] = [], includingStopped: Bool = false) -> Bool {
         let resolved = removal.resolvingSymlinksInPath().path
@@ -104,7 +139,7 @@ enum ModelFileSafety {
             }
             guard !spec.modelPath.isEmpty else { return false }
             let path = URL(fileURLWithPath: spec.modelPath).resolvingSymlinksInPath().path
-            return spec.modelID == model.id || EngineMaintenance.contains(resolved, path) || EngineMaintenance.contains(path, URL(fileURLWithPath: model.path).resolvingSymlinksInPath().path)
+            return model.matchesID(spec.modelID) || EngineMaintenance.contains(resolved, path) || EngineMaintenance.contains(path, URL(fileURLWithPath: model.path).resolvingSymlinksInPath().path)
         } || external.contains { service in service.models.contains { name in
             (name.hasPrefix("/") && EngineMaintenance.contains(resolved, URL(fileURLWithPath: name).resolvingSymlinksInPath().path)) || (model.repository != nil && name == model.repository)
         } }
@@ -136,16 +171,21 @@ extension AppStore {
                     let path = try ModelFileSafety.removalURL(model, models: models, roots: inventory?.roots ?? [])
                     let source = URL(fileURLWithPath: model.path).resolvingSymlinksInPath()
                     @MainActor func checkUse() throws {
+                        let users = ModelFileSafety.dependencies(model, removal: path, models: self.models)
+                        if !users.isEmpty { throw LaunchError.message(L10n.text("这些文件仍被其他模型或启动登记引用，已阻止删除。请先更换关联组件或移除相应登记：") + "\n" + users.joined(separator: "\n")) }
                         if self.solutions.deployments.contains(where: { $0.components.contains { $0.modelID == model.id || $0.modelPath.map { DownloadController.overlaps($0, path.path) } == true } }) { throw LaunchError.message("方案实例仍引用此模型，请先移除关联或更换模型") }
+                        if self.engineConfigurations.values.compactMap(\.draftPath).contains(where: { ModelFileSafety.references($0, within: path) }) { throw LaunchError.message("基座配置仍引用此配套模型，不能一并清理") }
                         if self.strata.uses(source.path) || self.strata.uses(path.path) { throw LaunchError.message("此模型位置正在准备 Strata 配套组件，请等待操作完成。") }
                         if self.downloads.hasWriter(affecting: path.path) { throw LaunchError.message("此模型目录正在下载，请先暂停对应下载任务") }
                         guard !ModelFileSafety.used(model, removal: path, services: self.services.records, external: self.services.external, models: self.models) else { throw LaunchError.message("此模型文件正在被服务使用，请先停止使用它的服务") }
                     }
                     try checkUse()
                     guard let identity = FileIdentity.read(path.path) else { throw LaunchError.message("模型文件已移动或删除，请重新扫描") }
-                    cleanup = removalCleanup(model: model, removedPath: path.path)
+                    let linkOnly = ModelFileSafety.isLink(path)
+                    // Removing a selection link must not erase shared service/client state.
+                    if !linkOnly { cleanup = removalCleanup(model: model, removedPath: path.path) }
                     let alert = NSAlert(); alert.messageText = L10n.text("将 \(model.name) 移至废纸篓？")
-                    alert.informativeText = L10n.text("\(path.path)\n\n其他模型及共享的配套文件保留。可以从废纸篓恢复。") + cleanupNote()
+                    alert.informativeText = path.path + "\n\n" + L10n.text(linkOnly ? "仅移除此启动登记链接；原始权重、草稿、其他登记和服务配置保留。" : "仅移除此位置的文件。已检查其他模型和启动登记的引用；可以从废纸篓恢复。") + cleanupNote()
                     alert.alertStyle = .warning; alert.addButton(withTitle: L10n.text("移至废纸篓")); alert.addButton(withTitle: L10n.text("取消")); alert.buttons[1].keyEquivalent = "\r"; alert.buttons[0].keyEquivalent = ""
                     guard alert.runModal() == .alertFirstButtonReturn else { return }
                     await services.refresh()

@@ -32,17 +32,19 @@ The public packages currently use ad-hoc signing; automatic updating does not ma
 
 ### Solutions
 
-Open **Solutions** (⌘6). The sidebar currently shows only **Multilingual live translation**, with the existing **Overview / Configuration / Instances / Maintenance** layout. Creation entries for older recipes are hidden; their saved configurations and services remain under **Maintenance → Saved configurations for hidden solutions**.
+Open **Solutions** (⌘6). The sidebar shows **Multilingual live translation** and **Local image generation**, with the existing **Overview / Configuration / Instances / Maintenance** layout. Creation entries for older recipes are hidden; their saved configurations and services remain under **Maintenance → Saved configurations for hidden solutions**.
 
 ![Translation configuration](assets/images/en-solutions.png)
 
 In **Configuration**, select the source language (or Auto detect), target language, optional translated speech, and component models. Targets are English, Chinese, French, Portuguese, German, Spanish, Italian, Japanese, Korean and Russian. These settings are independent of the app language. ASR and optional TTS use MLX Audio; the translator defaults to an installed matching Qwen3.8 model or the pinned Qwen3.8 default. T3PO requires a different Chinese–English interpreting protocol and is excluded from this workflow. Light/Balanced/High quality presets select speech model sizes, not measured speed or quality guarantees.
 
+**In 0.10.4:** Qwen3.8 is a default recommendation, not a required translator. Use **Replace model or service…** beside the translation component to bind a compatible existing managed service directly, or use **Edit configuration → Change → Reuse a compatible service**. Entries identify the API model, engine, port and state, so two instances of the same model remain distinct. Running services are reused without restart or repeated downloads. Stopped saved services can be started by the solution. A replacement retains the solution ID/URL and the other components; the previously used service remains independently manageable. Compatibility checks exclude image generators, auxiliary models and known incompatible T3PO protocols. Translation quality should still be checked with the solution trial.
+
 **Install and start** installs missing engines, resumes matching downloads, verifies files, configures ports and starts components. Download details remain in **Downloads & Import**. **Check and start solution** also starts stopped reused service configurations and checks each component before exposing a ready gateway. A failure identifies the component and retains the other services. Existing audio helpers are reloaded when idle to apply the corrected audio-format handling.
 
 For a saved configuration, click **Edit configuration**. Change languages, component models or speech output, then **Save configuration** or **Save and start**. The same solution URL is retained. Previous running model services remain manageable in Services. **Instances → Use this configuration** selects an older translation deployment.
 
-In **Overview → Live microphone translation**, click **Start microphone translation** and grant macOS microphone permission. Original and translated captions appear after pauses or roughly six-second segments; this is segmented translation, not word-by-word simultaneous interpretation. Audio is processed by the local solution services without saving microphone recordings. If processing falls behind, capture pauses and asks you to wait and repeat the current segment. **Read translations aloud** pauses capture during playback to avoid recording its own speech. Headphones are still useful when other audio is playing.
+In **Overview → Try solution → Open conversation**, click **Microphone** and grant macOS microphone permission. Original and translated captions appear after pauses or roughly six-second segments; this is segmented translation, not word-by-word simultaneous interpretation. Audio is processed by the local solution services without saving microphone recordings. If processing falls behind, capture pauses and asks you to wait and repeat the current segment. **Read translations aloud** pauses capture during playback to avoid recording its own speech. Headphones are still useful when other audio is playing.
 
 **Audio file translation** accepts a short, clear recording up to 20 MiB and shows the transcript, translation and optional reference-voice WAV. French and Portuguese output were tested with real models and synthetic English audio; other language/device combinations should be tried with your own short sample.
 
@@ -96,6 +98,10 @@ Model cards in the engine configuration and **Model Files** show instance counts
 
 Disabling an engine hides it from normal selection. Existing files and service records remain available for management.
 
+### Official Splash recommendations
+
+**In 0.10.4:** open **Engines → Splash → Configuration** for official Qwen3.8-27B, Qwen3.6-35B-A3B, Qwen3.8-Flash-Next and Ternary Bonsai 2 options. Pick a supported MLX/GGUF quantization, then **Prepare and start…** to review the command before launching. Splash pairs its draft, tokenizer and available vision components. The ModelDock recommendation entry uses the newer upstream loader (Splash 1.3+); Flash-Next requires Splash 1.4+ and uses GGUF, not MLX. Official Splash requires M3 or newer and macOS 26.4+. Four-bit examples require at least 36 GB RAM (48 GB recommended); smaller GGUF options may fit 24 GB. The engine makes the final memory check. Recommendations follow the [official 1.4 model examples](https://github.com/incoai/splash/blob/1.4.0/README.md#models), checked October 22, 2026; listing a model does not claim a completed inference test on this Mac.
+
 ### Strata on Apple Silicon
 
 Strata's Metal backend is experimental and requires **macOS 15+**, Apple Silicon and Xcode Command Line Tools. In **Engines → Strata → Install & Update**, review the pinned official source revision and compile it. Installation builds the Metal runtime and image encoder in an independent environment; it does not automatically download the large model weights.
@@ -123,7 +129,7 @@ mlx-community/Qwen3.8-27B-4bit
 https://huggingface.co/mlx-community/Qwen3.8-27B-4bit
 ```
 
-A bare `owner/repo` defaults to Hugging Face. Full Hugging Face/ModelScope repository URLs and supported model-file direct links are also accepted. Restricted repositories require the correct access permission and token. The access token field is not saved to disk.
+A bare `owner/repo` defaults to Hugging Face. Full Hugging Face/ModelScope repository URLs and supported model-file direct links are also accepted. Restricted repositories require the correct access permission and token. A temporary task token is not persisted in task files.
 
 Click **Resolve URL**, inspect the listing, and choose the files:
 
@@ -164,6 +170,8 @@ The task's trash action removes its record and preserves both completed and part
 ## 4. Import and inspect local models
 
 In **Model Files**, use **+** to add a local file or model directory. Imported files remain at their existing location. You can filter by engine or by main/auxiliary model, search by name or path, and select a card anywhere within its area.
+
+Model details list only compatible enabled engines, including relevant installation/import or missing-file status. When none match, they show **No compatible engine available**.
 
 ![Model files and compatible launch options](assets/images/en-models.png)
 
@@ -247,6 +255,18 @@ Clicking inside the panel keeps it usable; clicking another window or desktop ar
 
 Performance values labeled as measurements come from an actual benchmark or supported service logs. Unknown measurements remain unavailable; do not compare startup estimates with generation throughput.
 
+Service display names now follow the associated local model file. Legacy command instances use an exact repository reference and pinned revision when available. API model IDs are shown separately and remain unchanged; instance IDs, ports, launch settings and gateway routing are preserved.
+
+Filter the **Services** sidebar by **All / Started / Stopped**, together with an engine filter. Started includes loading and stopping instances; Stopped includes failed configurations whose processes have exited. Discovered external endpoints appear in Started only when ready. The list updates when status changes. Direct instance links reveal their destination if a filter would hide it; **Clear filters** restores the full list. Filtering does not start or stop services.
+
+### Test an individual service instance
+
+Open **Services → select an instance → Instance performance → Performance test**. The same action is available on an engine’s service instance cards. Start the service and wait until it is ready before testing; stopped instances still show saved results. If an endpoint exposes several models, select the exact model first.
+
+Text generation measures first-output latency (including reasoning), engine-reported generation speed when available, total time and sampled peak process memory. Choose the same 64/128/256-token limit when comparing instances. Without reported token counts, speed stays unavailable. Speech recognition uses a short audio file; speech synthesis uses English test text, with reference audio and its transcript required for Base models. Speech results show audio duration and a real-time multiplier (audio duration / elapsed time; higher is faster). Image tests use one fixed prompt and seed 42; embedding tests report latency and returned dimensions.
+
+History belongs to the exact service instance and API model, so two instances serving the same model do not share results. Tests call the instance directly and do not change its launch configuration. Only one benchmark runs at a time. Cancelled or failed tests are not saved; non-streaming services may continue processing a submitted request after cancellation. Audio, transcripts, access keys and generated media are not stored in benchmark history. Initial loading, caching and other requests can affect measurements.
+
 **Gateway Requests** lists requests made through the gateway: per-model requests, failures, input/output tokens and average time, plus recent requests. Only this metadata is recorded, never request or reply content.
 
 The trash icon on each **Measurement history** row deletes that record. When records of deleted models remain, **Clean up deleted models** appears next to the heading; if a model is on a disconnected drive, connect it before cleaning up.
@@ -281,3 +301,32 @@ Engine logs and third-party client error text may remain in the language produce
 Manager state remains in `~/Library/Application Support/ModelManager` to preserve existing installations. Model files stay in their chosen library/import locations. Distribution packages and screenshots do not include personal state, credentials, or model weights.
 
 See [licensing](LICENSING.md) for the noncommercial license and third-party boundaries.
+
+
+### Local image generation
+
+Open **Solutions → Local image generation → Configuration**. The recommended-engine card shows the installed MFLUX version and status and offers one-click runtime installation with logs. Model downloads use the shared queue; compatible installed models and services can be reused. The default complete Qwen-Image-2.1-Turbo snapshot is about 32.45 GB. The Heretic option still needs full inference validation.
+
+Once ready, choose **Open image generation** or **Open GPT Image Playground** in Overview. The browser client automatically uses the current solution's image service and an available running local chat service that accepts images and text. No manual API URL or key is needed. Without a suitable chat service, Gallery still supports generation and editing; start a compatible chat service and reopen the solution for Agent conversations. The real gateway key remains inside the local adapter, outside the webpage.
+
+Continue describing edits in chat, or click **Edit image** below a message. **Edit output** in cards and details also opens the mask editor directly. Paint the area to change, save, then enter your instruction. Canvas comments and text describing an area do not create a pixel mask. Follow-ups carry reference images; masked output keeps every unselected pixel identical to the reference, avoiding repeated full-frame redraws. Existing blurry outputs are not restored: begin again from the clear original. The selected region still depends on the model.
+
+Preset ratios and custom dimensions support 256–2048 pixels per side, multiples of 32 and an aspect ratio up to 4:1. Auto defaults new images to 1024×1024 and preserves reference dimensions for edits. Masked edits require the source dimensions. Output is lossless PNG with the Turbo standard 8 steps; generation progress follows actual sampling steps. Larger dimensions do not guarantee recovered detail. Noct-Q, Viggle and multiple references are not included.
+
+On October 23, 2026, a real local 1536×864 masked edit retained its source dimensions and changed none of the 1,275,660 unselected pixels. Browser conversations and automatic solution configuration were also verified; this does not establish quality or speed on other hardware. The stable solution gateway still exposes `model: image` at `/images/generations` and `/images/edits`; Playground mask editing connects to the selected image service through the local adapter.
+
+### Raw Qwen3 weights and prepared Splash configurations
+
+Original Qwen3 BF16 Safetensors with standard `Qwen3ForCausalLM` configuration can run directly through MLX-LM 0.32.0 or later. ModelDock checks the architecture and quantization metadata before offering this path. On this machine, `NiuTrans/LMT-60-8B` translated “Good morning” into “早上好。” using its downloaded original weights, with no conversion. If its compatible engine is disabled, model details explain this and link to Global engine settings.
+
+**Splash launch configurations** groups text-only and multimodal options under the selected model source. Records with the same physical component files appear together, with a running-service count and the draft name. **View preparation records** opens the individual records for inspection or removal. Grouping does not remove files, records or services. The model-file page describes available configurations; the service page shows the components actually selected for that service.
+
+### Solution conversations and image Playground
+
+Live translation opens its native conversation window from **Overview → Try solution**. Each instance keeps its own conversation. Successive text requests include recently completed translation pairs; failures are excluded. Microphone and audio-file requests show originals and translations in order. Closing the window stops microphone capture while submitted work continues; the conversation remains until app exit. **New conversation** does not change models, engines or services.
+
+Image solutions use GPT Image Playground with the current image service and available chat service configured automatically. Conversations, references and outputs stay in the current browser and can be reopened. Use the same local address and browser to retain access to that history. Application updates preserve models and services; restart an older image service once to load the new mask and reference support.
+
+### Global Hugging Face token and model sources
+
+Save the global Hugging Face token in **Settings → Downloads & Import**. Credentials are stored in macOS Keychain and reused for search, version checks and resumed downloads; a temporary task token takes priority. For 401/403 failures, reauthorize from the task and continue while preserving complete and resumable files. The token still needs access to the repository. Tasks and model details link to their Hugging Face source. Model checks distinguish a newer revision, matching revision with missing files, complete local files and an unknown source; enter a repository URL when needed. An unknown source is not treated as up to date.

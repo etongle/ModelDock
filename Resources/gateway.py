@@ -198,7 +198,7 @@ def solution_bindings(config, solution):
 
 
 def solution_route(config, solution, path, alias):
-    accepted = {'/v1/audio/transcriptions': ['asr'], '/v1/audio/speech': ['tts'],
+    accepted = {'/v1/audio/transcriptions': ['asr'], '/v1/audio/speech': ['tts'], '/v1/images/generations': ['image'], '/v1/images/edits': ['image'],
                 '/v1/chat/completions': ['translation', 'chat', 'vision'],
                 '/v1/completions': ['translation', 'chat'], '/v1/responses': ['translation', 'chat', 'vision']}.get(path, [])
     bindings = solution_bindings(config, solution)
@@ -256,7 +256,7 @@ class Gateway(BaseHTTPRequestHandler):
             if path == '/health':
                 self.json_response(200, {'status': 'ready', 'instance': config['instance'], 'schema': 1,
                                          'pid': os.getpid(), 'birth': identity.mm_process_start_time(os.getpid()),
-                                         'features': ['solution_routes']}); return
+                                         'features': ['solution_routes', 'image_solution_routes', 'image_edit_routes']}); return
             if path == '/gateway/status':
                 with stats_lock:
                     value = dict(stats)
@@ -341,6 +341,8 @@ class Gateway(BaseHTTPRequestHandler):
                     needed.add('audio')
             if path in ['/v1/audio/transcriptions', '/v1/audio/translations']:
                 needed.add('audio')
+            if path == '/v1/images/edits':
+                needed.add('image')
             route = solution_route(config, solution, path, alias) if solution is not None else next((r for r in config['routes'] if r['alias'] == alias and r.get('enabled', True)), None)
             if not route:
                 self.error(404, '模型未注册到网关。', 'model_not_found'); return

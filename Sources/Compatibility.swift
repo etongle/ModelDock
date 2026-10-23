@@ -33,6 +33,12 @@ extension Engine {
 }
 
 extension LocalModel {
+    // Missing files affect readiness, not which engine formats are relevant.
+    func supportsEngineFormat(_ engine: Engine) -> Bool {
+        var candidate = self
+        candidate.complete = true
+        return candidate.compatibility(with: engine).level != .unsupported
+    }
     var needsPrism: Bool {
         let label = (name + " " + path).lowercased().replacingOccurrences(of: "_", with: "-")
         return prismRequired == true || format.contains("PQ2") || format.contains("PTQ1") || label.contains("bonsai-2") || label.contains("bonsai 2") || label.contains("prism-fork-required")
@@ -45,6 +51,7 @@ extension LocalModel {
         return nil
     }
     var usageTitle: String {
+        if NativeTensorPolicy.supports(self) { return "Qwen3 原始权重 · MLX-LM" }
         if kind == .image { return "图片生成 · MFLUX" }
         if kind == .draft { return "草稿加速组件 · 不能单独运行" }
         if kind == .adapter { return "附属适配器 · 不能单独运行" }
@@ -60,6 +67,7 @@ extension LocalModel {
         }
     }
     var usageExplanation: String {
+        if NativeTensorPolicy.supports(self) { return "推荐 MLX-LM 0.32.0 或更新版本，可直接加载这套 Qwen3 BF16 原始权重，无需转换或重复下载。" }
         if kind == .image { return "图片生成模型需要完整的主权重、文本编码器、VAE 和处理配置，使用 MFLUX；不能交给聊天模型引擎加载。" }
         if kind == .draft { return "DFlash2 与匹配的主模型配合做推测解码，使用主模型 tokenizer；不能作为聊天服务或普通 MLX-LM 模型单独加载。" }
         if kind == .adapter { return "适配器需要匹配原始基座和加载方式，不能作为独立主模型启动。" }
@@ -87,6 +95,9 @@ extension LocalModel {
         if strataConfig != nil { return .init(level: .unsupported, reason: "这是 Strata 配套模型配置，请使用 Strata Metal；原始 GGUF 权重按其架构适配其他引擎。") }
         guard complete else { return .init(level: .incomplete, reason: "先补齐或修复模型文件。") }
         guard kind != .adapter else { return .init(level: .unsupported, reason: "附属适配器需要匹配基座，不能单独启动服务。") }
+        if NativeTensorPolicy.supports(self) {
+            return .init(level: engine.kind == .mlx ? .direct : .unsupported, reason: "MLX-LM 0.32.0 或更新版本可直接加载 Qwen3 BF16 Safetensors；使用文本服务。")
+        }
         if engine.kind == .splash, let prepared = preparedForSplash(), splashSelection == nil { return prepared.compatibility(with: engine) }
         if splashSelection != nil {
             guard engine.kind == .splash else { return .init(level: .unsupported, reason: "此目录是 Splash 组合组件，原始 MLX / GGUF 权重可供其他匹配引擎使用。") }

@@ -60,7 +60,12 @@ struct SolutionRuntimeSnapshot {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(verbatim: L10n.text(component.role.rawValue)).font(.system(size: TypeScale.callout, weight: .medium))
-                            Text(verbatim: spec?.modelName ?? component.repository).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(2)
+                            Text(verbatim: component.serviceBinding?.model ?? spec?.modelName ?? component.repository).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).lineLimit(2)
+                            if component.role == .text || component.role == .image {
+                                Text(verbatim: L10n.text(component.role == .image ? "可替换为已安装的 Turbo 模型，或复用兼容生图服务。" : "可替换 · 不限定 Qwen3.8，兼容的已有服务也可复用"))
+                                    .font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted)
+                                SolutionReplacementMenu(store: store, controller: controller, record: record, component: component)
+                            }
                         }
                         Spacer(minLength: 4)
                         StateLabel(title: entry.phase.title, color: entry.phase == .ready ? .green : entry.issue != nil ? .orange : .gray)
@@ -78,7 +83,7 @@ struct SolutionRuntimeSnapshot {
             }
             if let error = record.error, !snapshot.allReady, !snapshot.issues.contains(error) { Text(verbatim: L10n.text(error)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.errorText).textSelection(.enabled) }
             if snapshot.allReady {
-                Text(verbatim: L10n.text("组件接口已就绪。开始翻译后显示实际识别和翻译结果。"))
+                Text(verbatim: L10n.text(record.solutionID == "image-generation" ? "图片服务已就绪，可在概览中输入提示词。" : "组件接口已就绪。开始翻译后显示实际识别和翻译结果。"))
                     .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
         }.padding(16).background(Theme.selection.opacity(0.55), in: RoundedRectangle(cornerRadius: 12)).accessibilityIdentifier("solution-runtime-status")
@@ -97,11 +102,18 @@ struct SolutionRuntimeSnapshot {
     func runtimeComponent(_ component: SolutionComponent, store: AppStore, deploymentID: String) -> SolutionComponentRuntime {
         func value(_ phase: SolutionComponentPhase, _ issue: String? = nil) -> SolutionComponentRuntime { .init(component: component, phase: phase, issue: issue) }
         guard store.engineEnabled(component.engineID) else { return value(.configuration, "方案需要的基座已禁用，请在全局引擎设置中启用") }
-        guard let model = store.models.first(where: { $0.id == component.modelID }), model.complete else { return value(.configuration, "所选模型已移动、不完整或基座已禁用，请重新选择") }
-        if component.role == .text, let issue = TranslationLanguages.modelIssue(model) { return value(.configuration, issue) }
+        let model = store.models.first(where: { $0.id == component.modelID })
+        if component.serviceBinding != nil {
+            if let issue = boundServiceIssue(component, store: store) { return value(.configuration, issue) }
+        } else {
+            guard let model, model.complete else { return value(.configuration, "所选模型已移动、不完整或基座已禁用，请重新选择") }
+            if component.role == .text, let issue = TranslationLanguages.modelIssue(model) { return value(.configuration, issue) }
+        }
         guard let spec = store.services.records.first(where: { $0.id == component.serviceID }) else { return value(.configuration, "服务配置已缺失，请重新配置") }
-        guard spec.engineID == component.engineID, model.matchesID(spec.modelID),
-              ModelInstancePolicy.paths(model).contains(where: { ModelInstancePolicy.samePath(spec.modelPath, $0) }) else { return value(.configuration, "服务与方案模型不匹配，请重新配置") }
+        if component.serviceBinding == nil {
+            guard let model, spec.engineID == component.engineID, model.matchesID(spec.modelID),
+                  ModelInstancePolicy.paths(model).contains(where: { ModelInstancePolicy.samePath(spec.modelPath, $0) }) else { return value(.configuration, "服务与方案模型不匹配，请重新配置") }
+        }
         switch store.services.status(spec) {
         case .running:
             if component.engineID == "audio" {
@@ -223,6 +235,10 @@ struct SolutionRuntimeSnapshot {
         selectedID = record.solutionID; selectedDeploymentID = id; editingID = id; section = .configuration
         var value = record.draft
         for component in record.components {
+            if let binding = component.serviceBinding, let spec = store.services.records.first(where: { $0.id == component.serviceID }) {
+                value.localChoices[component.role.rawValue] = SolutionServiceChoice.prefix + spec.id + "\n" + binding.model
+                continue
+            }
             guard let model = store.models.first(where: { $0.id == component.modelID }), component.role != .text || TranslationLanguages.modelIssue(model) == nil else { value.localChoices[component.role.rawValue] = nil; continue }
             value.localChoices[component.role.rawValue] = component.engineID + "\n" + model.id
         }
@@ -233,7 +249,10 @@ struct SolutionRuntimeSnapshot {
         guard let index = deployments.firstIndex(where: { $0.id == id }), !startingIDs.contains(id) else { throw LaunchError.message("请等待当前方案操作完成") }
         let before = deployments, old = deployments[index]
         var next = components.map { value in
-            old.components.first { $0.role == value.role && $0.engineID == value.engineID && $0.modelID == value.modelID && $0.modelPath == value.modelPath && value.modelID != nil } ?? value
+            if let previous = old.components.first(where: { $0.role == value.role && $0.engineID == value.engineID && $0.modelID == value.modelID && $0.modelPath == value.modelPath && value.modelID != nil && $0.serviceBinding == value.serviceBinding && (value.serviceID == nil || $0.serviceID == value.serviceID) }) { return previous }
+            var result = value
+            if let sid = value.serviceID, let previous = old.components.first(where: { $0.serviceID == sid }) { result.ownsConfiguration = previous.ownsConfiguration }
+            return result
         }
         for previous in old.components where !next.contains(where: { $0.serviceID != nil && $0.serviceID == previous.serviceID }) {
             guard let sid = previous.serviceID,

@@ -21,6 +21,10 @@ enum SolutionTrialConnection: String, CaseIterable { case gateway = "方案网�
     func model(_ role: SolutionRole, spec: ServiceSpec, store: AppStore) throws -> String {
         if connection == .gateway { return role.gatewayModel }
         let reported = store.services.reportedModels[spec.port] ?? []
+        if let binding = deployment.components.first(where: { $0.role == role && $0.serviceID == spec.id })?.serviceBinding {
+            guard binding.matches(spec), reported.contains(binding.model) else { throw LaunchError.message("所选服务未提供已绑定的模型，请检查服务或重新选择。") }
+            return binding.model
+        }
         let model = store.models.first { $0.id == spec.modelID }
         if let exact = reported.first(where: { $0 == spec.modelPath || $0 == spec.modelName || $0 == model?.repository }) { return exact }
         guard reported.count == 1, let only = reported.first else { throw LaunchError.message("方案模型或服务配置已变化，请修复方案") }

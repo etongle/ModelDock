@@ -40,7 +40,7 @@ enum DownloadRecovery {
     }
     static func matches(_ job: ModelDownload, listing: RemoteListing, files: [RemoteFile], root: URL) -> Bool {
         job.site == listing.site && job.repository == listing.repository && job.revision == listing.revision &&
-        URL(fileURLWithPath: job.root).standardizedFileURL.path == root.path && sameFiles(job.files, files)
+        URL(fileURLWithPath: job.root).standardizedFileURL.resolvingSymlinksInPath().path == root.standardizedFileURL.resolvingSymlinksInPath().path && sameFiles(job.files, files)
     }
     static func reconcile(_ original: ModelDownload) throws -> ModelDownload {
         var job = original; job.received = 0; job.fileReceived = [:]

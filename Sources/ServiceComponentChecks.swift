@@ -37,6 +37,9 @@ enum ServiceComponentChecks {
             try ConnectionChecks.require(store.serviceComponents(saved)?.entries.contains { $0.id == "draft" && $0.state == "已启用" } == true, "New model configuration changed active service components")
             let nextLog = log + "\n—— next launch ——\nLoading main model only\n"
             var next = preview; next.commandText = "splash serve --model " + original.modelName + " --language-only"; next.inputMode = .text
+            // A new attempt replaces these fields in ServiceController.startPlan.
+            // Do not retain an explicit draft from the real service in this fixture.
+            next.launchArguments = nil; next.draftModelPath = nil
             let nextValue = ServiceComponentEvidence.collect(spec: next, models: inventory.models, log: nextLog, capabilities: .init(inputs: ["text"], known: true, source: "fixture"), status: .starting)
             try ConnectionChecks.require(nextValue?.entries.contains { $0.id == "draft" } != true && nextValue?.entries.first { $0.id == "vision" }?.state == "未启用", "Old launch draft/vision leaked into current attempt")
             reportRows.append(["port": original.port, "model": original.modelName, "draft": "incoai/Qwen3.8-27B-DFlash2", "vision": true, "tokenizer": "main model"])

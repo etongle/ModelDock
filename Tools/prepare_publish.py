@@ -6,10 +6,10 @@ version=sys.argv[1] if len(sys.argv)>1 else re.search(r'CFBundleShortVersionStri
 assert re.fullmatch(r'\d+\.\d+\.\d+',version),'Expected a release version'
 out=root/('artifacts/publish-v'+version.replace('.',''));stage=out/'ModelDock';stage.mkdir(parents=True,exist_ok=True)
 files=['README.md','README.zh-CN.md','CONTRIBUTING.md','LICENSE','LICENSE-NOTICE.txt','.gitignore','build.sh','package.py','prepare-runtime.py','prepare-notices.py']
-folders=['Sources','Resources','Tests','Tools','docs','website','.github']
+folders=['Sources','Resources','Tests','Tools','docs','website','.github','Client']
 for name in files:shutil.copy2(root/name,stage/name)
 for name in folders:
- shutil.copytree(root/name,stage/name,dirs_exist_ok=True,ignore=shutil.ignore_patterns('__pycache__','*.pyc','.DS_Store'))
+ shutil.copytree(root/name,stage/name,dirs_exist_ok=True,ignore=shutil.ignore_patterns('__pycache__','*.pyc','.DS_Store','node_modules','dist','*.tsbuildinfo'))
 selected=[p for p in stage.rglob('*') if p.is_file() and '.git' not in p.relative_to(stage).parts]
 for p in selected:
  if p.suffix in ['.swift','.py','.mjs','.md','.html','.js','.yml','.json','.txt']:

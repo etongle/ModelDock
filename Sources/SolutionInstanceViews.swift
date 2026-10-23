@@ -24,7 +24,7 @@ import SwiftUI
                         ForEach(controller.services(record, store: store)) { service in
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
-                                    Text(verbatim: service.modelName).font(.system(size: TypeScale.body, weight: .medium)).lineLimit(2)
+                                    Text(verbatim: store.serviceDisplayName(service)).font(.system(size: TypeScale.body, weight: .medium)).lineLimit(2)
                                     Spacer(minLength: 6)
                                     StateLabel(title: store.services.statusTitle(service), color: store.services.status(service).color)
                                 }
@@ -66,7 +66,7 @@ import SwiftUI
                     Spacer(minLength: 4)
                     if controller.removingIDs.contains(record.id) { ProgressView().controlSize(.small) }
                 }
-                Text(verbatim: record.created.formatted(date: .abbreviated, time: .shortened) + " · " + TranslationLanguages.title(record.draft.language))
+                Text(verbatim: record.created.formatted(date: .abbreviated, time: .shortened) + (record.solutionID == "image-generation" ? "" : " · " + TranslationLanguages.title(record.draft.language)))
                     .font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
                 Text(verbatim: record.state == .configured ? snapshot.title : L10n.text(record.stage))
                     .font(.system(size: TypeScale.callout)).foregroundStyle(snapshot.allReady ? Theme.successText : Theme.muted)
@@ -83,7 +83,7 @@ import SwiftUI
     @ViewBuilder private var actions: some View {
         if record.state == .configured {
             Button(L10n.text(snapshot.allReady ? "使用此实例" : snapshot.actionTitle)) {
-                if snapshot.allReady { controller.selectDeployment(record.id, store: store); controller.section = .overview }
+                if snapshot.allReady { store.openSolutionExperience(record) }
                 else { controller.activate(record, store: store) }
             }.buttonStyle(AccentButton()).disabled(busy).accessibilityIdentifier("start-solution-instance-" + record.id)
             Button(L10n.text("停止独占服务")) { controller.stop(record.id, store: store) }

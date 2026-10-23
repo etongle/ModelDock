@@ -66,7 +66,7 @@ enum ModelFileRepair {
                 guard !ModelFileSafety.used(model, removal: target, services: services.records, external: services.external, models: models) else { throw LaunchError.message("此文件正在被服务使用，请先停止相关服务；修复不会改动其他文件") }
                 var address = source.site == .huggingface ? "https://huggingface.co/" : "https://modelscope.cn/models/"
                 address += source.repository + (source.site == .huggingface ? "/tree/" : "/files?revision=") + source.revision
-                let listing = try await ModelCatalog.listing(address, token: downloads.token)
+                let listing = try await ModelCatalog.listing(address, token: downloads.accessTokens.credential(for: address, override: downloads.token))
                 let file = listing.files.first(where: { $0.path == relative }) ?? (relative == "tokenizer 文件" ? ["tokenizer.json", "tokenizer.model", "vocab.json"].compactMap { candidate in listing.files.first { $0.path == candidate } }.first : nil)
                 guard listing.revision == source.revision, let file else { throw LaunchError.message("原版本仓库没有“\(relative)”。这可能是可选组件或检查误报，请查看模型说明；不会下载整套模型。") }
                 let destination = relative == "tokenizer 文件" ? target.deletingLastPathComponent().appendingPathComponent(file.path) : target

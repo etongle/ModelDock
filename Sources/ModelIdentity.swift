@@ -24,8 +24,8 @@ struct SplashRegistration: Codable, Hashable {
 }
 extension LocalModel {
     var preparedSplashModels: [LocalModel] {
-        if splashSelection != nil { return [self] }
-        return (splashRegistrations ?? []).map { $0.model(association: association) }
+        if let registrations = splashRegistrations, !registrations.isEmpty { return registrations.map { $0.model(association: association) } }
+        return splashSelection != nil ? [self] : []
     }
     func preparedForSplash(_ mode: InputMode = .automatic) -> LocalModel? {
         preparedSplashModels.sorted {
@@ -77,7 +77,25 @@ enum ModelIdentity {
                     registrations[existing].aliases = Array(Set(registrations[existing].aliases + [assembly.id])).sorted()
                 } else { registrations.append(.init(assembly)) }
                 result[index].splashRegistrations = registrations
-            } else if !standalone.contains(where: { $0.path == assembly.path }) { standalone.append(assembly) }
+            } else {
+                // Text/vision selections are preparations of the same source weights, even
+                // when the raw snapshot is temporarily missing. Keep every launch alias.
+                let index = standalone.indices.first { i in
+                    if URL(fileURLWithPath: standalone[i].path).resolvingSymlinksInPath() == URL(fileURLWithPath: assembly.path).resolvingSymlinksInPath() { return true }
+                    guard standalone[i].splashSelection != nil, let origin = ModelOrigin.read(standalone[i]), let source,
+                          !source.revision.isEmpty, origin.site == source.site, origin.repository == source.repository,
+                          origin.revision == source.revision, standalone[i].format == assembly.format, !signature.isEmpty else { return false }
+                    return weights(standalone[i]) == signature
+                }
+                if let index {
+                    var registrations = standalone[index].splashRegistrations ?? [.init(standalone[index])]
+                    if let alias = registrations.firstIndex(where: { $0.path == assembly.path }) {
+                        registrations[alias].aliases = Array(Set(registrations[alias].aliases + [assembly.id])).sorted()
+                    } else { registrations.append(.init(assembly)) }
+                    if (assembly.complete && !standalone[index].complete) || (assembly.complete == standalone[index].complete && assembly.splashVision != "none" && standalone[index].splashVision == "none") { standalone[index] = assembly }
+                    standalone[index].splashRegistrations = registrations
+                } else { var item = assembly; item.splashRegistrations = [.init(assembly)]; standalone.append(item) }
+            }
         }
         for assembly in models where assembly.strataConfig != nil {
             let signature = weights(assembly)
@@ -86,22 +104,5 @@ enum ModelIdentity {
             } else if !standalone.contains(where: { $0.path == assembly.path }) { standalone.append(assembly) }
         }
         return result + standalone
-    }
-}
-
-@MainActor struct PreparedEngineComponentsView: View {
-    @ObservedObject var store: AppStore
-    var model: LocalModel
-    var body: some View {
-        if let registrations = model.splashRegistrations, !registrations.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(verbatim: L10n.text("引擎配套组件")).font(.system(size: TypeScale.body, weight: .semibold))
-                Text(verbatim: L10n.text("Splash 与 MLX 共用本版本主权重；Splash 的草稿、视觉和配置登记单独保留。")).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted)
-                ForEach(registrations, id: \.path) { item in
-                    HStack { StateLabel(title: item.complete ? "Splash 已准备" : "Splash 组件需修复", color: item.complete ? .green : .orange); Spacer(); Button(L10n.text("查看组件目录")) { store.reveal(item.path) }.buttonStyle(.bordered) }
-                    Text(verbatim: L10n.text(item.vision == "none" ? "Splash 输入：文本" : "Splash 输入：文本 / 图片 / 文件")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
-                }
-            }.padding(18).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
-        }
     }
 }

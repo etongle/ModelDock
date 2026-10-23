@@ -7,6 +7,7 @@ enum SolutionRecommendations {
     static func usesBaseline(_ role: SolutionRole) -> Bool { [.text, .chat, .vision].contains(role) }
 
     static func source(_ role: SolutionRole, draft: SolutionDraft) -> SolutionModel {
+        if role == .image, draft.localChoices[role.rawValue] == "heretic" { return ImageModelPolicy.heretic }
         if usesBaseline(role), draft.localChoices[role.rawValue] == lightweightChoice {
             return role == .vision
                 ? .init(repository: "mlx-community/Qwen3-VL-4B-Instruct-4bit", revision: "2fd8dacbdb8f1e54b8c005f081ec5bf79c56376b")
@@ -32,6 +33,7 @@ enum SolutionRecommendations {
     }
 
     static func isCurrent(_ component: SolutionComponent, draft: SolutionDraft) -> Bool {
+        if component.serviceBinding != nil { return true }
         guard usesBaseline(component.role) else { return true }
         let choice = draft.localChoices[component.role.rawValue] ?? ""
         if choice == lightweightChoice {
@@ -43,6 +45,7 @@ enum SolutionRecommendations {
     }
 
     static func label(_ role: SolutionRole, draft: SolutionDraft, model: LocalModel?) -> String {
+        if draft.localChoices[role.rawValue]?.hasPrefix(SolutionServiceChoice.prefix) == true { return "复用已有兼容服务" }
         if draft.localChoices[role.rawValue] == lightweightChoice { return "轻量备选" }
         if let model, !matches(model, role: role, draft: draft) { return "手动选择 · 用途需核实" }
         return "推荐基准"

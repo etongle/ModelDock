@@ -112,6 +112,8 @@ final class GatewayController: ObservableObject {
     @Published var settings: GatewaySettings
     @Published var process: GatewayProcess?
     @Published var ready = false
+    @Published var supportsImageSolutionRoutes = false
+    @Published var supportsImageEditRoutes = false
     @Published var supportsSolutionRoutes = false
     @Published var busy = false
     @Published var error: String?
@@ -247,6 +249,8 @@ final class GatewayController: ObservableObject {
             let value = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             let before = await PortIdentity.snapshot(ports: [process.port])
             ready = (response as? HTTPURLResponse)?.statusCode == 200 && value?["instance"] as? String == settings.instance && value?["pid"] as? Int32 == process.pid && ownsProcess() && !(before[process.port] ?? []).isEmpty && (before[process.port] ?? []).allSatisfy { $0.belongs(pid: process.pid, birth: process.birth) }
+            supportsImageSolutionRoutes = ready && (value?["features"] as? [String] ?? []).contains("image_solution_routes")
+            supportsImageEditRoutes = ready && (value?["features"] as? [String] ?? []).contains("image_edit_routes")
             supportsSolutionRoutes = ready && (value?["features"] as? [String] ?? []).contains("solution_routes")
             if ready {
                 request.url = URL(string: "http://127.0.0.1:\(process.port)/gateway/status")!

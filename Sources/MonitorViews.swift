@@ -5,8 +5,22 @@ func diskLabel(_ bytes: Int64) -> String { bytes >= 1_000_000_000_000 ? String(f
 func secondsLabel(_ value: Double?) -> String { value.map { $0 < 1 ? String(format: "%.0f ms", locale: L10n.locale, $0 * 1000) : String(format: "%.2f s", locale: L10n.locale, $0) } ?? "—" }
 func rateLabel(_ value: Double?) -> String { value.map { String(format: "%.1f tok/s", locale: L10n.locale, $0) } ?? "—" }
 extension BenchmarkResult {
-    var speedTitle: String { generationRate == nil ? "端到端吞吐" : "生成速度" }
+    var speedTitle: String {
+        switch target.operation ?? .chat {
+        case .chat: return generationRate == nil ? "端到端吞吐" : "生成速度"
+        case .speech, .transcription: return "实时倍率"
+        case .image: return "图片数量"
+        case .embedding: return "向量维度"
+        }
+    }
     var measuredRate: Double? { generationRate ?? endToEndRate }
+    var speedLabel: String {
+        switch target.operation ?? .chat {
+        case .chat: return rateLabel(measuredRate)
+        case .speech, .transcription: return audioSeconds.flatMap { elapsed > 0 ? String(format: "%.2f×", $0 / elapsed) : nil } ?? "—"
+        case .image, .embedding: return outputUnits.map(String.init) ?? "—"
+        }
+    }
 }
 
 struct ResourceCard: View {
@@ -82,8 +96,10 @@ struct BenchmarkCards: View {
     var columns = 4
     var body: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns), spacing: 12) {
-            metric(result.speedTitle, rateLabel(result.measuredRate))
-            metric("首个输出", secondsLabel(result.firstOutput))
+            metric(result.speedTitle, result.speedLabel)
+            if result.target.operation == .speech || result.target.operation == .transcription { metric("音频时长", secondsLabel(result.audioSeconds)) }
+            else if let operation = result.target.operation, operation != .chat { metric("测试类型", L10n.text(operation.title)) }
+            else { metric("首个输出", secondsLabel(result.firstOutput)) }
             metric("总耗时", secondsLabel(result.elapsed))
             metric("采样峰值内存", result.peakMemory.map(memoryLabel) ?? "—")
         }
@@ -100,7 +116,7 @@ struct MonitorWorkspace: View {
     var current: BenchmarkTarget? { store.benchmarkTargets.first { $0.id == performance.selection } ?? store.benchmarkTargets.first }
     var latest: BenchmarkResult? {
         guard let current else { return performance.records.first }
-        return performance.records.first { $0.target.id == current.id || (current.modelID != nil && $0.target.modelID == current.modelID && $0.target.engineID == current.engineID) }
+        return performance.records.first { $0.target.id == current.id }
     }
     var body: some View {
         ScrollView {
@@ -138,7 +154,7 @@ struct MonitorWorkspace: View {
                         if orphans > 0 { Button { store.removeOrphanedBenchmarks() } label: { Label(L10n.text("清理已删除模型的记录（\(orphans)）"), systemImage: "trash") }.buttonStyle(PlainAction()) }
                     }
                     ForEach(Array(performance.records.prefix(12))) { result in
-                        HStack(spacing: 20) { VStack(alignment: .leading, spacing: 7) { Text(result.target.modelName).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1); Text(verbatim: L10n.text("\(result.target.engineName) \(result.target.engineVersion) · \(result.requestedTokens) tokens · \(result.date.formatted(date: .abbreviated, time: .shortened))")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }.frame(maxWidth: .infinity, alignment: .leading); VStack(alignment: .trailing, spacing: 5) { Text(verbatim: L10n.text(rateLabel(result.measuredRate))).font(.system(size: TypeScale.body, weight: .medium)).monospacedDigit(); Text(verbatim: L10n.text(result.speedTitle)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }; Text(verbatim: L10n.text(secondsLabel(result.firstOutput))).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).frame(width: 90, alignment: .trailing); Button { store.removeBenchmark(result) } label: { Image(systemName: "trash") }.buttonStyle(PlainAction()).help(L10n.text("删除这条记录")).accessibilityLabel(L10n.text("删除这条记录")).disabled(performance.running) }.padding(16).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10)).help(L10n.text(result.chip))
+                        HStack(spacing: 20) { VStack(alignment: .leading, spacing: 7) { Text(result.target.modelName).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1); Text(verbatim: L10n.text("\(result.target.engineName) \(result.target.engineVersion) · \(result.sampleDescription ?? "\(result.requestedTokens) tokens") · \(result.date.formatted(date: .abbreviated, time: .shortened))")).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }.frame(maxWidth: .infinity, alignment: .leading); VStack(alignment: .trailing, spacing: 5) { Text(verbatim: L10n.text(result.speedLabel)).font(.system(size: TypeScale.body, weight: .medium)).monospacedDigit(); Text(verbatim: L10n.text(result.speedTitle)).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted) }; Text(verbatim: L10n.text(secondsLabel(result.firstOutput))).font(.system(size: TypeScale.body)).foregroundStyle(Theme.muted).frame(width: 90, alignment: .trailing); Button { store.removeBenchmark(result) } label: { Image(systemName: "trash") }.buttonStyle(PlainAction()).help(L10n.text("删除这条记录")).accessibilityLabel(L10n.text("删除这条记录")).disabled(performance.running) }.padding(16).background(Theme.line.opacity(0.25), in: RoundedRectangle(cornerRadius: 10)).help(L10n.text(result.chip))
                     }
                 }
                 Divider()
@@ -193,7 +209,7 @@ struct StatusBarPanel: View {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) { Text(verbatim: L10n.text("最近实测 · " + latest.speedTitle)).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted); Text(latest.target.modelName).font(.system(size: TypeScale.caption)).foregroundStyle(Theme.muted).lineLimit(1) }
                     Spacer()
-                    Text(verbatim: L10n.text(rateLabel(latest.measuredRate))).font(.system(size: TypeScale.body, weight: .semibold)).monospacedDigit()
+                    Text(verbatim: L10n.text(latest.speedLabel)).font(.system(size: TypeScale.body, weight: .semibold)).monospacedDigit()
                 }.padding(16)
             }
             StatusDownloads(store: store, downloads: store.downloads)

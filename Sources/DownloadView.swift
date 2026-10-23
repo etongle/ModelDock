@@ -13,6 +13,7 @@ struct DownloadWorkspace: View {
                 SidebarHeader(title: "下载任务") {
                     // A new import has its own empty form; existing transfers continue.
                     SidebarIconButton(symbol: "plus", help: "新建下载") { downloads.beginImport() }.accessibilityIdentifier("new-download")
+                    SidebarIconButton(symbol: "key", help: "全局 Hugging Face 令牌") { globalTokenSettings() }.accessibilityIdentifier("global-hf-token-entry")
                     SidebarToggleButton(store: store)
                 }.padding(.bottom, 4)
                 DownloadConcurrencyControl(downloads: downloads)
@@ -44,8 +45,9 @@ struct DownloadWorkspace: View {
                     // Only private or gated repositories need a token, so keep it out of the way by default.
                     DisclosureGroup(L10n.text("访问令牌（可选）")) {
                         VStack(alignment: .leading, spacing: 8) {
-                            SecureField(L10n.text("访问令牌（可选，用于 Hugging Face / ModelScope / GitHub）"), text: $downloads.token).textFieldStyle(.roundedBorder)
-                            Text(verbatim: L10n.text("私有或受限仓库需先获访问许可。令牌不会保存到磁盘，重新打开应用后需重新填写。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                            SecureField(L10n.text("单次访问令牌（可选，覆盖全局配置）"), text: $downloads.token).textFieldStyle(.roundedBorder)
+                            Text(verbatim: L10n.text("Hugging Face 自动使用全局令牌。这里填写的令牌仅用于本次任务；私有或受限模型仍需访问许可。")).font(.system(size: TypeScale.callout)).foregroundStyle(Theme.muted)
+                            Button(L10n.text("配置全局 Hugging Face 令牌…")) { globalTokenSettings() }.buttonStyle(.bordered)
                         }.padding(.top, 6)
                     }.font(.system(size: TypeScale.body))
                     HStack { VStack(alignment: .leading, spacing: 7) { Text(verbatim: L10n.text("保存到模型库")).font(.system(size: TypeScale.body, weight: .semibold)); Text(verbatim: L10n.text(downloads.destination)).font(.system(size: TypeScale.callout, design: .monospaced)).foregroundStyle(Theme.muted).textSelection(.enabled) }; Spacer(); Button(L10n.text("选择目录…")) { let panel = NSOpenPanel(); panel.canChooseFiles = false; panel.canChooseDirectories = true; panel.prompt = L10n.text("选择模型库"); if panel.runModal() == .OK, let url = panel.url { downloads.chooseDestination(url.resolvingSymlinksInPath().path) } }.buttonStyle(.bordered) }
@@ -69,8 +71,10 @@ struct DownloadWorkspace: View {
                 }.padding(32)
                 }
             }.id(downloads.selectedTaskID ?? downloads.importSessionID.uuidString).frame(maxWidth: .infinity)
-        }.alert(L10n.text("下载导入"), isPresented: Binding(get: { downloads.message != nil }, set: { if !$0 { downloads.message = nil } })) { Button(L10n.text("好")) { downloads.message = nil } } message: { Text(verbatim: L10n.text(downloads.message ?? "")) }
+        }.sheet(item: $downloads.authorization) { draft in DownloadAuthorizationView(downloads: downloads, draft: draft, configureGlobal: { downloads.authorization = nil; globalTokenSettings() }) }
+        .alert(L10n.text("下载导入"), isPresented: Binding(get: { downloads.message != nil }, set: { if !$0 { downloads.message = nil } })) { Button(L10n.text("好")) { downloads.message = nil } } message: { Text(verbatim: L10n.text(downloads.message ?? "")) }
     }
+    func globalTokenSettings() { store.settingsTab = 3; store.showSettings?() }
 }
 
 /// Compact sidebar row: repository, state and percentage, a thin bar while unfinished, sizes and speed.
@@ -85,7 +89,7 @@ struct DownloadRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(job.repository).font(.system(size: TypeScale.body, weight: .semibold)).lineLimit(1).truncationMode(.middle).help(L10n.text(job.repository))
                 HStack {
-                    Text(verbatim: L10n.text(job.state.rawValue)).foregroundStyle(job.state == .failed ? Theme.errorText : Color.secondary)
+                    Text(verbatim: L10n.text(downloads.retryStatuses[job.id] == nil ? job.state.rawValue : "等待自动续传")).foregroundStyle(job.state == .failed ? Theme.errorText : Color.secondary)
                     Spacer()
                     Text(verbatim: L10n.text(job.percentageLabel)).monospacedDigit()
                 }.font(.system(size: TypeScale.callout)).foregroundStyle(.secondary)
@@ -109,17 +113,25 @@ struct DownloadTaskActions: View {
     var job: ModelDownload
     var menu = false
     var body: some View {
-        if menu { transfer; directory; Divider(); cleanup; delete }
-        else { HStack { transfer; directory; cleanup; delete }.buttonStyle(.bordered).controlSize(.small) }
+        if menu { transfer; credential; repository; directory; Divider(); cleanup; delete }
+        else { HStack { transfer; credential; directory; cleanup; delete }.buttonStyle(.bordered).controlSize(.small) }
     }
     @ViewBuilder var transfer: some View {
         if downloads.isScheduled(job.id) { Button(L10n.text("暂停")) { downloads.pause(job.id) } }
         else if job.state != .complete {
-            Button(L10n.text(job.resumeBlockedReason != nil ? "重新下载" : (job.pausedFiles ?? []).isEmpty ? "继续下载" : "继续全部")) { downloads.resume(job.id, includingPausedFiles: true) }
+            Button(L10n.text(job.needsAuthorization ? job.site == .huggingface && downloads.accessTokens.huggingFaceConfigured ? "使用全局令牌重试" : "输入令牌并继续…" : job.resumeBlockedReason != nil ? "重新下载" : (job.pausedFiles ?? []).isEmpty ? "继续下载" : "继续全部")) { downloads.resume(job.id, includingPausedFiles: true) }
                 .disabled(downloads.deletingIDs.contains(job.id))
         }
     }
     var directory: some View { Button(L10n.text("打开目录")) { store.reveal(job.displayLocation) }.disabled(!store.canReveal(job.displayLocation)) }
+    @ViewBuilder var repository: some View {
+        if let url = job.huggingFacePage { Button(L10n.text("查看 Hugging Face 页面")) { NSWorkspace.shared.open(url) } }
+    }
+    @ViewBuilder var credential: some View {
+        if job.state != .complete && !downloads.isScheduled(job.id), job.site != .direct {
+            Button(L10n.text("访问令牌…")) { downloads.requestAuthorization(job.id) }.accessibilityIdentifier("download-authorization-entry")
+        }
+    }
     @ViewBuilder var cleanup: some View {
         if job.state != .complete && !downloads.isScheduled(job.id) { Button(L10n.text("清理未完成文件…"), role: .destructive) { confirmCleanup() } }
     }
@@ -157,6 +169,7 @@ struct DownloadSettingsView: View {
     @ObservedObject var downloads: DownloadController
     var body: some View {
         Form {
+            Section(L10n.text("全局 Hugging Face 令牌")) { HuggingFaceTokenSettings(tokens: downloads.accessTokens) }
             Section(L10n.text("下载队列")) {
                 DownloadConcurrencyControl(downloads: downloads)
                 Text(verbatim: L10n.text("默认同时下载 2 个模型，可设置为 1–8 个；超出数量的任务自动排队。每个模型内依次下载文件。"))

@@ -32,6 +32,7 @@ extension AppStore {
     func showEngineServices(_ id: String) {
         gatewaySelected = false
         serviceEngineFilter = id
+        serviceStateFilter = .all
         selectedServiceID = engineServices(id).first?.id
         selectedExternal = selectedServiceID == nil ? externalEngineServices(id).first?.port : nil
         tab = .services
